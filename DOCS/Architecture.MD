@@ -23,7 +23,7 @@ Confirm the installed .NET SDK and select supported package versions when the so
 
 ## Logical Components
 
-- **Presentation:** WPF views, navigation, view models, and commands. The main window uses the available screen space for navigation, feed/article lists, and the reading area; exact layout is a UI design decision.
+- **Presentation:** WPF views, navigation, view models, and commands. The main window has a persistent navigation sidebar and one main workspace. The workspace shows either the article list or the selected article's reading view, not both side by side. Article list entries show the article title, source feed, and publication age/date.
 - **Application:** Subscription management, catalog browsing, refresh coordination, article state, and search use cases.
 - **Domain:** Feed, category, article, and user reading-state concepts, independent of WPF and persistence.
 - **Infrastructure:** HTTP feed retrieval, RSS/Atom parsing, SQLite repositories, and catalog data.

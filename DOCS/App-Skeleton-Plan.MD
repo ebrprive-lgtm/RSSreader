@@ -31,16 +31,18 @@ Use MVVM commands and observable state consistently. Select and pin supported .N
 
 ## Main Window Shell
 
-Use a resizable WPF window that fills the available work area. The desktop reading layout has three regions:
+Use a resizable WPF window that fills the available work area. The desktop reading layout has a persistent sidebar and one main content workspace. The workspace switches between list and reader modes:
 
 ```text
-+----------------------+----------------------+------------------------------+
-| Navigation sidebar   | Article list         | Selected article             |
-| Profile and routes   | For current route    | Reading view                 |
-+----------------------+----------------------+------------------------------+
++----------------------+-----------------------------------------------------+
+| Navigation sidebar   | Main content workspace                          |
+| Profile and routes   | Article list OR selected article reading view   |
++----------------------+-----------------------------------------------------+
 ```
 
-The sidebar is a stable, collapsible column, initially around 280 device-independent pixels, with a sensible minimum width. The article list starts around 360 device-independent pixels. The reading pane takes remaining space. These are starting proportions, not fixed sizes: smaller windows should collapse the sidebar or article list without clipping the active content. Resizing must not cause text, controls, or selection state to overlap.
+The sidebar is a stable, collapsible column, initially around 280 device-independent pixels, with a sensible minimum width. The main workspace takes the remaining width and adapts its content to the available space. Smaller windows should collapse the sidebar without clipping the active content. Resizing must not cause text, controls, or selection state to overlap.
+
+In article-list mode, each row shows the article title, its source feed, and publication age/date. In reader mode, selecting an article replaces the list in the same workspace. Provide a clear return-to-list action and preserve the list's route, filters, scroll position, and selection as practical when navigating back.
 
 ### Sidebar Hierarchy
 
@@ -101,7 +103,7 @@ All persistence queries that access personal state take the active profile ident
 
 1. **Solution and shell:** create the solution/projects, configure the Generic Host and WPF startup, add logging and test projects, and show a blank profile chooser. Verify the app starts and tests run.
 2. **Profiles:** implement profile persistence, creation/validation, chooser states, Shift-revealed Catalog Master, optional password hashing/unlock, and profile switching/isolation.
-3. **Navigation shell:** implement the resizable sidebar, main workspace columns, profile header, routes, folders/tags presentation, and empty/loading/error states using fake data first.
+3. **Navigation shell:** implement the resizable sidebar, single main workspace with list/reader modes, profile header, routes, folders/tags presentation, and empty/loading/error states using fake data first.
 4. **Catalog administration:** add catalog storage and browse/manage flows; enforce and test Catalog Master-only write access.
 5. **Reader foundation:** implement subscriptions, feed polling/parsing, article persistence, filters, search, read state, and saved-for-later behavior.
 6. **Fit and finish:** accessibility and keyboard navigation, responsive sizing, persistence migration checks, packaging, and end-to-end regression tests.
@@ -113,6 +115,6 @@ Each phase remains buildable and has passing focused tests before the next phase
 - The WPF app launches into the correct profile chooser state.
 - Create/select/switch profile flows are wired to application services, with profile isolation tests.
 - Shift reveals Catalog Master, and catalog write permissions are tested outside the UI.
-- The main shell presents the agreed sidebar hierarchy and three-region reading workspace with fake data.
+- The main shell presents the agreed sidebar hierarchy and single-workspace list/reader flow with fake data; article rows show title, source, and publication age/date.
 - Sidebar routes update workspace state without putting data access or business rules in code-behind.
 - All test projects build and their focused tests pass; resizing and keyboard navigation have UI-level coverage.

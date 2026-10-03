@@ -1,0 +1,100 @@
+using RssReader.Application;
+using RssReader.Domain;
+
+namespace RssReader.Application.Tests;
+
+[TestClass]
+public sealed class ReadingServiceTests
+{
+    [TestMethod]
+    public async Task GetArticlesCombinesProfileFolderTagReadLaterAndSearchFilters()
+    {
+        var profile = Profile.CreateRegular("Reader");
+        var feed = new CatalogFeed("feed-1", "Gaming News", "https://example.com/feed.xml", null, null);
+        var readerStore = new MemoryReaderStore();
+        readerStore.Subscriptions.Add(new ProfileSubscription(profile.Id, feed.Id, feed.Name, feed.FeedUrl, "Gaming"));
+        readerStore.Tags.Add(new ProfileFeedTag(profile.Id, feed.Id, "Reviews"));
+        readerStore.Articles.Add(new ArticleForProfile(
+            new FeedArticle("article-1", feed.Id, "item-1", "Handheld review", null, DateTimeOffset.UtcNow, "Portable gaming hardware", null),
+            feed.Name,
+            "Gaming",
+            false,
+            true));
+        readerStore.Articles.Add(new ArticleForProfile(
+            new FeedArticle("article-2", feed.Id, "item-2", "Console update", null, DateTimeOffset.UtcNow, "System changes", null),
+            feed.Name,
+            "Gaming",
+            true,
+            false));
+        var service = new ReadingService(readerStore, new MemoryCatalogStore([feed]));
+
+        var result = await service.GetArticlesAsync(profile.Id, new ArticleFilter(
+            FolderName: "Gaming",
+            TagName: "Reviews",
+            IsRead: false,
+            IsSaved: true,
+            SearchText: "portable"));
+
+        Assert.AreEqual("article-1", result.Single().Article.Id);
+    }
+
+    [TestMethod]
+    public async Task SubscribeRequiresExistingCatalogFeedAndRegularProfile()
+    {
+        var catalogFeed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        var readerStore = new MemoryReaderStore();
+        var service = new ReadingService(readerStore, new MemoryCatalogStore([catalogFeed]));
+        var profile = Profile.CreateRegular("Reader");
+
+        await service.SubscribeAsync(profile, catalogFeed.Id);
+
+        Assert.AreEqual(profile.Id, readerStore.Subscriptions.Single().ProfileId);
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.SubscribeAsync(profile, "unknown-feed"));
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => service.SubscribeAsync(Profile.CreateCatalogMaster(), catalogFeed.Id));
+    }
+
+    private sealed class MemoryCatalogStore(IReadOnlyList<CatalogFeed> feeds) : ICatalogStore
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<CatalogFeed>> GetFeedsAsync(CancellationToken cancellationToken = default) => Task.FromResult(feeds);
+        public Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<CatalogCategory>>([]);
+        public Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<CatalogCollection>>([]);
+        public Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(string collectionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AddFeedToCollectionAsync(string collectionId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveFeedFromCollectionAsync(string collectionId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class MemoryReaderStore : IReaderStore
+    {
+        public List<ProfileSubscription> Subscriptions { get; } = [];
+        public List<ProfileFeedTag> Tags { get; } = [];
+        public List<ArticleForProfile> Articles { get; } = [];
+
+        public Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ProfileSubscription>>(Subscriptions.Where(item => item.ProfileId == profileId).ToArray());
+        public Task SubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) =>
+            Task.Run(() => Subscriptions.Add(new ProfileSubscription(profileId, feedId, "Gaming News", "https://example.com/feed.xml", null)), cancellationToken);
+        public Task UnsubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<string>> GetFoldersAsync(string profileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task AddFolderAsync(string profileId, string name, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteFolderAsync(string profileId, string name, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetFeedFolderAsync(string profileId, string feedId, string? folderName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<ProfileFeedTag>> GetFeedTagsAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ProfileFeedTag>>(Tags.Where(item => item.ProfileId == profileId).ToArray());
+        public Task AddFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<ArticleForProfile>> GetArticlesAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ArticleForProfile>>(Articles.Where(item => Subscriptions.Any(subscription =>
+                subscription.ProfileId == profileId && subscription.FeedId == item.Article.FeedId)).ToArray());
+        public Task SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+}
