@@ -22,20 +22,24 @@ public sealed class CatalogManagementViewModel : ObservableObject
     private readonly CatalogService _catalogService;
     private string _feedName = string.Empty;
     private string _feedUrl = string.Empty;
+    private string _feedWebsiteUrl = string.Empty;
     private string _feedDescription = string.Empty;
     private string _categoryName = string.Empty;
     private string _collectionName = string.Empty;
     private string _errorMessage = string.Empty;
     private string _importMessage = string.Empty;
+    private bool _showMetadataGapsOnly;
     private CatalogCategory? _selectedCategory;
     private CatalogFeedListItem? _selectedFeed;
     private CatalogCollection? _selectedCollection;
+    private string? _editingFeedId;
 
     public CatalogManagementViewModel(Profile actor, CatalogService catalogService)
     {
         _actor = actor;
         _catalogService = catalogService;
         AddFeedCommand = new AsyncCommand(AddFeedAsync);
+        CheckFeedHealthCommand = new AsyncCommand<CatalogFeedListItem>(CheckFeedHealthAsync);
         LoadStarterPackCommand = new AsyncCommand(LoadStarterPackAsync);
         DeleteFeedCommand = new AsyncCommand<CatalogFeedListItem>(DeleteFeedAsync);
         AddCategoryCommand = new AsyncCommand(AddCategoryAsync);
@@ -47,10 +51,12 @@ public sealed class CatalogManagementViewModel : ObservableObject
     }
 
     public ObservableCollection<CatalogFeedListItem> Feeds { get; } = [];
+    public ObservableCollection<CatalogFeedListItem> VisibleFeeds { get; } = [];
     public ObservableCollection<CatalogCategory> Categories { get; } = [];
     public ObservableCollection<CatalogCollection> Collections { get; } = [];
 
     public AsyncCommand AddFeedCommand { get; }
+    public AsyncCommand<CatalogFeedListItem> CheckFeedHealthCommand { get; }
     public AsyncCommand LoadStarterPackCommand { get; }
     public AsyncCommand<CatalogFeedListItem> DeleteFeedCommand { get; }
     public AsyncCommand AddCategoryCommand { get; }
@@ -59,6 +65,20 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public AsyncCommand<CatalogCollection> DeleteCollectionCommand { get; }
     public AsyncCommand AddFeedToCollectionCommand { get; }
     public AsyncCommand RemoveFeedFromCollectionCommand { get; }
+
+    public string MetadataReviewSummary => $"Metadata gaps: {Feeds.Count(feed => feed.HasMetadataGaps)}";
+
+    public bool ShowMetadataGapsOnly
+    {
+        get => _showMetadataGapsOnly;
+        set
+        {
+            if (SetProperty(ref _showMetadataGapsOnly, value))
+            {
+                RefreshVisibleFeeds();
+            }
+        }
+    }
 
     public string FeedName
     {
@@ -70,6 +90,12 @@ public sealed class CatalogManagementViewModel : ObservableObject
     {
         get => _feedUrl;
         set => SetProperty(ref _feedUrl, value);
+    }
+
+    public string FeedWebsiteUrl
+    {
+        get => _feedWebsiteUrl;
+        set => SetProperty(ref _feedWebsiteUrl, value);
     }
 
     public string FeedDescription
@@ -123,12 +149,25 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public void ResetEntryForm()
     {
         ErrorMessage = string.Empty;
+        _editingFeedId = null;
         FeedName = string.Empty;
         FeedUrl = string.Empty;
+        FeedWebsiteUrl = string.Empty;
         FeedDescription = string.Empty;
         SelectedCategory = null;
         CategoryName = string.Empty;
         CollectionName = string.Empty;
+    }
+
+    public void PrepareFeedEdit(CatalogFeedListItem feed)
+    {
+        ErrorMessage = string.Empty;
+        _editingFeedId = feed.Id;
+        FeedName = feed.Name;
+        FeedUrl = feed.FeedUrl;
+        FeedWebsiteUrl = feed.WebsiteUrl ?? string.Empty;
+        FeedDescription = feed.Description ?? string.Empty;
+        SelectedCategory = Categories.FirstOrDefault(category => category.Id == feed.CategoryId);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -154,6 +193,9 @@ public sealed class CatalogManagementViewModel : ObservableObject
         var categories = await _catalogService.GetCategoriesAsync(cancellationToken);
         var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
         var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
+        var sameNameCounts = feeds
+            .GroupBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         var collections = await _catalogService.GetCollectionsAsync(cancellationToken);
 
         Categories.Clear();
@@ -172,8 +214,16 @@ public sealed class CatalogManagementViewModel : ObservableObject
                 feed.Description,
                 feed.CategoryId is not null && categoryNames.TryGetValue(feed.CategoryId, out var categoryName)
                     ? categoryName
-                    : null));
+                    : null,
+                feed.CategoryId,
+                feed.WebsiteUrl,
+                sameNameCounts[feed.Name],
+                feed.LastHealthCheckedAt,
+                feed.LastHealthCheckSucceeded));
         }
+
+            OnPropertyChanged(nameof(MetadataReviewSummary));
+            RefreshVisibleFeeds();
 
         Collections.Clear();
         foreach (var collection in collections)
@@ -182,20 +232,46 @@ public sealed class CatalogManagementViewModel : ObservableObject
         }
     }
 
+    private void RefreshVisibleFeeds()
+    {
+        VisibleFeeds.Clear();
+        foreach (var feed in Feeds)
+        {
+            if (!ShowMetadataGapsOnly || feed.HasMetadataGaps)
+            {
+                VisibleFeeds.Add(feed);
+            }
+        }
+    }
+
     private async Task AddFeedAsync()
     {
         ErrorMessage = string.Empty;
         try
         {
-            await _catalogService.AddFeedAsync(
-                _actor,
-                FeedName,
-                FeedUrl,
-                FeedDescription,
-                SelectedCategory?.Id);
-            FeedName = string.Empty;
-            FeedUrl = string.Empty;
-            FeedDescription = string.Empty;
+            if (_editingFeedId is { } feedId)
+            {
+                await _catalogService.UpdateFeedAsync(
+                    _actor,
+                    feedId,
+                    FeedName,
+                    FeedUrl,
+                    FeedDescription,
+                    SelectedCategory?.Id,
+                    websiteUrl: FeedWebsiteUrl);
+            }
+            else
+            {
+                await _catalogService.AddFeedAsync(
+                    _actor,
+                    FeedName,
+                    FeedUrl,
+                    FeedDescription,
+                    SelectedCategory?.Id,
+                    websiteUrl: FeedWebsiteUrl);
+            }
+
+            ResetEntryForm();
             await RefreshAsync();
         }
         catch (ArgumentException exception)
@@ -236,6 +312,25 @@ public sealed class CatalogManagementViewModel : ObservableObject
     {
         await _catalogService.DeleteFeedAsync(_actor, feed.Id);
         await RefreshAsync();
+    }
+
+    private async Task CheckFeedHealthAsync(CatalogFeedListItem feed)
+    {
+        ErrorMessage = string.Empty;
+        feed.IsHealthCheckInProgress = true;
+        try
+        {
+            await _catalogService.CheckFeedHealthAsync(_actor, feed.Id);
+            await RefreshAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ErrorMessage = $"Could not check feed: {exception.Message}";
+        }
+        finally
+        {
+            feed.IsHealthCheckInProgress = false;
+        }
     }
 
     private async Task AddCategoryAsync()

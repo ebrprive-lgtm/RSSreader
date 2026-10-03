@@ -744,17 +744,34 @@
                                 <CheckBox Content="Read"
                                       IsChecked="{Binding SelectedArticle.IsRead, Mode=TwoWay}"
                                       Margin="0,0,22,0" />
+                                    <TextBlock x:Name="ArticleSourceHyperlink"
+                                               VerticalAlignment="Center"
+                                         Margin="0,0,22,0"
+                                         Visibility="{Binding SelectedArticle.IsSourceLinkVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                     <Hyperlink NavigateUri="{Binding SelectedArticle.Link}"
+                                             RequestNavigate="SourceLink_RequestNavigate">Source</Hyperlink>
+                                    </TextBlock>
                                 <Button Content="Show RAW"
                                     Click="ShowRawFeed_Click"
                                     Padding="10,4"
                                     Visibility="{Binding IsRawFeedButtonVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             </StackPanel>
                             <Border Height="1" Background="#E3E9E6" />
-                            <TextBlock Text="{Binding SelectedArticle.Summary}"
+                            <Image x:Name="SelectedArticleImage"
+                                Source="{Binding SelectedArticle.ImageUrl}"
+                                   MaxWidth="860"
+                                   MaxHeight="600"
+                                   Margin="0,25,0,0"
+                                   HorizontalAlignment="Left"
+                                   Stretch="Uniform"
+                                   Visibility="{Binding SelectedArticle.IsImageVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <TextBlock x:Name="SelectedArticleSummary"
+                                       Text="{Binding SelectedArticle.Summary}"
                                        Margin="0,25,0,0"
                                        FontSize="17"
                                        LineHeight="27"
-                                       TextWrapping="Wrap" />
+                                       TextWrapping="Wrap"
+                                       Visibility="{Binding SelectedArticle.HasReadableSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             <TextBlock Text="{Binding SelectedArticle.Content}"
                                        Margin="0,18,0,0"
                                        FontSize="15"
@@ -768,56 +785,229 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <DockPanel Margin="0,0,0,14">
+                        <DockPanel Grid.Row="0" Margin="0,0,0,12">
                             <StackPanel>
                                 <TextBlock Text="Browse the feed catalog" FontSize="21" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding CatalogFeeds.Count, StringFormat={}{0} feeds}"
+                                <TextBlock Text="{Binding CatalogResultsSummary}"
                                            Margin="0,7,0,0"
                                            Foreground="{StaticResource MutedTextBrush}" />
                             </StackPanel>
                         </DockPanel>
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                          <ItemsControl ItemsSource="{Binding CatalogFeeds}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,13">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="250" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15" />
-                                                <TextBlock Text="{Binding CategoryName, TargetNullValue=Uncategorized}"
-                                                           Margin="0,4,0,0"
-                                                           FontSize="12"
-                                                           Foreground="{StaticResource AccentBrush}" />
-                                                <TextBlock Text="{Binding Description}"
-                                                           Margin="0,4,0,0"
-                                                           Foreground="{StaticResource MutedTextBrush}"
-                                                           TextWrapping="Wrap" />
-                                                <TextBlock Text="{Binding FeedUrl}"
-                                                           Margin="0,4,0,0"
-                                                           FontSize="11"
-                                                           Foreground="{StaticResource MutedTextBrush}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" HorizontalAlignment="Stretch">
-                                                <Button Content="{Binding SubscriptionLabel}"
-                                                        Command="{Binding DataContext.ToggleSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        HorizontalAlignment="Right"
-                                                        MinWidth="82"
-                                                        Padding="9,5" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                          </ItemsControl>
-                        </ScrollViewer>
+                        <Grid Grid.Row="1" Margin="0,0,0,12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0">
+                                <TextBlock Text="Search feeds"
+                                           Margin="0,0,12,0"
+                                           VerticalAlignment="Center" />
+                                <TextBox MinHeight="34"
+                                         Padding="9,5"
+                                         VerticalContentAlignment="Center"
+                                         x:Name="CatalogFeedSearchBox"
+                                         AutomationProperties.Name="Search feeds"
+                                         ToolTip="Search names, descriptions, categories, or feed URLs"
+                                         Text="{Binding CatalogSearchQuery, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                            <WrapPanel Grid.Row="1" Margin="0,8,0,0" VerticalAlignment="Center">
+                                <ComboBox Width="190"
+                                          Height="32"
+                                          Margin="0,0,12,0"
+                                          x:Name="CatalogCategoryFilter"
+                                          AutomationProperties.Name="Filter by category"
+                                          ToolTip="Filter catalog feeds by category"
+                                          ItemsSource="{Binding CatalogCategoryOptions}"
+                                          DisplayMemberPath="Name"
+                                          SelectedItem="{Binding SelectedCatalogCategory}" />
+                                <ComboBox Width="190"
+                                          Height="32"
+                                          Margin="0,0,12,0"
+                                          x:Name="CatalogCollectionFilter"
+                                          AutomationProperties.Name="Filter by collection"
+                                          ToolTip="Browse curated collections"
+                                          ItemsSource="{Binding CatalogCollectionOptions}"
+                                          DisplayMemberPath="Name"
+                                          SelectedItem="{Binding SelectedCatalogCollection}" />
+                                <CheckBox x:Name="HideFollowedCatalogCheckBox"
+                                          Content="Hide followed"
+                                          Margin="0,0,12,0"
+                                          VerticalAlignment="Center"
+                                          IsChecked="{Binding HideFollowedCatalogFeeds}" />
+                                <Button x:Name="BatchFollowSelectedButton"
+                                    Content="{Binding FollowSelectedCatalogFeedsLabel}"
+                                    Margin="0,0,8,0"
+                                    Padding="10,5"
+                                    IsEnabled="{Binding CanFollowSelectedCatalogFeeds}"
+                                    Command="{Binding FollowSelectedCatalogFeedsCommand}" />
+                                <Button x:Name="ClearSelectedCatalogFeedsButton"
+                                    Content="Clear selection"
+                                    Padding="10,5"
+                                    IsEnabled="{Binding HasSelectedCatalogFeeds}"
+                                    Command="{Binding ClearSelectedCatalogFeedsCommand}" />
+                                <Button Content="Clear filters"
+                                        Padding="10,5"
+                                        Command="{Binding ClearCatalogFiltersCommand}" />
+                            </WrapPanel>
+                            <TextBlock Grid.Row="2"
+                                       Text="{Binding SelectedCatalogCollectionCuratorLabel}"
+                                       FontSize="12"
+                                       Foreground="{StaticResource MutedTextBrush}" />
+                        </Grid>
+                        <Border x:Name="CatalogFeedPreviewPanel"
+                                Grid.Row="2"
+                                Margin="0,0,0,12"
+                                Padding="12"
+                                BorderBrush="#DCE4DF"
+                                BorderThickness="1"
+                                Visibility="{Binding IsCatalogFeedPreviewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <DockPanel LastChildFill="False" Margin="0,0,0,8">
+                                    <StackPanel DockPanel.Dock="Left">
+                                        <TextBlock Text="{Binding PreviewingCatalogFeed.Name}" FontWeight="SemiBold" FontSize="16" />
+                                        <TextBlock Text="{Binding PreviewingCatalogFeed.CategoryName, TargetNullValue=Uncategorized}"
+                                                   Margin="0,3,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                    </StackPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="{Binding CatalogFeedPreviewCloseLabel}"
+                                            Margin="8,0,0,0"
+                                            Padding="9,5"
+                                            Command="{Binding CloseCatalogFeedPreviewCommand}" />
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Refresh preview"
+                                            Padding="9,5"
+                                            Command="{Binding RefreshCatalogFeedPreviewCommand}" />
+                                </DockPanel>
+                                <ProgressBar Height="3"
+                                             IsIndeterminate="True"
+                                             Visibility="{Binding IsCatalogFeedPreviewLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <TextBlock Text="{Binding CatalogFeedPreviewErrorMessage}"
+                                           Margin="0,8,0,0"
+                                           Foreground="#A23B35"
+                                           TextWrapping="Wrap"
+                                           Visibility="{Binding HasCatalogFeedPreviewError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <TextBlock Text="No recent articles are available in this feed."
+                                           Margin="0,8,0,0"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           Visibility="{Binding IsCatalogFeedPreviewEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <ScrollViewer MaxHeight="220"
+                                              Margin="0,8,0,0"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding ActiveCatalogFeedPreview.Items}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,8">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding PublishedAt, StringFormat={}{0:MMM d, yyyy}}"
+                                                                   Margin="0,3,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                                        <TextBlock Text="{Binding Summary}"
+                                                                   Margin="0,3,0,0"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                        <Grid Grid.Row="3">
+                            <ListBox ItemsSource="{Binding CatalogFeedListView}"
+                                     x:Name="CatalogFeedResultsList"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     ScrollViewer.CanContentScroll="True"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="0" />
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,13">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox VerticalAlignment="Center"
+                                                          Margin="0,0,12,0"
+                                                          IsChecked="{Binding IsSelectedForFollow}"
+                                                          IsEnabled="{Binding CanSelectForFollow}"
+                                                          AutomationProperties.Name="{Binding Name}"
+                                                          AutomationProperties.HelpText="Select this feed to follow it with one folder choice"
+                                                          ToolTip="Select for batch follow" />
+                                                <StackPanel Grid.Column="1" Margin="0,0,16,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="15" />
+                                                    <TextBlock Text="{Binding CategoryName, TargetNullValue=Uncategorized}"
+                                                               Margin="0,4,0,0"
+                                                               FontSize="12"
+                                                               Foreground="{StaticResource AccentBrush}" />
+                                                    <TextBlock Text="{Binding Description}"
+                                                               Margin="0,4,0,0"
+                                                               Foreground="{StaticResource MutedTextBrush}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Text="{Binding FeedUrl}"
+                                                               Margin="0,4,0,0"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource MutedTextBrush}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding PublisherWebsiteDisplay}"
+                                                               Margin="0,4,0,0"
+                                                               FontSize="11"
+                                                               Foreground="{StaticResource AccentBrush}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" HorizontalAlignment="Stretch">
+                                                    <Button Content="Preview"
+                                                            Command="{Binding DataContext.PreviewCatalogFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            IsEnabled="{Binding DataContext.IsCatalogFeedPreviewAvailable, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            Margin="0,0,0,6"
+                                                            MinWidth="82"
+                                                            Padding="9,5"
+                                                            ToolTip="Preview recent entries without following this feed" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="3" HorizontalAlignment="Stretch">
+                                                    <Button Content="{Binding SubscriptionLabel}"
+                                                            Command="{Binding DataContext.ToggleSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            HorizontalAlignment="Right"
+                                                            MinWidth="82"
+                                                            Padding="9,5" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Text="{Binding CatalogResultsEmptyMessage}"
+                                       Margin="0,16,0,0"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Top"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       IsHitTestVisible="False"
+                                       Visibility="{Binding IsCatalogResultsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </Grid>
                     </Grid>
                 </Grid>
 
@@ -861,7 +1051,18 @@
                                                 AutomationProperties.Name="Add feed"
                                                 Click="AddFeed_Click" />
                                     </Grid>
-                                    <ItemsControl ItemsSource="{Binding CatalogManagement.Feeds}">
+                                    <DockPanel Margin="0,0,0,8">
+                                        <CheckBox Content="Show metadata gaps only"
+                                                  IsChecked="{Binding CatalogManagement.ShowMetadataGapsOnly}"
+                                                  VerticalAlignment="Center" />
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding CatalogManagement.MetadataReviewSummary}"
+                                                   Margin="12,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                    </DockPanel>
+                                    <ItemsControl ItemsSource="{Binding CatalogManagement.VisibleFeeds}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,11">
@@ -872,22 +1073,49 @@
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel>
                                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding SameNameDisplay}"
+                                                                       Margin="0,4,8,0"
+                                                                       FontSize="11"
+                                                                       Foreground="#9B5C00" />
+                                                            <TextBlock Text="{Binding MetadataReviewDisplay}"
+                                                                       Margin="0,4,8,0"
+                                                                       FontSize="11"
+                                                                       Foreground="#9B5C00"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Text="{Binding HealthCheckDisplay}"
+                                                                       Margin="0,4,8,0"
+                                                                       FontSize="11"
+                                                                       Foreground="{StaticResource MutedTextBrush}" />
                                                             <TextBlock Text="{Binding FeedUrl}"
                                                                        Margin="0,4,8,0"
                                                                        FontSize="11"
                                                                        Foreground="{StaticResource MutedTextBrush}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding PublisherWebsiteDisplay}"
+                                                                       Margin="0,4,8,0"
+                                                                       FontSize="11"
+                                                                       Foreground="{StaticResource AccentBrush}"
                                                                        TextTrimming="CharacterEllipsis" />
                                                             <TextBlock Text="{Binding CategoryName, TargetNullValue=Uncategorized}"
                                                                        Margin="0,4,0,0"
                                                                        FontSize="11"
                                                                        Foreground="{StaticResource AccentBrush}" />
                                                         </StackPanel>
-                                                        <Button Grid.Column="1"
-                                                                Content="Remove"
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <Button Content="Edit"
+                                                                Click="EditFeed_Click"
+                                                                Padding="8,5"
+                                                                Margin="0,0,0,5" />
+                                                            <Button Content="Check feed"
+                                                                    Command="{Binding DataContext.CatalogManagement.CheckFeedHealthCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    Padding="8,5"
+                                                                    Margin="0,0,0,5" />
+                                                            <Button Content="Remove"
                                                                 Command="{Binding DataContext.CatalogManagement.DeleteFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                 CommandParameter="{Binding}"
-                                                                VerticalAlignment="Center"
                                                                 Padding="8,5" />
+                                                        </StackPanel>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
@@ -939,6 +1167,10 @@
                                                 AutomationProperties.Name="Add collection"
                                                 Click="AddCollection_Click" />
                                     </Grid>
+                                    <TextBlock Text="Curated by Catalog Master"
+                                               Margin="0,0,0,8"
+                                               FontSize="12"
+                                               Foreground="{StaticResource MutedTextBrush}" />
                                     <ItemsControl ItemsSource="{Binding CatalogManagement.Collections}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>

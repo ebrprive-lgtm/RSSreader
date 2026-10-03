@@ -37,7 +37,9 @@ public sealed class OpmlFeedParserTests
         Assert.AreEqual("https://example.com/verge.xml", result.Feeds[0].FeedUrl);
         Assert.AreEqual("Technology", result.Feeds[0].CategoryName);
         Assert.AreEqual("Technology news", result.Feeds[0].Description);
+        Assert.AreEqual("https://example.com", result.Feeds[0].WebsiteUrl);
         Assert.AreEqual("GitHub Blog", result.Feeds[1].Name);
+        Assert.IsNull(result.Feeds[1].WebsiteUrl);
         Assert.AreEqual("Technology / Software", result.Feeds[1].CategoryName);
         Assert.AreEqual(2, result.SkippedCount);
     }

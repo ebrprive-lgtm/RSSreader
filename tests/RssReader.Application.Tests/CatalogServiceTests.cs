@@ -44,6 +44,101 @@ public sealed class CatalogServiceTests
     }
 
     [TestMethod]
+    public async Task CatalogMasterCanUpdateFeedMetadataWithoutChangingIdentity()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        var actor = Profile.CreateCatalogMaster();
+        var original = await service.AddFeedAsync(
+            actor,
+            "Example",
+            "https://example.com/feed.xml",
+            null,
+            null);
+
+        var updated = await service.UpdateFeedAsync(
+            actor,
+            original.Id,
+            "Example Journal",
+            original.FeedUrl,
+            "A better description",
+            null,
+            websiteUrl: "https://example.com/journal");
+
+        Assert.AreEqual(original.Id, updated.Id);
+        Assert.AreEqual("Example Journal", updated.Name);
+        Assert.AreEqual("A better description", updated.Description);
+        Assert.AreEqual("https://example.com/journal", updated.WebsiteUrl);
+        Assert.AreEqual(1, (await service.GetFeedsAsync()).Count);
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.UpdateFeedAsync(
+            actor,
+            original.Id,
+            updated.Name,
+            updated.FeedUrl,
+            updated.Description,
+            null,
+            websiteUrl: "file:///C:/publisher"));
+    }
+
+    [TestMethod]
+    public async Task CatalogMasterFeedHealthCheckPersistsSuccessAndFailureWithTimestamps()
+    {
+        var store = new MemoryCatalogStore();
+        var feed = new CatalogFeed("health-feed", "Health feed", "https://example.com/feed.xml", null, null);
+        await store.AddFeedAsync(feed);
+        var actor = Profile.CreateCatalogMaster();
+        var successfulService = new CatalogService(store, new TestFeedDownloader((_, _) =>
+            Task.FromResult<IReadOnlyList<DownloadedFeedItem>>([])));
+
+        var successfulCheck = await successfulService.CheckFeedHealthAsync(actor, feed.Id);
+        var persistedSuccess = (await store.GetFeedsAsync()).Single();
+
+        Assert.IsTrue(successfulCheck.IsSuccessful);
+        Assert.AreEqual(successfulCheck.CheckedAt, persistedSuccess.LastHealthCheckedAt);
+        Assert.AreEqual(true, persistedSuccess.LastHealthCheckSucceeded);
+
+        var failedService = new CatalogService(store, new TestFeedDownloader((_, _) =>
+            Task.FromException<IReadOnlyList<DownloadedFeedItem>>(new InvalidOperationException("offline"))));
+        var failedCheck = await failedService.CheckFeedHealthAsync(actor, feed.Id);
+        var persistedFailure = (await store.GetFeedsAsync()).Single();
+
+        Assert.IsFalse(failedCheck.IsSuccessful);
+        Assert.AreEqual(failedCheck.CheckedAt, persistedFailure.LastHealthCheckedAt);
+        Assert.AreEqual(false, persistedFailure.LastHealthCheckSucceeded);
+        await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(() =>
+            successfulService.CheckFeedHealthAsync(Profile.CreateRegular("Reader"), feed.Id));
+    }
+
+    [TestMethod]
+    public async Task CancelledFeedHealthCheckDoesNotReplacePreviousResult()
+    {
+        var store = new MemoryCatalogStore();
+        var checkedAt = new DateTimeOffset(2026, 10, 2, 12, 0, 0, TimeSpan.Zero);
+        var feed = new CatalogFeed(
+            "health-feed",
+            "Health feed",
+            "https://example.com/feed.xml",
+            null,
+            null,
+            null,
+            checkedAt,
+            true);
+        await store.AddFeedAsync(feed);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var downloader = new TestFeedDownloader((_, token) =>
+            Task.FromCanceled<IReadOnlyList<DownloadedFeedItem>>(token));
+        var service = new CatalogService(store, downloader);
+
+        await Assert.ThrowsExceptionAsync<TaskCanceledException>(() =>
+            service.CheckFeedHealthAsync(Profile.CreateCatalogMaster(), feed.Id, cancellation.Token));
+
+        var unchangedFeed = (await store.GetFeedsAsync()).Single();
+        Assert.AreEqual(checkedAt, unchangedFeed.LastHealthCheckedAt);
+        Assert.AreEqual(true, unchangedFeed.LastHealthCheckSucceeded);
+    }
+
+    [TestMethod]
     public async Task CatalogMasterAuthorizationRequiresReservedIdentity()
     {
         var service = new CatalogService(new MemoryCatalogStore());
@@ -77,7 +172,7 @@ public sealed class CatalogServiceTests
 
         var result = await service.ImportFeedsAsync(catalogMaster,
         [
-            new OpmlFeed("The Verge", "https://example.com/feed.xml", null, "technology"),
+            new OpmlFeed("The Verge", "https://example.com/feed.xml", null, "technology", "https://www.theverge.com"),
             new OpmlFeed("Duplicate", "https://EXAMPLE.com/feed.xml", null, "Technology"),
             new OpmlFeed("Invalid URL", "file:///feed.xml", null, null),
             new OpmlFeed(" ", "https://example.com/unnamed.xml", null, null)
@@ -85,7 +180,9 @@ public sealed class CatalogServiceTests
 
         Assert.AreEqual(1, result.AddedCount);
         Assert.AreEqual(3, result.SkippedCount);
-        Assert.AreEqual(category.Id, (await service.GetFeedsAsync()).Single().CategoryId);
+        var importedFeed = (await service.GetFeedsAsync()).Single();
+        Assert.AreEqual(category.Id, importedFeed.CategoryId);
+        Assert.AreEqual("https://www.theverge.com/", importedFeed.WebsiteUrl);
         Assert.AreEqual(1, (await service.GetCategoriesAsync()).Count);
     }
 
@@ -132,6 +229,17 @@ public sealed class CatalogServiceTests
         public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default)
         {
             _feeds.Add(feed);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default)
+        {
+            var index = _feeds.FindIndex(item => item.Id == feed.Id);
+            if (index >= 0)
+            {
+                _feeds[index] = feed;
+            }
+
             return Task.CompletedTask;
         }
 
@@ -184,5 +292,13 @@ public sealed class CatalogServiceTests
             _memberships.Remove((collectionId, feedId));
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class TestFeedDownloader(
+        Func<CatalogFeed, CancellationToken, Task<IReadOnlyList<DownloadedFeedItem>>> download) : IFeedDownloader
+    {
+        public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
+            CatalogFeed feed,
+            CancellationToken cancellationToken = default) => download(feed, cancellationToken);
     }
 }

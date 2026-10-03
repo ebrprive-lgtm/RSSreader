@@ -8,19 +8,33 @@ using RssReader.Domain;
 
 namespace RssReader.App.ViewModels;
 
+public sealed record CatalogCategoryOption(string? CategoryId, string Name);
+public sealed record CatalogCollectionOption(string? CollectionId, string Name, IReadOnlySet<string> FeedIds);
+
 public sealed class MainWindowViewModel : ObservableObject
 {
+    private const int MaximumCachedCatalogFeedPreviews = 20;
     private readonly List<ArticleRowViewModel> _allArticles;
     private readonly CatalogService? _catalogService;
+    private readonly CatalogFeedPreviewService? _catalogFeedPreviewService;
     private readonly ReadingService? _readingService;
     private readonly FeedRefreshService? _feedRefreshService;
+    private readonly Dictionary<string, CatalogFeedPreview> _catalogFeedPreviewCache = new(StringComparer.Ordinal);
+    private readonly Queue<string> _catalogFeedPreviewCacheOrder = new();
     private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
     private ProfilePreferences _profilePreferences;
     private Dictionary<string, string[]> _feedIdsByFolder = new(StringComparer.OrdinalIgnoreCase);
     private string _activeRoute;
     private string _searchQuery = string.Empty;
+    private string _catalogSearchQuery = string.Empty;
     private string _quickQuery = string.Empty;
     private string _statusMessage = string.Empty;
+    private string _catalogFeedPreviewErrorMessage = string.Empty;
+    private CatalogCategoryOption? _selectedCatalogCategory;
+    private CatalogCollectionOption? _selectedCatalogCollection;
+    private CatalogFeedListItem? _previewingCatalogFeed;
+    private CatalogFeedPreview? _activeCatalogFeedPreview;
+    private CancellationTokenSource? _catalogFeedPreviewCancellation;
     private ArticleRowViewModel? _selectedArticle;
     private bool _isSidebarPinned = true;
     private bool _isRefreshing;
@@ -29,6 +43,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isCardsView = true;
     private bool _isMagazineView;
     private bool _isSortByDate;
+    private bool _hideFollowedCatalogFeeds;
+    private bool _isCatalogFeedPreviewLoading;
     private bool _hasAppliedStartPage;
     private bool _hasLoadedInitialReaderData;
     private int _folderArticlesPerFeedLimit;
@@ -46,10 +62,12 @@ public sealed class MainWindowViewModel : ObservableObject
         CatalogService? catalogService,
         ReadingService? readingService,
         FeedRefreshService? feedRefreshService,
-        ProfilePreferences? profilePreferences = null)
+        ProfilePreferences? profilePreferences = null,
+        CatalogFeedPreviewService? catalogFeedPreviewService = null)
     {
         ActiveProfile = profile;
         _catalogService = catalogService;
+        _catalogFeedPreviewService = catalogFeedPreviewService;
         _readingService = readingService;
         _feedRefreshService = feedRefreshService;
         _profilePreferences = profilePreferences ?? new ProfilePreferences();
@@ -95,6 +113,18 @@ public sealed class MainWindowViewModel : ObservableObject
         QuickTargets = [];
         CatalogFeeds = [];
         CatalogCategories = [];
+        CatalogCategoryOptions = [];
+        var allCategoriesOption = new CatalogCategoryOption(null, $"All categories ({CatalogFeeds.Count})");
+        CatalogCategoryOptions.Add(allCategoriesOption);
+        _selectedCatalogCategory = allCategoriesOption;
+        CatalogCollectionOptions = [];
+        var allCollectionsOption = new CatalogCollectionOption(null, $"All collections ({CatalogFeeds.Count})", new HashSet<string>(StringComparer.Ordinal));
+        CatalogCollectionOptions.Add(allCollectionsOption);
+        _selectedCatalogCollection = allCollectionsOption;
+        CatalogFeedListView = new ListCollectionView(CatalogFeeds);
+        CatalogFeedListView.Filter = IsCatalogFeedVisible;
+        CatalogFeedListView.SortDescriptions.Add(
+            new SortDescription(nameof(CatalogFeedListItem.Name), ListSortDirection.Ascending));
         CatalogCollections = [];
         FolderNames = [];
         CatalogManagement = profile.IsCatalogMaster && catalogService is not null
@@ -122,6 +152,20 @@ public sealed class MainWindowViewModel : ObservableObject
         ToggleReadCommand = new RelayCommand(ToggleRead);
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
+        ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
+        FollowSelectedCatalogFeedsCommand = new AsyncCommand(FollowSelectedCatalogFeedsAsync);
+        ClearSelectedCatalogFeedsCommand = new RelayCommand(ClearSelectedCatalogFeeds, () => HasSelectedCatalogFeeds);
+        PreviewCatalogFeedCommand = new RelayCommand<CatalogFeedListItem>(feed => _ = PreviewCatalogFeedAsync(feed));
+        RefreshCatalogFeedPreviewCommand = new RelayCommand(
+            () =>
+            {
+                if (PreviewingCatalogFeed is { } feed)
+                {
+                    _ = PreviewCatalogFeedAsync(feed, forceRefresh: true);
+                }
+            },
+            () => PreviewingCatalogFeed is not null && !IsCatalogFeedPreviewLoading);
+        CloseCatalogFeedPreviewCommand = new RelayCommand(CloseCatalogFeedPreview);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsRefreshing && !IsCatalogMaster);
         ToggleSubscriptionCommand = new AsyncCommand<CatalogFeedListItem>(ToggleSubscriptionAsync);
 
@@ -149,6 +193,9 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<SidebarLink> QuickTargets { get; }
     public ObservableCollection<CatalogFeedListItem> CatalogFeeds { get; }
     public ObservableCollection<CatalogCategory> CatalogCategories { get; }
+    public ObservableCollection<CatalogCategoryOption> CatalogCategoryOptions { get; }
+    public ObservableCollection<CatalogCollectionOption> CatalogCollectionOptions { get; }
+    public ICollectionView CatalogFeedListView { get; }
     public ObservableCollection<CatalogCollection> CatalogCollections { get; }
     public ObservableCollection<string> FolderNames { get; }
     public CatalogManagementViewModel? CatalogManagement { get; }
@@ -160,6 +207,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand ToggleReadCommand { get; }
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
+    public RelayCommand ClearCatalogFiltersCommand { get; }
+    public AsyncCommand FollowSelectedCatalogFeedsCommand { get; }
+    public RelayCommand ClearSelectedCatalogFeedsCommand { get; }
+    public RelayCommand<CatalogFeedListItem> PreviewCatalogFeedCommand { get; }
+    public RelayCommand RefreshCatalogFeedPreviewCommand { get; }
+    public RelayCommand CloseCatalogFeedPreviewCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
 
@@ -169,6 +222,142 @@ public sealed class MainWindowViewModel : ObservableObject
             : _feedRefreshService.GetRawFeedContentAsync(ActiveProfile.Id, feedId, cancellationToken);
 
     public event Action? ProfileSwitchRequested;
+
+    public string CatalogSearchQuery
+    {
+        get => _catalogSearchQuery;
+        set
+        {
+            if (SetProperty(ref _catalogSearchQuery, value ?? string.Empty))
+            {
+                RefreshCatalogFeedView();
+            }
+        }
+    }
+
+    public CatalogCategoryOption? SelectedCatalogCategory
+    {
+        get => _selectedCatalogCategory;
+        set
+        {
+            if (SetProperty(ref _selectedCatalogCategory, value))
+            {
+                RefreshCatalogFeedView();
+            }
+        }
+    }
+
+    public CatalogCollectionOption? SelectedCatalogCollection
+    {
+        get => _selectedCatalogCollection;
+        set
+        {
+            if (SetProperty(ref _selectedCatalogCollection, value))
+            {
+                OnPropertyChanged(nameof(SelectedCatalogCollectionCuratorLabel));
+                RefreshCatalogFeedView();
+            }
+        }
+    }
+
+    public string SelectedCatalogCollectionCuratorLabel =>
+        SelectedCatalogCollection?.CollectionId is null ? string.Empty : "Curated by Catalog Master";
+
+    public bool HideFollowedCatalogFeeds
+    {
+        get => _hideFollowedCatalogFeeds;
+        set
+        {
+            if (SetProperty(ref _hideFollowedCatalogFeeds, value))
+            {
+                RefreshCatalogFeedView();
+            }
+        }
+    }
+
+    public bool IsCatalogFilterActive =>
+        !string.IsNullOrWhiteSpace(CatalogSearchQuery) ||
+        SelectedCatalogCategory?.CategoryId is not null ||
+        SelectedCatalogCollection?.CollectionId is not null ||
+        HideFollowedCatalogFeeds;
+
+    public bool IsCatalogResultsEmpty => CatalogFeedListView.IsEmpty;
+
+    public string CatalogResultsSummary => IsCatalogFilterActive
+        ? $"{CatalogFeedListView.Cast<CatalogFeedListItem>().Count()} of {CatalogFeeds.Count} feeds"
+        : $"{CatalogFeeds.Count} feeds";
+
+    public string CatalogResultsEmptyMessage => CatalogFeeds.Count == 0
+        ? "No feeds are available in the catalog yet."
+        : "No feeds match these filters.";
+
+    public int SelectedCatalogFeedCount => CatalogFeeds.Count(feed => feed.IsSelectedForFollow);
+    public bool HasSelectedCatalogFeeds => SelectedCatalogFeedCount > 0;
+    public bool CanFollowSelectedCatalogFeeds => _readingService is not null && HasSelectedCatalogFeeds;
+    public string FollowSelectedCatalogFeedsLabel => $"Follow selected ({SelectedCatalogFeedCount})";
+
+    public CatalogFeedListItem? PreviewingCatalogFeed
+    {
+        get => _previewingCatalogFeed;
+        private set
+        {
+            if (SetProperty(ref _previewingCatalogFeed, value))
+            {
+                OnPropertyChanged(nameof(IsCatalogFeedPreviewVisible));
+                OnPropertyChanged(nameof(CatalogFeedPreviewCloseLabel));
+                RefreshCatalogFeedPreviewCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public CatalogFeedPreview? ActiveCatalogFeedPreview
+    {
+        get => _activeCatalogFeedPreview;
+        private set
+        {
+            if (SetProperty(ref _activeCatalogFeedPreview, value))
+            {
+                OnPropertyChanged(nameof(IsCatalogFeedPreviewEmpty));
+            }
+        }
+    }
+
+    public string CatalogFeedPreviewErrorMessage
+    {
+        get => _catalogFeedPreviewErrorMessage;
+        private set
+        {
+            if (SetProperty(ref _catalogFeedPreviewErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasCatalogFeedPreviewError));
+                OnPropertyChanged(nameof(IsCatalogFeedPreviewEmpty));
+            }
+        }
+    }
+
+    public bool IsCatalogFeedPreviewLoading
+    {
+        get => _isCatalogFeedPreviewLoading;
+        private set
+        {
+            if (SetProperty(ref _isCatalogFeedPreviewLoading, value))
+            {
+                OnPropertyChanged(nameof(CatalogFeedPreviewCloseLabel));
+                OnPropertyChanged(nameof(IsCatalogFeedPreviewEmpty));
+                RefreshCatalogFeedPreviewCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsCatalogFeedPreviewAvailable => _catalogFeedPreviewService is not null;
+    public bool IsCatalogFeedPreviewVisible => PreviewingCatalogFeed is not null;
+    public bool HasCatalogFeedPreviewError => !string.IsNullOrWhiteSpace(CatalogFeedPreviewErrorMessage);
+    public bool IsCatalogFeedPreviewEmpty =>
+        IsCatalogFeedPreviewVisible &&
+        !IsCatalogFeedPreviewLoading &&
+        !HasCatalogFeedPreviewError &&
+        (ActiveCatalogFeedPreview is null || ActiveCatalogFeedPreview.Items.Count == 0);
+    public string CatalogFeedPreviewCloseLabel => IsCatalogFeedPreviewLoading ? "Cancel preview" : "Close preview";
 
     public Func<
         IReadOnlyList<string>,
@@ -184,31 +373,63 @@ public sealed class MainWindowViewModel : ObservableObject
             var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
             var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
             var collections = await _catalogService.GetCollectionsAsync(cancellationToken);
+            var selectedCollectionId = _selectedCatalogCollection?.CollectionId;
 
             CatalogCategories.Clear();
-            foreach (var category in categories)
+            CatalogCategoryOptions.Clear();
+            var allCategoriesOption = new CatalogCategoryOption(null, $"All categories ({feeds.Count})");
+            CatalogCategoryOptions.Add(allCategoriesOption);
+            foreach (var category in categories.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
             {
                 CatalogCategories.Add(category);
+                var categoryFeedCount = feeds.Count(feed => feed.CategoryId == category.Id);
+                CatalogCategoryOptions.Add(new CatalogCategoryOption(
+                    category.Id,
+                    $"{category.Name} ({categoryFeedCount})"));
             }
 
+            SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(option =>
+                option.CategoryId == _selectedCatalogCategory?.CategoryId) ?? allCategoriesOption;
+
             CatalogCollections.Clear();
+            CatalogCollectionOptions.Clear();
+            var allCollectionsOption = new CatalogCollectionOption(
+                null,
+                $"All collections ({feeds.Count})",
+                new HashSet<string>(StringComparer.Ordinal));
+            CatalogCollectionOptions.Add(allCollectionsOption);
             foreach (var collection in collections)
             {
                 CatalogCollections.Add(collection);
+                var collectionFeedIds = await _catalogService.GetCollectionFeedIdsAsync(collection.Id, cancellationToken);
+                var feedIdSet = collectionFeedIds.ToHashSet(StringComparer.Ordinal);
+                CatalogCollectionOptions.Add(new CatalogCollectionOption(
+                    collection.Id,
+                    $"{collection.Name} ({feedIdSet.Count})",
+                    feedIdSet));
             }
+
+            SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(option =>
+                option.CollectionId == selectedCollectionId) ?? allCollectionsOption;
 
             CatalogFeeds.Clear();
             foreach (var feed in feeds)
             {
-                CatalogFeeds.Add(new CatalogFeedListItem(
+                var catalogFeed = new CatalogFeedListItem(
                     feed.Id,
                     feed.Name,
                     feed.FeedUrl,
                     feed.Description,
                     feed.CategoryId is not null && categoryNames.TryGetValue(feed.CategoryId, out var categoryName)
                         ? categoryName
-                        : null));
+                        : null,
+                    feed.CategoryId,
+                    feed.WebsiteUrl);
+                catalogFeed.PropertyChanged += OnCatalogFeedPropertyChanged;
+                CatalogFeeds.Add(catalogFeed);
             }
+
+            RefreshCatalogFeedView();
 
             if (CatalogManagement is not null)
             {
@@ -451,8 +672,241 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsCatalogAdminVisible => IsCatalogMaster && ActiveRoute == "Manage catalog";
     public bool IsArticleListEmpty => VisibleArticles.Count == 0;
 
+    private bool IsCatalogFeedVisible(object item)
+    {
+        if (item is not CatalogFeedListItem feed ||
+            (HideFollowedCatalogFeeds && feed.IsSubscribed) ||
+            (SelectedCatalogCategory?.CategoryId is { } categoryId && feed.CategoryId != categoryId) ||
+            (SelectedCatalogCollection?.CollectionId is not null &&
+             !SelectedCatalogCollection.FeedIds.Contains(feed.Id)))
+        {
+            return false;
+        }
+
+        var searchTerms = CatalogSearchQuery.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (searchTerms.Length == 0)
+        {
+            return true;
+        }
+
+        var searchableText = string.Join(" ", new[]
+        {
+            feed.Name,
+            feed.CategoryName,
+            feed.Description,
+            feed.FeedUrl,
+            feed.WebsiteUrl
+        }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        return searchTerms.All(term => searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void OnCatalogFeedPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(CatalogFeedListItem.IsSelectedForFollow))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(SelectedCatalogFeedCount));
+        OnPropertyChanged(nameof(HasSelectedCatalogFeeds));
+        OnPropertyChanged(nameof(CanFollowSelectedCatalogFeeds));
+        OnPropertyChanged(nameof(FollowSelectedCatalogFeedsLabel));
+        ClearSelectedCatalogFeedsCommand.NotifyCanExecuteChanged();
+    }
+
+    private string[] GetSuggestedFolders()
+    {
+        var suggestions = CatalogFeeds
+            .Select(item => item.CategoryName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return suggestions.Length > 0
+            ? suggestions
+            : new[] { "News", "Technology", "Gaming", "Culture" }
+                .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                .ToArray();
+    }
+
+    private void ClearSelectedCatalogFeeds()
+    {
+        foreach (var feed in CatalogFeeds.Where(feed => feed.IsSelectedForFollow))
+        {
+            feed.IsSelectedForFollow = false;
+        }
+    }
+
+    private async Task FollowSelectedCatalogFeedsAsync()
+    {
+        var selectedFeeds = CatalogFeeds
+            .Where(feed => feed.IsSelectedForFollow && !feed.IsSubscribed)
+            .ToArray();
+        if (_readingService is null || selectedFeeds.Length == 0 || FolderSelectionRequested is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var folderName = await FolderSelectionRequested(
+                FolderNames.ToArray(),
+                GetSuggestedFolders(),
+                CreateFolderFromPickerAsync);
+            if (string.IsNullOrWhiteSpace(folderName))
+            {
+                return;
+            }
+
+            var failedFeedNames = new List<string>();
+            var followedCount = 0;
+            foreach (var feed in selectedFeeds)
+            {
+                try
+                {
+                    await _readingService.SubscribeAsync(ActiveProfile, feed.Id, folderName);
+                    _pendingInitialRefreshFeedIds.Add(feed.Id);
+                    feed.IsSelectedForFollow = false;
+                    followedCount++;
+                }
+                catch
+                {
+                    failedFeedNames.Add(feed.Name);
+                }
+            }
+
+            if (followedCount > 0)
+            {
+                await LoadProfileReaderDataAsync(CancellationToken.None);
+            }
+
+            StatusMessage = failedFeedNames.Count == 0
+                ? $"Following {followedCount} feeds in {folderName}."
+                : $"Followed {followedCount} feeds; {failedFeedNames.Count} failed: {string.Join(", ", failedFeedNames)}.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+    }
+
+    private void RefreshCatalogFeedView()
+    {
+        CatalogFeedListView.Refresh();
+        OnPropertyChanged(nameof(IsCatalogFilterActive));
+        OnPropertyChanged(nameof(IsCatalogResultsEmpty));
+        OnPropertyChanged(nameof(CatalogResultsSummary));
+        OnPropertyChanged(nameof(CatalogResultsEmptyMessage));
+    }
+
+    private void ClearCatalogFilters()
+    {
+        CatalogSearchQuery = string.Empty;
+        SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(option => option.CategoryId is null);
+        SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(option => option.CollectionId is null);
+        HideFollowedCatalogFeeds = false;
+    }
+
+    public async Task PreviewCatalogFeedAsync(CatalogFeedListItem feed, bool forceRefresh = false)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        if (_catalogFeedPreviewService is null)
+        {
+            return;
+        }
+
+        var previousCancellation = _catalogFeedPreviewCancellation;
+        var cancellation = new CancellationTokenSource();
+        _catalogFeedPreviewCancellation = cancellation;
+        previousCancellation?.Cancel();
+        PreviewingCatalogFeed = feed;
+        ActiveCatalogFeedPreview = null;
+        CatalogFeedPreviewErrorMessage = string.Empty;
+        IsCatalogFeedPreviewLoading = true;
+
+        try
+        {
+            CatalogFeedPreview preview;
+            if (!forceRefresh && _catalogFeedPreviewCache.TryGetValue(feed.Id, out var cachedPreview))
+            {
+                preview = cachedPreview;
+            }
+            else
+            {
+                var catalogFeed = new CatalogFeed(
+                    feed.Id,
+                    feed.Name,
+                    feed.FeedUrl,
+                    feed.Description,
+                    feed.CategoryId);
+                var items = await _catalogFeedPreviewService.GetPreviewItemsAsync(catalogFeed, cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                preview = new CatalogFeedPreview(feed.Name, feed.CategoryName, feed.Description, items);
+                CacheCatalogFeedPreview(feed.Id, preview);
+            }
+
+            if (ReferenceEquals(_catalogFeedPreviewCancellation, cancellation))
+            {
+                ActiveCatalogFeedPreview = preview;
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (ReferenceEquals(_catalogFeedPreviewCancellation, cancellation))
+            {
+                CatalogFeedPreviewErrorMessage = $"Could not load this feed preview: {exception.Message}";
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_catalogFeedPreviewCancellation, cancellation))
+            {
+                _catalogFeedPreviewCancellation = null;
+                IsCatalogFeedPreviewLoading = false;
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private void CacheCatalogFeedPreview(string feedId, CatalogFeedPreview preview)
+    {
+        if (!_catalogFeedPreviewCache.ContainsKey(feedId))
+        {
+            if (_catalogFeedPreviewCache.Count >= MaximumCachedCatalogFeedPreviews)
+            {
+                var oldestFeedId = _catalogFeedPreviewCacheOrder.Dequeue();
+                _catalogFeedPreviewCache.Remove(oldestFeedId);
+            }
+
+            _catalogFeedPreviewCacheOrder.Enqueue(feedId);
+        }
+
+        _catalogFeedPreviewCache[feedId] = preview;
+    }
+
+    private void CloseCatalogFeedPreview()
+    {
+        var cancellation = _catalogFeedPreviewCancellation;
+        _catalogFeedPreviewCancellation = null;
+        cancellation?.Cancel();
+        PreviewingCatalogFeed = null;
+        ActiveCatalogFeedPreview = null;
+        CatalogFeedPreviewErrorMessage = string.Empty;
+        IsCatalogFeedPreviewLoading = false;
+    }
+
     private void NavigateTo(SidebarLink link)
     {
+        if (link.Route != "Follow sources")
+        {
+            CloseCatalogFeedPreview();
+        }
+
         SelectedArticle = null;
         ActiveRoute = link.Route;
         UpdateSelectedLinks();
@@ -537,6 +991,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             feed.IsSubscribed = subscriptionsByFeed.ContainsKey(feed.Id);
         }
+
+        RefreshCatalogFeedView();
 
         _allArticles.Clear();
         foreach (var item in articles)
@@ -683,23 +1139,9 @@ public sealed class MainWindowViewModel : ObservableObject
                     return;
                 }
 
-                var suggestions = CatalogFeeds
-                    .Select(item => item.CategoryName)
-                    .Where(name => !string.IsNullOrWhiteSpace(name))
-                    .Select(name => name!.Trim())
-                    .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                if (suggestions.Length == 0)
-                {
-                    suggestions = new[] { "News", "Technology", "Gaming", "Culture" }
-                        .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
-                        .ToArray();
-                }
-
                 var folderName = await FolderSelectionRequested(
                     FolderNames.ToArray(),
-                    suggestions,
+                    GetSuggestedFolders(),
                     CreateFolderFromPickerAsync);
                 if (string.IsNullOrWhiteSpace(folderName))
                 {

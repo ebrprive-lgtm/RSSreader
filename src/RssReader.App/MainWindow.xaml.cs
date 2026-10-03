@@ -4,7 +4,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Navigation;
 using System.Windows.Threading;
+using System.Diagnostics;
 using RssReader.App.ViewModels;
 using RssReader.Domain;
 
@@ -182,6 +184,29 @@ public partial class MainWindow : Window
 
     private void LogoutMenuItem_Click(object sender, RoutedEventArgs e) => LogoutRequested?.Invoke();
 
+    private void SourceLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        if (e.Uri.Scheme != Uri.UriSchemeHttp && e.Uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+            e.Handled = true;
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                $"The source link could not be opened.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
+                "Open source",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
     private async void ShowRawFeed_Click(object sender, RoutedEventArgs e)
     {
         var article = _viewModel?.SelectedArticle;
@@ -244,18 +269,30 @@ public partial class MainWindow : Window
 
     private void AddFeed_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Feed);
 
+    private void EditFeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
+            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        catalogManagement.PrepareFeedEdit(feed);
+        ShowCatalogEntry(CatalogEntryKind.Feed, isEditingFeed: true);
+    }
+
     private void AddCategory_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Category);
 
     private void AddCollection_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Collection);
 
-    private void ShowCatalogEntry(CatalogEntryKind entryKind)
+    private void ShowCatalogEntry(CatalogEntryKind entryKind, bool isEditingFeed = false)
     {
         if (DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
         {
             return;
         }
 
-        var dialog = new CatalogEntryWindow(catalogManagement, entryKind)
+        var dialog = new CatalogEntryWindow(catalogManagement, entryKind, isEditingFeed)
         {
             Owner = this
         };

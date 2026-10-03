@@ -46,6 +46,7 @@ public partial class App : System.Windows.Application
 					services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 					services.AddSingleton<ProfileService>();
 					services.AddSingleton<CatalogService>();
+					services.AddSingleton<CatalogFeedPreviewService>();
 					services.AddSingleton<ReadingService>();
 					services.AddSingleton<FeedRefreshService>();
 				})
@@ -124,9 +125,16 @@ public partial class App : System.Windows.Application
 			var catalogService = _host!.Services.GetRequiredService<CatalogService>();
 			var readingService = _host.Services.GetRequiredService<ReadingService>();
 			var feedRefreshService = _host.Services.GetRequiredService<FeedRefreshService>();
+			var catalogFeedPreviewService = _host.Services.GetRequiredService<CatalogFeedPreviewService>();
 			var profileService = _host.Services.GetRequiredService<ProfileService>();
 			var preferences = await profileService.GetPreferencesAsync(profile.Id);
-			var viewModel = new MainWindowViewModel(profile, catalogService, readingService, feedRefreshService, preferences);
+			var viewModel = new MainWindowViewModel(
+				profile,
+				catalogService,
+				readingService,
+				feedRefreshService,
+				preferences,
+				catalogFeedPreviewService);
 			await viewModel.InitializeAsync();
 			var window = new MainWindow(viewModel);
 			window.LogoutRequested += LogOut;

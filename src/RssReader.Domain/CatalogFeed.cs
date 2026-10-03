@@ -5,4 +5,7 @@ public sealed record CatalogFeed(
     string Name,
     string FeedUrl,
     string? Description,
-    string? CategoryId);
+    string? CategoryId,
+    string? WebsiteUrl = null,
+    DateTimeOffset? LastHealthCheckedAt = null,
+    bool? LastHealthCheckSucceeded = null);

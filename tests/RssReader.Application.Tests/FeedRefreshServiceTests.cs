@@ -106,6 +106,7 @@ public sealed class FeedRefreshServiceTests
         public Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<CatalogCollection>>([]);
         public Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(string collectionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
         public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default) => Task.CompletedTask;

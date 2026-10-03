@@ -29,6 +29,13 @@ public sealed class ArticleRowViewModel(
     public string? Link { get; } = link;
     public string? Content { get; } = content;
     public string? ImageUrl { get; } = imageUrl;
+    public bool HasReadableSummary =>
+        !string.IsNullOrWhiteSpace(Summary) &&
+        (!string.Equals(Summary.Trim(), "Source", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(Link));
+    public bool IsImageVisible => !string.IsNullOrWhiteSpace(ImageUrl);
+    public bool IsSourceLinkVisible =>
+        Uri.TryCreate(Link, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     public string AgeLabel => FormatAge(PublishedAt, DateTimeOffset.Now);
     public string PublishedDateLabel => PublishedAt.ToLocalTime().ToString("MMM d, yyyy");
 

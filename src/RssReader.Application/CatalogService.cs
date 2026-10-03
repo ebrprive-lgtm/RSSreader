@@ -3,8 +3,9 @@ using RssReader.Domain;
 namespace RssReader.Application;
 
 public sealed record FeedImportSummary(int AddedCount, int SkippedCount);
+public sealed record CatalogFeedHealthCheckResult(bool IsSuccessful, DateTimeOffset CheckedAt);
 
-public sealed class CatalogService(ICatalogStore store)
+public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDownloader = null)
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
         store.InitializeAsync(cancellationToken);
@@ -29,13 +30,20 @@ public sealed class CatalogService(ICatalogStore store)
         string feedUrl,
         string? description,
         string? categoryId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? websiteUrl = null)
     {
         EnsureCatalogMaster(actor);
         var normalizedName = RequireName(name, "feed");
         if (!TryNormalizeFeedUrl(feedUrl, out var normalizedUrl))
         {
             throw new ArgumentException("Feed URLs must use HTTP or HTTPS.", nameof(feedUrl));
+        }
+
+        string? normalizedWebsiteUrl = null;
+        if (!string.IsNullOrWhiteSpace(websiteUrl) && !TryNormalizeFeedUrl(websiteUrl, out normalizedWebsiteUrl))
+        {
+            throw new ArgumentException("Website URLs must use HTTP or HTTPS.", nameof(websiteUrl));
         }
 
         var existingFeeds = await store.GetFeedsAsync(cancellationToken);
@@ -58,9 +66,107 @@ public sealed class CatalogService(ICatalogStore store)
             normalizedName,
             normalizedUrl,
             string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-            categoryId);
+            categoryId,
+            normalizedWebsiteUrl);
         await store.AddFeedAsync(feed, cancellationToken);
         return feed;
+    }
+
+    public async Task<CatalogFeed> UpdateFeedAsync(
+        Profile actor,
+        string feedId,
+        string name,
+        string feedUrl,
+        string? description,
+        string? categoryId,
+        CancellationToken cancellationToken = default,
+        string? websiteUrl = null)
+    {
+        EnsureCatalogMaster(actor);
+        var normalizedName = RequireName(name, "feed");
+        if (!TryNormalizeFeedUrl(feedUrl, out var normalizedUrl))
+        {
+            throw new ArgumentException("Feed URLs must use HTTP or HTTPS.", nameof(feedUrl));
+        }
+
+        string? normalizedWebsiteUrl = null;
+        if (!string.IsNullOrWhiteSpace(websiteUrl) && !TryNormalizeFeedUrl(websiteUrl, out normalizedWebsiteUrl))
+        {
+            throw new ArgumentException("Website URLs must use HTTP or HTTPS.", nameof(websiteUrl));
+        }
+
+        var existingFeeds = await store.GetFeedsAsync(cancellationToken);
+        var existingFeed = existingFeeds.FirstOrDefault(feed => feed.Id == feedId);
+        if (existingFeed is null)
+        {
+            throw new InvalidOperationException("That feed no longer exists in the catalog.");
+        }
+
+        if (existingFeeds.Any(feed => feed.Id != feedId &&
+            string.Equals(feed.FeedUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("That feed URL is already in the catalog.");
+        }
+
+        if (categoryId is not null)
+        {
+            var categories = await store.GetCategoriesAsync(cancellationToken);
+            if (categories.All(category => category.Id != categoryId))
+            {
+                throw new ArgumentException("The selected category does not exist.", nameof(categoryId));
+            }
+        }
+
+        var updatedFeed = new CatalogFeed(
+            feedId,
+            normalizedName,
+            normalizedUrl,
+            string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            categoryId,
+            normalizedWebsiteUrl,
+            existingFeed.LastHealthCheckedAt,
+            existingFeed.LastHealthCheckSucceeded);
+        await store.UpdateFeedAsync(updatedFeed, cancellationToken);
+        return updatedFeed;
+    }
+
+    public async Task<CatalogFeedHealthCheckResult> CheckFeedHealthAsync(
+        Profile actor,
+        string feedId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCatalogMaster(actor);
+        if (feedDownloader is null)
+        {
+            throw new InvalidOperationException("Feed health checks are unavailable.");
+        }
+
+        var feed = (await store.GetFeedsAsync(cancellationToken))
+            .FirstOrDefault(candidate => candidate.Id == feedId)
+            ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
+
+        var isSuccessful = false;
+        try
+        {
+            await feedDownloader.DownloadAsync(feed, cancellationToken);
+            isSuccessful = true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // A failed check is recorded as feed status rather than aborting catalog maintenance.
+        }
+
+        var checkedAt = DateTimeOffset.UtcNow;
+        await store.UpdateFeedAsync(feed with
+        {
+            LastHealthCheckedAt = checkedAt,
+            LastHealthCheckSucceeded = isSuccessful
+        }, cancellationToken);
+        return new CatalogFeedHealthCheckResult(isSuccessful, checkedAt);
     }
 
     public async Task<FeedImportSummary> ImportFeedsAsync(
@@ -116,7 +222,8 @@ public sealed class CatalogService(ICatalogStore store)
                 normalizedName,
                 normalizedUrl,
                 string.IsNullOrWhiteSpace(importedFeed.Description) ? null : importedFeed.Description.Trim(),
-                categoryId);
+                categoryId,
+                TryNormalizeFeedUrl(importedFeed.WebsiteUrl, out var websiteUrl) ? websiteUrl : null);
             await store.AddFeedAsync(feed, cancellationToken);
             addedCount++;
         }

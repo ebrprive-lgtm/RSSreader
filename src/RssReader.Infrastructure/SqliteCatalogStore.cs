@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Globalization;
 using RssReader.Application;
 using RssReader.Domain;
 
@@ -35,7 +36,10 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
                 Name TEXT NOT NULL,
                 FeedUrl TEXT NOT NULL COLLATE NOCASE UNIQUE,
                 Description TEXT NULL,
-                CategoryId TEXT NULL REFERENCES CatalogCategories(Id) ON DELETE SET NULL
+                CategoryId TEXT NULL REFERENCES CatalogCategories(Id) ON DELETE SET NULL,
+                WebsiteUrl TEXT NULL,
+                LastHealthCheckedAt TEXT NULL,
+                LastHealthCheckSucceeded INTEGER NULL
             );
             CREATE TABLE IF NOT EXISTS CatalogCollectionFeeds (
                 CollectionId TEXT NOT NULL REFERENCES CatalogCollections(Id) ON DELETE CASCADE,
@@ -44,6 +48,34 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
             );
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await EnsureCatalogFeedColumnAsync(connection, "WebsiteUrl", "TEXT NULL", cancellationToken);
+        await EnsureCatalogFeedColumnAsync(connection, "LastHealthCheckedAt", "TEXT NULL", cancellationToken);
+        await EnsureCatalogFeedColumnAsync(connection, "LastHealthCheckSucceeded", "INTEGER NULL", cancellationToken);
+    }
+
+    private static async Task EnsureCatalogFeedColumnAsync(
+        SqliteConnection connection,
+        string columnName,
+        string columnDefinition,
+        CancellationToken cancellationToken)
+    {
+        var hasWebsiteUrl = false;
+        await using (var columnsCommand = connection.CreateCommand())
+        {
+            columnsCommand.CommandText = "PRAGMA table_info(CatalogFeeds);";
+            await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken);
+            while (await columnsReader.ReadAsync(cancellationToken))
+            {
+                hasWebsiteUrl |= string.Equals(columnsReader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        if (!hasWebsiteUrl)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = $"ALTER TABLE CatalogFeeds ADD COLUMN {columnName} {columnDefinition};";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     public async Task<IReadOnlyList<CatalogFeed>> GetFeedsAsync(CancellationToken cancellationToken = default)
@@ -51,7 +83,7 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT Id, Name, FeedUrl, Description, CategoryId
+            SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded
             FROM CatalogFeeds
             ORDER BY Name COLLATE NOCASE;
             """;
@@ -64,7 +96,10 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+                reader.IsDBNull(7) ? null : reader.GetInt64(7) == 1));
         }
 
         return feeds;
@@ -120,15 +155,40 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
 
     public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => ExecuteAsync(
         """
-        INSERT INTO CatalogFeeds (Id, Name, FeedUrl, Description, CategoryId)
-        VALUES ($id, $name, $feedUrl, $description, $categoryId);
+        INSERT INTO CatalogFeeds (Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded)
+        VALUES ($id, $name, $feedUrl, $description, $categoryId, $websiteUrl, $lastHealthCheckedAt, $lastHealthCheckSucceeded);
         """,
         cancellationToken,
         ("$id", feed.Id),
         ("$name", feed.Name),
         ("$feedUrl", feed.FeedUrl),
         ("$description", (object?)feed.Description ?? DBNull.Value),
-        ("$categoryId", (object?)feed.CategoryId ?? DBNull.Value));
+        ("$categoryId", (object?)feed.CategoryId ?? DBNull.Value),
+        ("$websiteUrl", (object?)feed.WebsiteUrl ?? DBNull.Value),
+        ("$lastHealthCheckedAt", (object?)feed.LastHealthCheckedAt?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value),
+        ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } insertSucceeded ? (object)(insertSucceeded ? 1 : 0) : DBNull.Value));
+
+    public Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => ExecuteAsync(
+        """
+        UPDATE CatalogFeeds
+        SET Name = $name,
+            FeedUrl = $feedUrl,
+            Description = $description,
+            CategoryId = $categoryId,
+            WebsiteUrl = $websiteUrl,
+            LastHealthCheckedAt = $lastHealthCheckedAt,
+            LastHealthCheckSucceeded = $lastHealthCheckSucceeded
+        WHERE Id = $id;
+        """,
+        cancellationToken,
+        ("$id", feed.Id),
+        ("$name", feed.Name),
+        ("$feedUrl", feed.FeedUrl),
+        ("$description", (object?)feed.Description ?? DBNull.Value),
+        ("$categoryId", (object?)feed.CategoryId ?? DBNull.Value),
+        ("$websiteUrl", (object?)feed.WebsiteUrl ?? DBNull.Value),
+        ("$lastHealthCheckedAt", (object?)feed.LastHealthCheckedAt?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value),
+        ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } updateSucceeded ? (object)(updateSucceeded ? 1 : 0) : DBNull.Value));
 
     public Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default) => ExecuteAsync(
         "DELETE FROM CatalogFeeds WHERE Id = $id;",

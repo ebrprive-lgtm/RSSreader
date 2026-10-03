@@ -15,15 +15,24 @@ public partial class CatalogEntryWindow : Window
     private readonly CatalogManagementViewModel _catalogManagement;
     private readonly CatalogEntryKind _entryKind;
 
-    internal CatalogEntryWindow(CatalogManagementViewModel catalogManagement, CatalogEntryKind entryKind)
+    internal CatalogEntryWindow(
+        CatalogManagementViewModel catalogManagement,
+        CatalogEntryKind entryKind,
+        bool isEditingFeed = false)
     {
         InitializeComponent();
         _catalogManagement = catalogManagement;
         _entryKind = entryKind;
-        _catalogManagement.ResetEntryForm();
+        if (!isEditingFeed)
+        {
+            _catalogManagement.ResetEntryForm();
+        }
+
         DataContext = catalogManagement;
 
-        var (heading, buttonText) = entryKind switch
+        var (heading, buttonText) = isEditingFeed && entryKind == CatalogEntryKind.Feed
+            ? ("Edit feed", "Save changes")
+            : entryKind switch
         {
             CatalogEntryKind.Feed => ("Add feed", "Add feed"),
             CatalogEntryKind.Category => ("Add category", "Add category"),
@@ -36,6 +45,14 @@ public partial class CatalogEntryWindow : Window
         FeedFields.Visibility = entryKind == CatalogEntryKind.Feed ? Visibility.Visible : Visibility.Collapsed;
         CategoryFields.Visibility = entryKind == CatalogEntryKind.Category ? Visibility.Visible : Visibility.Collapsed;
         CollectionFields.Visibility = entryKind == CatalogEntryKind.Collection ? Visibility.Visible : Visibility.Collapsed;
+        if (isEditingFeed)
+        {
+            FeedNameBox.Text = catalogManagement.FeedName;
+            FeedUrlBox.Text = catalogManagement.FeedUrl;
+            FeedWebsiteUrlBox.Text = catalogManagement.FeedWebsiteUrl;
+            FeedDescriptionBox.Text = catalogManagement.FeedDescription;
+            FeedCategoryBox.SelectedItem = catalogManagement.SelectedCategory;
+        }
     }
 
     private async void SubmitButton_Click(object sender, RoutedEventArgs e)
@@ -45,6 +62,7 @@ public partial class CatalogEntryWindow : Window
             case CatalogEntryKind.Feed:
                 _catalogManagement.FeedName = FeedNameBox.Text.Trim();
                 _catalogManagement.FeedUrl = FeedUrlBox.Text.Trim();
+                _catalogManagement.FeedWebsiteUrl = FeedWebsiteUrlBox.Text.Trim();
                 _catalogManagement.FeedDescription = FeedDescriptionBox.Text.Trim();
                 _catalogManagement.SelectedCategory = FeedCategoryBox.SelectedItem as Domain.CatalogCategory;
                 await _catalogManagement.AddFeedCommand.ExecuteAsync();

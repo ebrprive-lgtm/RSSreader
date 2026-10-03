@@ -38,6 +38,18 @@ public sealed class SyndicationFeedDownloaderTests
     }
 
     [TestMethod]
+    public async Task DownloadRawContent_ReturnsOriginalXmlText()
+    {
+        const string xml = "<?xml version=\"1.0\"?><rss><channel><title>Raw &amp; exact</title></channel></rss>";
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var rawContent = await downloader.DownloadRawContentAsync(CreateFeed());
+
+        Assert.AreEqual(xml, rawContent);
+    }
+
+    [TestMethod]
     public async Task Download_AtomReadsEntryAndTextContent()
     {
         const string xml = """
@@ -126,6 +138,26 @@ public sealed class SyndicationFeedDownloaderTests
                 Assert.AreEqual("https://example.test/news/story/images/cover.jpg", items[0].ImageUrl);
                 Assert.AreEqual("https://example.test/images/inline.jpg", items[1].ImageUrl);
         }
+
+    [TestMethod]
+    public async Task Download_RssDescriptionWithComicImageAndSourceLinkPreservesArticleData()
+    {
+        const string xml = """
+            <rss version="2.0"><channel><title>Comics</title><item>
+              <title>9 Chickweed Lane</title>
+              <link>https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031</link>
+              <description><![CDATA[<p><img src="https://resources.arcamax.com/newspics/396/39604/3960483.gif" alt="Comic"></p><p><a href="https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031">Source</a></p>]]></description>
+            </item></channel></rss>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+        Assert.AreEqual("Source", item.Summary);
+        Assert.AreEqual("https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031", item.Link);
+        Assert.AreEqual("https://resources.arcamax.com/newspics/396/39604/3960483.gif", item.ImageUrl);
+    }
 
     [TestMethod]
     public async Task Download_ProhibitsDtdDeclarations()

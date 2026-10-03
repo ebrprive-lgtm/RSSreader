@@ -3,7 +3,12 @@ using System.Xml.Linq;
 
 namespace RssReader.Application;
 
-public sealed record OpmlFeed(string Name, string FeedUrl, string? Description, string? CategoryName);
+public sealed record OpmlFeed(
+    string Name,
+    string FeedUrl,
+    string? Description,
+    string? CategoryName,
+    string? WebsiteUrl = null);
 
 public sealed record OpmlFeedParseResult(IReadOnlyList<OpmlFeed> Feeds, int SkippedCount);
 
@@ -66,7 +71,8 @@ public static class OpmlFeedParser
                         name,
                         feedUrl.Trim(),
                         GetAttribute(outline, "description"),
-                        folders.Count == 0 ? null : string.Join(" / ", folders)));
+                        folders.Count == 0 ? null : string.Join(" / ", folders),
+                        GetAttribute(outline, "htmlUrl")));
                 }
             }
             else if (string.Equals(type, "rss", StringComparison.OrdinalIgnoreCase))

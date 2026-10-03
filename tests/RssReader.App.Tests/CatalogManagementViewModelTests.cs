@@ -28,6 +28,28 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task OpmlImportKeepsSameNameFeedsDistinctAndFlagsThemForReview()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+
+        var result = await service.ImportFeedsAsync(Profile.CreateCatalogMaster(),
+        [
+            new OpmlFeed("Example Journal", "https://publisher-a.example/feed.xml", null, null, "https://publisher-a.example"),
+            new OpmlFeed("example journal", "https://publisher-b.example/feed.xml", null, null, "https://publisher-b.example")
+        ]);
+        var viewModel = new CatalogManagementViewModel(Profile.CreateCatalogMaster(), service);
+        await viewModel.InitializeAsync();
+
+        Assert.AreEqual(2, result.AddedCount);
+        Assert.AreEqual(2, viewModel.Feeds.Count);
+        Assert.IsTrue(viewModel.Feeds.All(feed => feed.SameNameDisplay == "2 feeds share this name"));
+        CollectionAssert.AreEquivalent(
+            new[] { "https://publisher-a.example/", "https://publisher-b.example/" },
+            viewModel.Feeds.Select(feed => feed.WebsiteUrl).ToArray());
+    }
+
+    [TestMethod]
     public async Task StarterPackAddsCuratedFeedsAndSkipsThemWhenRepeated()
     {
         var viewModel = new CatalogManagementViewModel(
@@ -72,6 +94,101 @@ public sealed class CatalogManagementViewModelTests
         Assert.AreEqual(0, store.CollectionFeedIds.Count);
     }
 
+    [TestMethod]
+    public async Task CatalogMasterCanEditExistingFeedMetadata()
+    {
+        var store = new MemoryCatalogStore();
+        var catalogService = new CatalogService(store);
+        var actor = Profile.CreateCatalogMaster();
+        var original = await catalogService.AddFeedAsync(
+            actor,
+            "Example",
+            "https://example.com/feed.xml",
+            null,
+            null);
+        var viewModel = new CatalogManagementViewModel(actor, catalogService);
+        await viewModel.InitializeAsync();
+        viewModel.PrepareFeedEdit(viewModel.Feeds.Single());
+        viewModel.FeedName = "Example Journal";
+        viewModel.FeedDescription = "Edited description";
+        viewModel.FeedWebsiteUrl = "https://example.com/journal";
+
+        await viewModel.AddFeedCommand.ExecuteAsync();
+
+        var edited = viewModel.Feeds.Single();
+        Assert.AreEqual(original.Id, edited.Id);
+        Assert.AreEqual("Example Journal", edited.Name);
+        Assert.AreEqual("Edited description", edited.Description);
+        Assert.AreEqual("https://example.com/journal", edited.WebsiteUrl);
+    }
+
+    [TestMethod]
+    public async Task CatalogMasterCanFilterFeedsWithMetadataGaps()
+    {
+        var store = new MemoryCatalogStore();
+        var category = new CatalogCategory("category-comics", "Comics");
+        await store.AddCategoryAsync(category);
+        var completeFeed = new CatalogFeed(
+            "complete-feed",
+            "Complete",
+            "https://complete.example/feed.xml",
+            "A complete feed",
+            category.Id,
+            "https://complete.example");
+        var incompleteFeed = new CatalogFeed(
+            "incomplete-feed",
+            "Incomplete",
+            "https://incomplete.example/feed.xml",
+            null,
+            null);
+        await store.AddFeedAsync(completeFeed);
+        await store.AddFeedAsync(incompleteFeed);
+
+        var viewModel = new CatalogManagementViewModel(
+            Profile.CreateCatalogMaster(),
+            new CatalogService(store));
+        await viewModel.InitializeAsync();
+
+        Assert.AreEqual("Metadata gaps: 1", viewModel.MetadataReviewSummary);
+        Assert.AreEqual(string.Empty, viewModel.Feeds.Single(feed => feed.Id == completeFeed.Id).MetadataReviewDisplay);
+        Assert.AreEqual(
+            "Metadata gaps: description, category, publisher website",
+            viewModel.Feeds.Single(feed => feed.Id == incompleteFeed.Id).MetadataReviewDisplay);
+        Assert.AreEqual(2, viewModel.VisibleFeeds.Count);
+
+        viewModel.ShowMetadataGapsOnly = true;
+
+        Assert.AreEqual(incompleteFeed.Id, viewModel.VisibleFeeds.Single().Id);
+        Assert.AreEqual(2, viewModel.Feeds.Count);
+        Assert.AreEqual("Metadata gaps: 1", viewModel.MetadataReviewSummary);
+    }
+
+    [TestMethod]
+    public async Task CatalogMasterCanCheckFeedAndDisplayTimestampedHealth()
+    {
+        var store = new MemoryCatalogStore();
+        var actor = Profile.CreateCatalogMaster();
+        var catalogService = new CatalogService(store, new TestFeedDownloader());
+        var feed = await catalogService.AddFeedAsync(
+            actor,
+            "Checkable",
+            "https://example.com/feed.xml",
+            null,
+            null);
+        var viewModel = new CatalogManagementViewModel(actor, catalogService);
+        await viewModel.InitializeAsync();
+        var item = viewModel.Feeds.Single();
+
+        Assert.AreEqual("Not checked", item.HealthCheckDisplay);
+
+        await viewModel.CheckFeedHealthCommand.ExecuteAsync(item);
+
+        var checkedItem = viewModel.Feeds.Single();
+        Assert.IsTrue(checkedItem.LastHealthCheckSucceeded);
+        Assert.IsNotNull(checkedItem.LastHealthCheckedAt);
+        StringAssert.StartsWith(checkedItem.HealthCheckDisplay, "Feed valid - checked ");
+    }
+
     private sealed class MemoryCatalogStore : ICatalogStore
     {
         private readonly List<CatalogFeed> _feeds = [];
@@ -90,6 +207,17 @@ public sealed class CatalogManagementViewModelTests
         public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default)
         {
             _feeds.Add(feed);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default)
+        {
+            var index = _feeds.FindIndex(item => item.Id == feed.Id);
+            if (index >= 0)
+            {
+                _feeds[index] = feed;
+            }
+
             return Task.CompletedTask;
         }
 
@@ -136,5 +264,13 @@ public sealed class CatalogManagementViewModelTests
             _memberships.Remove((collectionId, feedId));
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class TestFeedDownloader : IFeedDownloader
+    {
+        public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
+            CatalogFeed feed,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<DownloadedFeedItem>>([]);
     }
 }
