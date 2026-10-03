@@ -12,7 +12,7 @@ This is a product and engineering roadmap, not a commitment to build every advan
 - Discovery rows show feed identity, description, feed URL, optional publisher website, preview action, and Follow/Unfollow state. Catalog Master rows show publisher websites and flag names shared by multiple feeds.
 - Categories and collections are represented in the domain and storage; category and collection filters compose in the regular user's browser.
 - Following a single feed uses the folder-selection flow; batch follow asks once for the selected feeds.
-- Catalog feeds have a name, URL, optional description, category, and publisher website. Feed health and creator metadata are not modeled as catalog fields.
+- Catalog feeds have a name, URL, optional description, category, publisher website, and optional timestamped health-check result. Creator metadata is not modeled as a catalog field.
 - Duplicate display names can appear, so additional identifying context will matter as the catalog grows.
 
 Relevant implementation surfaces include `src/RssReader.App/MainWindow.xaml`, `src/RssReader.App/ViewModels/MainWindowViewModel.cs`, `src/RssReader.App/ViewModels/CatalogFeedListItem.cs`, `src/RssReader.Domain/CatalogFeed.cs`, `src/RssReader.Application/CatalogService.cs`, and `src/RssReader.Infrastructure/SqliteCatalogStore.cs`.
@@ -69,7 +69,7 @@ Users should be able to:
 
 **Exit criteria:** A user can find a named item, browse by category, hide followed feeds, and return to the same search/category position after following. The list remains responsive with at least the current catalog and a generated large-catalog test fixture.
 
-**Delivery status (October 3, 2026):** The first implementation tranche is in place: token-based search, category and curated-collection filtering with membership counts, hide-followed, clear filters, alphabetical ordering, result summaries and empty states, and a recycling virtualized results list. Category and collection filters compose. A generated 2,000-feed filter regression passes, as do the ViewModel and STA control-wiring tests. Phase 1 remains open for participant validation, explicit loading/recoverable-error states, and measured large-catalog performance targets.
+**Delivery status (October 3, 2026):** Token-based search, category and curated-collection filtering with membership counts, hide-followed, clear filters, alphabetical ordering, result summaries, distinct empty states, recoverable catalog-load errors with retry, and a recycling virtualized results list are implemented. Category and collection filters compose. Generated filtering tests cover 575, 5,000, and 25,000 feeds. Participant validation and reference-machine performance targets remain outstanding.
 
 ### Phase 2: Preview and Batch Follow
 
@@ -85,7 +85,7 @@ Users should be able to:
 
 **Exit criteria:** Users can preview a feed without losing their browse position and follow several selected feeds with one folder decision. Tests cover cancellation, duplicate follow, partial failure, and clear success/error feedback.
 
-**Delivery status (October 3, 2026):** Batch selection/follow and feed preview are implemented. Users can select eligible feeds, choose one folder for the batch, cancel without losing selection, and retry failed items after partial success. Per-feed preview shows up to five recent titles, dates, and summaries in an inline panel; it supports refresh and cancellation, caches at most 20 successful previews per session, and does not store article content or images. Tests cover batch cancellation, partial failure, preview caps/cache/refresh, offline recovery, and cancellation on navigation. Manual live-feed behavior and usability validation remain outstanding.
+**Delivery status (October 3, 2026):** Batch selection/follow and feed preview are implemented. Users can select eligible feeds, choose one folder for the batch, cancel without losing selection, and retry failed items after partial success. Per-feed preview shows up to five recent titles, dates, and summaries in an inline panel; it supports refresh and cancellation, caches at most 20 successful previews per session, and does not store article content or images. Tests cover batch cancellation, partial failure, preview caps/cache/refresh, offline recovery, and cancellation on navigation. A one-time smoke check confirmed that three selected public endpoints (BBC News, NPR News, and the GitHub Blog) returned RSS 2.0 with entries; this does not establish in-app preview compatibility or future availability. Manual preview verification and usability validation remain outstanding.
 
 ### Phase 3: Catalog Quality and Curation
 
@@ -116,6 +116,8 @@ Users should be able to:
 
 **Exit criteria:** Recommendations are optional, explainable, adjustable, and local by default. Users can complete all discovery tasks with recommendations disabled.
 
+**Status (October 3, 2026):** Deferred pending Phase 0 evidence that users want recommendations and agreement on transparent, locally maintainable signals. No ranking behavior has been added without that evidence.
+
 ### Phase 5: Scale, Accessibility, and Operational Polish
 
 **Goal:** Keep the discovery experience dependable as data volume and feature depth increase.
@@ -130,7 +132,7 @@ Users should be able to:
 
 **Exit criteria:** Performance and accessibility checks meet documented targets; UI remains responsive during search and preview; core catalog workflows pass app-level tests.
 
-**Work status (October 3, 2026):** The deterministic catalog filter fixture now exercises 575, 5,000, and 25,000 generated entries and reports population and filter durations without imposing machine-dependent thresholds. WPF virtualization wiring is covered separately. Reference-machine measurements, visual scrolling, accessibility review, and numeric targets remain outstanding pending Phase 0 validation and a documented test machine.
+**Work status (October 3, 2026):** The deterministic catalog filter fixture now exercises 575, 5,000, and 25,000 generated entries and reports population and filter durations without imposing machine-dependent thresholds. A SQLite-backed integration test covers browse, search, preview, follow, and return. WPF virtualization wiring and catalog screen-reader names/keyboard focus are covered by control tests. Reference-machine measurements, visual scrolling, broader application accessibility review, and numeric targets remain outstanding pending Phase 0 validation and a documented test machine.
 
 ## Success Measures
 

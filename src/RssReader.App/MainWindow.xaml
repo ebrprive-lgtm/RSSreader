@@ -795,6 +795,11 @@
                                 <TextBlock Text="{Binding CatalogResultsSummary}"
                                            Margin="0,7,0,0"
                                            Foreground="{StaticResource MutedTextBrush}" />
+                                <ProgressBar x:Name="CatalogLoadProgressBar"
+                                             Height="3"
+                                             Margin="0,7,0,0"
+                                             IsIndeterminate="True"
+                                             Visibility="{Binding IsCatalogLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             </StackPanel>
                         </DockPanel>
                         <Grid Grid.Row="1" Margin="0,0,0,12">
@@ -925,6 +930,7 @@
                         <Grid Grid.Row="3">
                             <ListBox ItemsSource="{Binding CatalogFeedListView}"
                                      x:Name="CatalogFeedResultsList"
+                                     AutomationProperties.Name="Catalog feed results"
                                      Background="Transparent"
                                      BorderThickness="0"
                                      ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -953,7 +959,7 @@
                                                           Margin="0,0,12,0"
                                                           IsChecked="{Binding IsSelectedForFollow}"
                                                           IsEnabled="{Binding CanSelectForFollow}"
-                                                          AutomationProperties.Name="{Binding Name}"
+                                                          AutomationProperties.Name="{Binding SelectForFollowAutomationName}"
                                                           AutomationProperties.HelpText="Select this feed to follow it with one folder choice"
                                                           ToolTip="Select for batch follow" />
                                                 <StackPanel Grid.Column="1" Margin="0,0,16,0" VerticalAlignment="Center">
@@ -982,6 +988,7 @@
                                                             Command="{Binding DataContext.PreviewCatalogFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                             CommandParameter="{Binding}"
                                                             IsEnabled="{Binding DataContext.IsCatalogFeedPreviewAvailable, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            AutomationProperties.Name="{Binding PreviewAutomationName}"
                                                             Margin="0,0,0,6"
                                                             MinWidth="82"
                                                             Padding="9,5"
@@ -991,6 +998,7 @@
                                                     <Button Content="{Binding SubscriptionLabel}"
                                                             Command="{Binding DataContext.ToggleSubscriptionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                             CommandParameter="{Binding}"
+                                                            AutomationProperties.Name="{Binding SubscriptionAutomationName}"
                                                             HorizontalAlignment="Right"
                                                             MinWidth="82"
                                                             Padding="9,5" />
@@ -1008,6 +1016,27 @@
                                        IsHitTestVisible="False"
                                        Visibility="{Binding IsCatalogResultsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         </Grid>
+                        <Border Grid.Row="3"
+                                Panel.ZIndex="1"
+                                Margin="12"
+                                Padding="16"
+                                Background="White"
+                                BorderBrush="#DCE4DF"
+                                BorderThickness="1"
+                                VerticalAlignment="Top"
+                                Visibility="{Binding HasCatalogLoadError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding CatalogLoadErrorMessage}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.LiveSetting="Polite" />
+                                <Button Content="Retry catalog load"
+                                        AutomationProperties.Name="Retry loading the feed catalog"
+                                        Command="{Binding RetryCatalogLoadCommand}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,10,0,0"
+                                        Padding="10,6" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Grid>
 

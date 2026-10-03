@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using RssReader.App.ViewModels;
 using RssReader.Application;
 using RssReader.Domain;
@@ -30,6 +32,14 @@ public sealed class MainWindowViewModelTests
                 var app = new RssReader.App.App();
                 app.InitializeComponent();
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+                var accessibilityFeed = new CatalogFeedListItem(
+                    "feed-accessibility",
+                    "Example comic feed",
+                    "https://example.com/comics.xml",
+                    "A sample comic feed",
+                    "Comics",
+                    "category-comics");
+                viewModel.CatalogFeeds.Add(accessibilityFeed);
                 var window = new RssReader.App.MainWindow(
                     viewModel);
                 var preferencesRequested = false;
@@ -52,8 +62,25 @@ public sealed class MainWindowViewModelTests
                 hideFollowedCheckBox.IsChecked = true;
                 Assert.IsTrue(viewModel.HideFollowedCatalogFeeds);
                 var catalogResults = (ListBox)window.FindName("CatalogFeedResultsList");
+                Assert.AreEqual("Catalog feed results", AutomationProperties.GetName(catalogResults));
                 Assert.IsTrue(VirtualizingPanel.GetIsVirtualizing(catalogResults));
                 Assert.AreEqual(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(catalogResults));
+                catalogResults.UpdateLayout();
+                var feedContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(accessibilityFeed);
+                Assert.IsNotNull(feedContainer);
+                var feedCheckBox = FindVisualChild<CheckBox>(feedContainer!)
+                    ?? throw new AssertFailedException("The catalog feed selection control was not created.");
+                var feedButtons = FindVisualChildren<Button>(feedContainer!).ToArray();
+                var previewButton = feedButtons.Single(button => Equals(button.Content, "Preview"));
+                var subscriptionButton = feedButtons.Single(button => Equals(button.Content, "Follow"));
+                Assert.AreEqual("Select Example comic feed for follow", AutomationProperties.GetName(feedCheckBox));
+                Assert.IsTrue(feedCheckBox.IsTabStop);
+                Assert.AreEqual("Preview Example comic feed", AutomationProperties.GetName(previewButton));
+                Assert.IsTrue(previewButton.IsTabStop);
+                Assert.AreEqual("Follow Example comic feed", AutomationProperties.GetName(subscriptionButton));
+                accessibilityFeed.IsSubscribed = true;
+                window.UpdateLayout();
+                Assert.AreEqual("Unfollow Example comic feed", AutomationProperties.GetName(subscriptionButton));
                 var batchFollowButton = (Button)window.FindName("BatchFollowSelectedButton");
                 Assert.AreEqual("Follow selected (0)", batchFollowButton.Content);
                 Assert.IsFalse(batchFollowButton.IsEnabled);
@@ -165,6 +192,27 @@ public sealed class MainWindowViewModelTests
         thread.Join();
 
         Assert.IsNull(failure, failure?.ToString());
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject =>
+        FindVisualChildren<T>(parent).FirstOrDefault();
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
+    {
+        var childCount = VisualTreeHelper.GetChildrenCount(parent);
+        for (var childIndex = 0; childIndex < childCount; childIndex++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, childIndex);
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     [TestMethod]
@@ -451,6 +499,80 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual("All", viewModel.ActiveRoute);
     }
 
+    [TestMethod]
+    public async Task CatalogBrowsePreviewFollowAndReturnWorksEndToEnd()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-catalog-workflow-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+            var profile = Profile.CreateRegular("Discovery Workflow Reader");
+            await profileStore.AddAsync(profile);
+            var category = new CatalogCategory("category-comics", "Comics");
+            var feed = new CatalogFeed(
+                "feed-indie-comic",
+                "Indie Webcomic",
+                "https://example.com/comic.xml",
+                "An independent comic",
+                category.Id,
+                "https://example.com");
+            await catalogStore.AddCategoryAsync(category);
+            await catalogStore.AddFeedAsync(feed);
+            await readerStore.AddFolderAsync(profile.Id, "Comics");
+
+            var downloader = new RecordingFeedDownloader();
+            var catalogService = new CatalogService(catalogStore);
+            var viewModel = new MainWindowViewModel(
+                profile,
+                catalogService,
+                new ReadingService(readerStore, catalogStore),
+                new FeedRefreshService(readerStore, catalogStore, downloader),
+                new ProfilePreferences(RefreshFeedsWhenOpened: false),
+                new CatalogFeedPreviewService(downloader));
+            await viewModel.InitializeAsync();
+            viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
+            viewModel.CatalogSearchQuery = "indie comics";
+
+            var catalogItem = viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Single();
+            await viewModel.PreviewCatalogFeedAsync(catalogItem);
+            Assert.AreEqual("New headline", viewModel.ActiveCatalogFeedPreview?.Items.Single().Title);
+            Assert.AreEqual(1, downloader.RequestedFeedIds.Count);
+
+            viewModel.FolderSelectionRequested = (_, _, _) => Task.FromResult<string?>("Comics");
+            await viewModel.ToggleSubscriptionCommand.ExecuteAsync(catalogItem);
+            Assert.IsTrue(catalogItem.IsSubscribed);
+            Assert.AreEqual("Comics", (await readerStore.GetSubscriptionsAsync(profile.Id)).Single().FolderName);
+            Assert.AreEqual("indie comics", viewModel.CatalogSearchQuery);
+
+            viewModel.HideFollowedCatalogFeeds = true;
+            Assert.IsTrue(viewModel.CatalogFeedListView.IsEmpty);
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+            Assert.IsFalse(viewModel.IsCatalogFeedPreviewVisible);
+            viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
+            viewModel.HideFollowedCatalogFeeds = false;
+
+            Assert.AreEqual("indie comics", viewModel.CatalogSearchQuery);
+            Assert.AreEqual(feed.Id, viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Single().Id);
+            Assert.IsTrue(viewModel.CatalogFeeds.Single().IsSubscribed);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
     [DataTestMethod]
     [DataRow(575)]
     [DataRow(5000)]
@@ -497,6 +619,56 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual($"1 of {catalogSize} feeds", viewModel.CatalogResultsSummary);
         TestContext.WriteLine(
             $"Catalog size {catalogSize:N0}: populate {populationTimer.Elapsed.TotalMilliseconds:F1} ms; filter {filterTimer.Elapsed.TotalMilliseconds:F1} ms.");
+    }
+
+    [TestMethod]
+    public async Task CatalogBrowserShowsRecoverableLoadFailureAndRetries()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-catalog-load-{Guid.NewGuid():N}.db");
+        await File.WriteAllTextAsync(databasePath, "invalid database content");
+        try
+        {
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var viewModel = new MainWindowViewModel(
+                Profile.CreateRegular("Catalog Recovery Reader"),
+                new CatalogService(catalogStore));
+
+            await viewModel.InitializeAsync();
+
+            Assert.IsFalse(viewModel.IsCatalogLoading);
+            Assert.IsFalse(viewModel.IsCatalogLoaded);
+            Assert.IsTrue(viewModel.HasCatalogLoadError);
+            Assert.IsFalse(viewModel.IsCatalogResultsEmpty);
+            StringAssert.StartsWith(viewModel.CatalogLoadErrorMessage, "Could not load the feed catalog:");
+
+            SqliteConnection.ClearAllPools();
+            File.Delete(databasePath);
+            await catalogStore.InitializeAsync();
+            await catalogStore.AddFeedAsync(new CatalogFeed(
+                "recovered-feed",
+                "Recovered feed",
+                "https://example.com/recovered.xml",
+                null,
+                null));
+
+            await viewModel.RetryCatalogLoadCommand.ExecuteAsync();
+
+            Assert.IsFalse(viewModel.IsCatalogLoading);
+            Assert.IsTrue(viewModel.IsCatalogLoaded);
+            Assert.IsFalse(viewModel.HasCatalogLoadError);
+            Assert.AreEqual("recovered-feed", viewModel.CatalogFeeds.Single().Id);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
     }
 
     [TestMethod]

@@ -30,6 +30,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _quickQuery = string.Empty;
     private string _statusMessage = string.Empty;
     private string _catalogFeedPreviewErrorMessage = string.Empty;
+    private string _catalogLoadErrorMessage = string.Empty;
     private CatalogCategoryOption? _selectedCatalogCategory;
     private CatalogCollectionOption? _selectedCatalogCollection;
     private CatalogFeedListItem? _previewingCatalogFeed;
@@ -45,6 +46,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isSortByDate;
     private bool _hideFollowedCatalogFeeds;
     private bool _isCatalogFeedPreviewLoading;
+    private bool _isCatalogLoading;
+    private bool _isCatalogLoaded;
     private bool _hasAppliedStartPage;
     private bool _hasLoadedInitialReaderData;
     private int _folderArticlesPerFeedLimit;
@@ -153,6 +156,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
+        RetryCatalogLoadCommand = new AsyncCommand(() => LoadCatalogAsync(CancellationToken.None), () => !IsCatalogLoading);
         FollowSelectedCatalogFeedsCommand = new AsyncCommand(FollowSelectedCatalogFeedsAsync);
         ClearSelectedCatalogFeedsCommand = new RelayCommand(ClearSelectedCatalogFeeds, () => HasSelectedCatalogFeeds);
         PreviewCatalogFeedCommand = new RelayCommand<CatalogFeedListItem>(feed => _ = PreviewCatalogFeedAsync(feed));
@@ -208,6 +212,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand ClearCatalogFiltersCommand { get; }
+    public AsyncCommand RetryCatalogLoadCommand { get; }
     public AsyncCommand FollowSelectedCatalogFeedsCommand { get; }
     public RelayCommand ClearSelectedCatalogFeedsCommand { get; }
     public RelayCommand<CatalogFeedListItem> PreviewCatalogFeedCommand { get; }
@@ -281,15 +286,61 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedCatalogCollection?.CollectionId is not null ||
         HideFollowedCatalogFeeds;
 
-    public bool IsCatalogResultsEmpty => CatalogFeedListView.IsEmpty;
+    public bool IsCatalogResultsEmpty =>
+        IsCatalogLoaded && !IsCatalogLoading && !HasCatalogLoadError && CatalogFeedListView.IsEmpty;
 
-    public string CatalogResultsSummary => IsCatalogFilterActive
-        ? $"{CatalogFeedListView.Cast<CatalogFeedListItem>().Count()} of {CatalogFeeds.Count} feeds"
-        : $"{CatalogFeeds.Count} feeds";
+    public string CatalogResultsSummary =>
+        !IsCatalogLoaded && IsCatalogLoading ? "Loading feed catalog..." :
+        !IsCatalogLoaded && HasCatalogLoadError ? "Catalog unavailable" :
+        IsCatalogFilterActive
+            ? $"{CatalogFeedListView.Cast<CatalogFeedListItem>().Count()} of {CatalogFeeds.Count} feeds"
+            : $"{CatalogFeeds.Count} feeds";
 
     public string CatalogResultsEmptyMessage => CatalogFeeds.Count == 0
         ? "No feeds are available in the catalog yet."
         : "No feeds match these filters.";
+
+    public bool IsCatalogLoading
+    {
+        get => _isCatalogLoading;
+        private set
+        {
+            if (SetProperty(ref _isCatalogLoading, value))
+            {
+                OnPropertyChanged(nameof(IsCatalogResultsEmpty));
+                OnPropertyChanged(nameof(CatalogResultsSummary));
+            }
+        }
+    }
+
+    public bool IsCatalogLoaded
+    {
+        get => _isCatalogLoaded;
+        private set
+        {
+            if (SetProperty(ref _isCatalogLoaded, value))
+            {
+                OnPropertyChanged(nameof(IsCatalogResultsEmpty));
+                OnPropertyChanged(nameof(CatalogResultsSummary));
+            }
+        }
+    }
+
+    public string CatalogLoadErrorMessage
+    {
+        get => _catalogLoadErrorMessage;
+        private set
+        {
+            if (SetProperty(ref _catalogLoadErrorMessage, value))
+            {
+                OnPropertyChanged(nameof(HasCatalogLoadError));
+                OnPropertyChanged(nameof(IsCatalogResultsEmpty));
+                OnPropertyChanged(nameof(CatalogResultsSummary));
+            }
+        }
+    }
+
+    public bool HasCatalogLoadError => !string.IsNullOrWhiteSpace(CatalogLoadErrorMessage);
 
     public int SelectedCatalogFeedCount => CatalogFeeds.Count(feed => feed.IsSelectedForFollow);
     public bool HasSelectedCatalogFeeds => SelectedCatalogFeedCount > 0;
@@ -369,6 +420,26 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         if (_catalogService is not null)
         {
+            await LoadCatalogAsync(cancellationToken);
+        }
+
+        if (_readingService is not null && !IsCatalogMaster)
+        {
+            await LoadProfileReaderDataAsync(cancellationToken);
+        }
+    }
+
+    private async Task LoadCatalogAsync(CancellationToken cancellationToken)
+    {
+        if (_catalogService is null)
+        {
+            return;
+        }
+
+        IsCatalogLoading = true;
+        CatalogLoadErrorMessage = string.Empty;
+        try
+        {
             var categories = await _catalogService.GetCategoriesAsync(cancellationToken);
             var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
             var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
@@ -435,11 +506,20 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 await CatalogManagement.InitializeAsync(cancellationToken);
             }
-        }
 
-        if (_readingService is not null && !IsCatalogMaster)
+            IsCatalogLoaded = true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await LoadProfileReaderDataAsync(cancellationToken);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            CatalogLoadErrorMessage = $"Could not load the feed catalog: {exception.Message}";
+        }
+        finally
+        {
+            IsCatalogLoading = false;
         }
     }
 

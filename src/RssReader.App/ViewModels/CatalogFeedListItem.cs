@@ -97,11 +97,15 @@ public sealed class CatalogFeedListItem : ObservableObject
 
                 OnPropertyChanged(nameof(CanSelectForFollow));
                 OnPropertyChanged(nameof(SubscriptionLabel));
+                OnPropertyChanged(nameof(SubscriptionAutomationName));
             }
         }
     }
 
     public bool CanSelectForFollow => !IsSubscribed;
+    public string SelectForFollowAutomationName => $"Select {Name} for follow";
+    public string PreviewAutomationName => $"Preview {Name}";
+    public string SubscriptionAutomationName => $"{SubscriptionLabel} {Name}";
 
     public bool IsSelectedForFollow
     {
