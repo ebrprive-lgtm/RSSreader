@@ -1,0 +1,39 @@
+<Window x:Class="RssReader.App.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RSS Reader"
+        Width="470"
+        Height="220"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        Background="{StaticResource WindowBrush}"
+        Foreground="{StaticResource TextBrush}">
+    <Grid Margin="32">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="RSS READER"
+                   FontSize="11"
+                   FontWeight="Bold"
+                   Foreground="{StaticResource AccentBrush}" />
+        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+            <TextBlock Text="RSS Reader"
+                       FontSize="27"
+                       FontWeight="SemiBold" />
+            <TextBlock x:Name="StartupStatus"
+                       Text="Starting..."
+                       Margin="0,8,0,0"
+                       FontSize="13"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       TextWrapping="Wrap" />
+        </StackPanel>
+        <ProgressBar Grid.Row="2"
+                     Height="4"
+                     IsIndeterminate="True"
+                     BorderThickness="0"
+                     Foreground="{StaticResource AccentBrush}" />
+    </Grid>
+</Window>

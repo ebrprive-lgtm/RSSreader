@@ -39,6 +39,35 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="DeleteProfileButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Background" Value="#FBEDEC" />
+            <Setter Property="Foreground" Value="#A33C35" />
+            <Setter Property="BorderBrush" Value="#E9CBC7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="DeleteBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="DeleteBorder" Property="Background" Value="#F4DAD7" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="DeleteBorder" Property="Background" Value="#EFCBC7" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="PrimaryButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource AccentBrush}" />
             <Setter Property="Foreground" Value="White" />
@@ -94,37 +123,59 @@
                     <ItemsControl ItemsSource="{Binding Profiles}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Button Style="{StaticResource ProfileButtonStyle}"
-                                        Command="{Binding DataContext.OpenProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                        CommandParameter="{Binding}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="44" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <Border Width="36" Height="36" CornerRadius="18" Background="{StaticResource AccentWashBrush}">
-                                            <TextBlock Text="{Binding Name, StringFormat={}{0:0}}"
-                                                       Foreground="{StaticResource AccentBrush}"
-                                                       FontWeight="Bold"
-                                                       FontSize="16"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
-                                        </Border>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" />
-                                            <TextBlock Text="Catalog management"
-                                                       FontSize="12"
+                                <Grid>
+                                    <Button Style="{StaticResource ProfileButtonStyle}"
+                                            Command="{Binding DataContext.OpenProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="44" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="36" Height="36" CornerRadius="18" Background="{StaticResource AccentWashBrush}">
+                                                <TextBlock Text="{Binding Name, StringFormat={}{0:0}}"
+                                                           Foreground="{StaticResource AccentBrush}"
+                                                           FontWeight="Bold"
+                                                           FontSize="16"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" />
+                                                <TextBlock Text="Catalog management"
+                                                           FontSize="12"
+                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           Visibility="{Binding IsCatalogMaster, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="&#xE76C;"
+                                                       FontFamily="Segoe MDL2 Assets"
                                                        Foreground="{StaticResource MutedTextBrush}"
-                                                       Visibility="{Binding IsCatalogMaster, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="2"
-                                                   Text="&#xE76C;"
-                                                   FontFamily="Segoe MDL2 Assets"
-                                                   Foreground="{StaticResource MutedTextBrush}"
-                                                   VerticalAlignment="Center" />
-                                    </Grid>
-                                </Button>
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Button>
+                                    <Button x:Name="DeleteProfileButton"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,12,8"
+                                            Style="{StaticResource DeleteProfileButtonStyle}"
+                                            Click="DeleteProfile_Click"
+                                            ToolTip="Delete profile"
+                                            AutomationProperties.Name="Delete profile"
+                                            Visibility="Collapsed">
+                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                                    </Button>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding DataContext.IsDeleteModeActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="True" />
+                                        <Condition Binding="{Binding IsCatalogMaster}" Value="False" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter TargetName="DeleteProfileButton" Property="Visibility" Value="Visible" />
+                                </MultiDataTrigger>
+                                </DataTemplate.Triggers>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

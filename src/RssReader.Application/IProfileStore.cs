@@ -13,4 +13,6 @@ public interface IProfileStore
     Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken = default);
 
     Task AddAsync(Profile profile, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(string id, CancellationToken cancellationToken = default);
 }

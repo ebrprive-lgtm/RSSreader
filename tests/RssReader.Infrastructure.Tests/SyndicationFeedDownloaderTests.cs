@@ -65,6 +65,35 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("Atom body", items[0].Content);
     }
 
+        [TestMethod]
+        public async Task Download_RssReadsMediaThumbnailAndHtmlImage()
+        {
+                const string xml = """
+                        <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+                            <channel>
+                                <title>Sample feed</title>
+                                <item>
+                                    <title>Media image</title>
+                                    <link>https://example.test/news/story/</link>
+                                    <media:thumbnail url="images/cover.jpg" />
+                                </item>
+                                <item>
+                                    <title>HTML image</title>
+                                    <link>https://example.test/another-story</link>
+                                    <description><![CDATA[<p>Story</p><img alt="Cover" src="/images/inline.jpg">]]></description>
+                                </item>
+                            </channel>
+                        </rss>
+                        """;
+                using var client = CreateClient(xml);
+                var downloader = new SyndicationFeedDownloader(client);
+
+                var items = await downloader.DownloadAsync(CreateFeed() with { FeedUrl = "https://example.test/feeds/rss" });
+
+                Assert.AreEqual("https://example.test/news/story/images/cover.jpg", items[0].ImageUrl);
+                Assert.AreEqual("https://example.test/images/inline.jpg", items[1].ImageUrl);
+        }
+
     [TestMethod]
     public async Task Download_ProhibitsDtdDeclarations()
     {

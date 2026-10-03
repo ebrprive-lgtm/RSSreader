@@ -12,7 +12,8 @@ public sealed class ArticleRowViewModel(
     string? articleId = null,
     string? feedId = null,
     string? link = null,
-    string? content = null) : ObservableObject
+    string? content = null,
+    string? imageUrl = null) : ObservableObject
 {
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
@@ -27,6 +28,7 @@ public sealed class ArticleRowViewModel(
     public string? FeedId { get; } = feedId;
     public string? Link { get; } = link;
     public string? Content { get; } = content;
+    public string? ImageUrl { get; } = imageUrl;
     public string AgeLabel => FormatAge(PublishedAt, DateTimeOffset.Now);
     public string PublishedDateLabel => PublishedAt.ToLocalTime().ToString("MMM d, yyyy");
 

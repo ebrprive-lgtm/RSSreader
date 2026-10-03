@@ -10,11 +10,11 @@
         Foreground="{StaticResource TextBrush}">
     <Window.Resources>
         <DataTemplate x:Key="SidebarLinkTemplate">
-                <Button Style="{StaticResource SidebarButtonStyle}"
+                <Button Style="{DynamicResource SidebarButtonStyle}"
                     ToolTip="{Binding Label}"
                     Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                     CommandParameter="{Binding}">
-                <Grid>
+                <Grid Margin="{Binding IndentMargin}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="28" />
                         <ColumnDefinition Width="*" />
@@ -39,7 +39,7 @@
             </Button>
         </DataTemplate>
         <DataTemplate x:Key="ArticleRowTemplate">
-            <Button Style="{StaticResource ArticleRowButtonStyle}"
+            <Button Style="{DynamicResource ArticleRowButtonStyle}"
                     Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                     CommandParameter="{Binding}">
                 <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,15">
@@ -71,6 +71,77 @@
                     </Grid>
                 </Border>
             </Button>
+        </DataTemplate>
+        <DataTemplate x:Key="ArticleCardTemplate">
+            <Button Style="{DynamicResource ArticleRowButtonStyle}"
+                    Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                    CommandParameter="{Binding}">
+                <Border Width="310"
+                        Height="314"
+                        Margin="0,0,12,12"
+                        Background="White"
+                        BorderBrush="#E1E7E3"
+                        BorderThickness="1"
+                        CornerRadius="6">
+                    <StackPanel>
+                        <Grid Height="166" Background="#E8EEEB">
+                            <Border x:Name="ImageFallback" Background="#E8EEEB">
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE91B;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="24"
+                                               Foreground="#87938D"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="No image"
+                                               Margin="0,5,0,0"
+                                               FontSize="11"
+                                               Foreground="#68756E" />
+                                </StackPanel>
+                            </Border>
+                            <Image x:Name="ArticleImage"
+                                   Source="{Binding ImageUrl}"
+                                   Stretch="UniformToFill" />
+                            <Border HorizontalAlignment="Left"
+                                    VerticalAlignment="Bottom"
+                                    Margin="10"
+                                    Padding="8,4"
+                                    Background="#B0000000"
+                                    CornerRadius="3">
+                                <TextBlock Text="{Binding Source}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Foreground="White"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="240" />
+                            </Border>
+                        </Grid>
+                        <StackPanel Margin="13,11,13,10">
+                            <TextBlock Text="{Binding Title}"
+                                       Height="46"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Summary}"
+                                       Height="48"
+                                       Margin="0,6,0,0"
+                                       FontSize="12"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding AgeLabel}"
+                                       Margin="0,8,0,0"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedTextBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Button>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding ImageUrl}" Value="{x:Null}">
+                    <Setter TargetName="ArticleImage" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
         <Style x:Key="SidebarButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
@@ -114,6 +185,32 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="#F6F8F7" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ArticleViewModeStyle" TargetType="RadioButton">
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="ModeBorder"
+                                Padding="{TemplateBinding Padding}"
+                                Background="Transparent"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ModeBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ModeBorder" Property="Background" Value="#E8EEEB" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -226,7 +323,8 @@
                     <TextBlock Text="{Binding ActiveProfileName}"
                                Margin="0,4,0,0"
                                FontSize="12"
-                               Foreground="{StaticResource MutedTextBrush}" />
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Visibility="{Binding IsProfileSubtitleVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <TextBlock Text="{Binding StatusMessage}"
                                Margin="0,5,0,0"
                                FontSize="11"
@@ -261,15 +359,43 @@
                                       IsChecked="{Binding UnreadOnly, Mode=TwoWay}"
                                       Margin="0,0,14,0" />
                             <CheckBox Content="Saved only"
-                                      IsChecked="{Binding SavedOnly, Mode=TwoWay}" />
+                                      IsChecked="{Binding SavedOnly, Mode=TwoWay}"
+                                      Margin="0,0,14,0" />
+                            <Border BorderBrush="#DDE3E0" BorderThickness="1" CornerRadius="5" Padding="2">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Cards"
+                                                 GroupName="ArticleViewMode"
+                                                 IsChecked="{Binding IsCardsView, Mode=TwoWay}"
+                                                 Style="{StaticResource ArticleViewModeStyle}" />
+                                    <RadioButton Content="List"
+                                                 GroupName="ArticleViewMode"
+                                                 IsChecked="{Binding IsListView, Mode=TwoWay}"
+                                                 Style="{StaticResource ArticleViewModeStyle}" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                         <TextBlock Text="{Binding VisibleArticles.Count, StringFormat={}{0} articles}"
                                    FontSize="12"
                                    Foreground="{StaticResource MutedTextBrush}"
                                    VerticalAlignment="Center" />
                     </DockPanel>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{Binding IsListView, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <ItemsControl ItemsSource="{Binding VisibleArticles}" ItemTemplate="{StaticResource ArticleRowTemplate}" />
+                    </ScrollViewer>
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{Binding IsCardsView, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ItemsControl ItemsSource="{Binding VisibleArticles}" ItemTemplate="{StaticResource ArticleCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel ItemWidth="322" ItemHeight="326" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </ScrollViewer>
                     <StackPanel Grid.Row="1"
                                 VerticalAlignment="Center"
@@ -295,7 +421,7 @@
                             BorderThickness="0"
                             Foreground="{StaticResource AccentBrush}"
                             Command="{Binding BackToListCommand}" />
-                    <ScrollViewer Grid.Row="1" Margin="0,26,0,0" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Grid.Row="1" Margin="0,26,0,0" VerticalScrollBarVisibility="Hidden">
                         <StackPanel MaxWidth="860" HorizontalAlignment="Left">
                             <TextBlock Text="{Binding SelectedArticle.Source}"
                                        FontSize="13"
@@ -345,16 +471,6 @@
                                            Margin="0,7,0,0"
                                            Foreground="{StaticResource MutedTextBrush}" />
                             </StackPanel>
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBox Text="{Binding NewFolderName, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="150"
-                                         Padding="8,6"
-                                         ToolTip="New personal folder" />
-                                <Button Content="Add folder"
-                                        Command="{Binding AddFolderCommand}"
-                                        Margin="6,0,0,0"
-                                        Padding="9,6" />
-                            </StackPanel>
                         </DockPanel>
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                           <ItemsControl ItemsSource="{Binding CatalogFeeds}">
@@ -390,18 +506,6 @@
                                                         MinWidth="82"
                                                         Padding="9,5" />
                                                 <StackPanel Visibility="{Binding IsSubscribed, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                    <DockPanel Margin="0,7,0,0">
-                                                        <Button DockPanel.Dock="Right"
-                                                                Content="Set folder"
-                                                                Command="{Binding DataContext.SaveFeedFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                CommandParameter="{Binding}"
-                                                                Margin="5,0,0,0"
-                                                                Padding="6,4" />
-                                                        <ComboBox ItemsSource="{Binding DataContext.FolderNames, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                  SelectedItem="{Binding FolderName, Mode=TwoWay}"
-                                                                  ToolTip="Personal folder"
-                                                                  Padding="4" />
-                                                    </DockPanel>
                                                     <DockPanel Margin="0,6,0,0">
                                                         <Button DockPanel.Dock="Right"
                                                                 Content="Add tag"
@@ -452,6 +556,10 @@
                             <TextBlock Text="Shared feed catalog" Margin="0,7,0,12" Foreground="{StaticResource MutedTextBrush}" />
                             <TextBlock Text="{Binding CatalogManagement.ErrorMessage}"
                                        Foreground="#A33C35"
+                                       Margin="0,0,0,10"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding CatalogManagement.ImportMessage}"
+                                       Foreground="{StaticResource MutedTextBrush}"
                                        Margin="0,0,0,10"
                                        TextWrapping="Wrap" />
                         </StackPanel>
@@ -532,6 +640,16 @@
 
                             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                                 <StackPanel>
+                                    <TextBlock Text="Import feeds" FontSize="15" FontWeight="SemiBold" />
+                                    <Button Content="Import OPML file"
+                                        Click="ImportOpml_Click"
+                                        Margin="0,8,0,6"
+                                        Padding="10,7" />
+                                    <Button Content="Load starter pack"
+                                        Command="{Binding CatalogManagement.LoadStarterPackCommand}"
+                                        Margin="0,0,0,6"
+                                        Padding="10,7" />
+
                                     <TextBlock Text="Add feed" FontSize="15" FontWeight="SemiBold" />
                                     <TextBox Text="{Binding CatalogManagement.FeedName, UpdateSourceTrigger=PropertyChanged}"
                                              Margin="0,8,0,6"

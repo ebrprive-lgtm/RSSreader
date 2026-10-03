@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Net.Http;
 using System.Windows;
+using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RssReader.App.ViewModels;
@@ -15,13 +16,20 @@ public partial class App : System.Windows.Application
 	private IHost? _host;
 	private ProfileChooserWindow? _profileChooserWindow;
 	private MainWindow? _readerWindow;
+	private SplashWindow? _splashWindow;
 
 	protected override async void OnStartup(StartupEventArgs e)
 	{
 		base.OnStartup(e);
+		ShutdownMode = ShutdownMode.OnExplicitShutdown;
+		_splashWindow = new SplashWindow();
+		MainWindow = _splashWindow;
+		_splashWindow.Show();
+		await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 
 		try
 		{
+			await UpdateStartupStatusAsync("Preparing application services...");
 			var databasePath = Path.Combine(
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"RssReader",
@@ -43,21 +51,38 @@ public partial class App : System.Windows.Application
 				})
 				.Build();
 
+			await UpdateStartupStatusAsync("Starting application services...");
 			await _host.StartAsync();
+			await UpdateStartupStatusAsync("Opening the local profile database...");
 			await _host.Services.GetRequiredService<ProfileService>().InitializeAsync();
+			await UpdateStartupStatusAsync("Preparing the shared feed catalog...");
 			await _host.Services.GetRequiredService<CatalogService>().InitializeAsync();
+			await UpdateStartupStatusAsync("Preparing your reading library...");
 			await _host.Services.GetRequiredService<SqliteReaderStore>().InitializeAsync();
+			await UpdateStartupStatusAsync("Opening the profile chooser...");
 			await ShowProfileChooserAsync();
+			_splashWindow.Close();
+			_splashWindow = null;
+			ShutdownMode = ShutdownMode.OnLastWindowClose;
 		}
 		catch (Exception)
 		{
+			await UpdateStartupStatusAsync("Startup failed. See the error message for details.");
 			System.Windows.MessageBox.Show(
 				"RSS Reader could not start. Check local application data permissions and try again.",
 				"RSS Reader",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);
+			_splashWindow?.Close();
+			_splashWindow = null;
 			Shutdown(1);
 		}
+	}
+
+	private async Task UpdateStartupStatusAsync(string status)
+	{
+		_splashWindow?.SetStatus(status);
+		await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 	}
 
 	protected override async void OnExit(ExitEventArgs e)
@@ -111,10 +136,11 @@ public partial class App : System.Windows.Application
 			chooser?.Close();
 			_profileChooserWindow = null;
 		}
-		catch (Exception)
+		catch (Exception exception)
 		{
+			System.Diagnostics.Debug.WriteLine(exception.ToString());
 			System.Windows.MessageBox.Show(
-				"The selected profile could not be opened.",
+				$"The selected profile could not be opened.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
 				"RSS Reader",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);

@@ -62,4 +62,20 @@ public sealed class ProfileService(IProfileStore store, IPasswordHasher password
             ? profile
             : null;
     }
+
+    public async Task DeleteProfileAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var profile = await store.GetByIdAsync(id, cancellationToken);
+        if (profile is null)
+        {
+            return;
+        }
+
+        if (profile.IsCatalogMaster)
+        {
+            throw new InvalidOperationException("Catalog Master cannot be deleted.");
+        }
+
+        await store.DeleteAsync(id, cancellationToken);
+    }
 }

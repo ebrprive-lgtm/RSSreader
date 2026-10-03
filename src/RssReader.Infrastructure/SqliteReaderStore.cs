@@ -50,6 +50,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 PublishedAt TEXT NULL,
                 Summary TEXT NULL,
                 Content TEXT NULL,
+                ImageUrl TEXT NULL,
                 UNIQUE (FeedId, ExternalId)
             );
             CREATE TABLE IF NOT EXISTS ProfileArticleStates (
@@ -62,6 +63,31 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             CREATE INDEX IF NOT EXISTS IX_Articles_Feed_Published ON Articles(FeedId, PublishedAt DESC);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var columnsCommand = connection.CreateCommand();
+        columnsCommand.CommandText = "PRAGMA table_info(Articles);";
+        await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken);
+        var hasImageUrl = false;
+        while (await columnsReader.ReadAsync(cancellationToken))
+        {
+            hasImageUrl |= columnsReader.GetString(1) == "ImageUrl";
+        }
+
+        await columnsReader.DisposeAsync();
+        if (!hasImageUrl)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN ImageUrl TEXT NULL;";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using var folderMigrationCommand = connection.CreateCommand();
+        folderMigrationCommand.CommandText = """
+            INSERT OR IGNORE INTO ProfileFolders (ProfileId, Name)
+            SELECT DISTINCT ProfileId, 'Unfiled' FROM ProfileSubscriptions WHERE FolderName IS NULL;
+            UPDATE ProfileSubscriptions SET FolderName = 'Unfiled' WHERE FolderName IS NULL;
+            """;
+        await folderMigrationCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(
@@ -87,17 +113,22 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.GetString(4)));
         }
 
         return subscriptions;
     }
 
-    public Task SubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "INSERT OR IGNORE INTO ProfileSubscriptions (ProfileId, FeedId) VALUES ($profileId, $feedId);",
+    public Task SubscribeAsync(
+        string profileId,
+        string feedId,
+        string folderName,
+        CancellationToken cancellationToken = default) => ExecuteAsync(
+        "INSERT OR IGNORE INTO ProfileSubscriptions (ProfileId, FeedId, FolderName) VALUES ($profileId, $feedId, $folder);",
         cancellationToken,
         ("$profileId", profileId),
-        ("$feedId", feedId));
+        ("$feedId", feedId),
+        ("$folder", folderName));
 
     public Task UnsubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => ExecuteAsync(
         "DELETE FROM ProfileSubscriptions WHERE ProfileId = $profileId AND FeedId = $feedId;",
@@ -133,13 +164,16 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = connection.BeginTransaction();
-        await using (var update = connection.CreateCommand())
+        await using (var check = connection.CreateCommand())
         {
-            update.Transaction = transaction;
-            update.CommandText = "UPDATE ProfileSubscriptions SET FolderName = NULL WHERE ProfileId = $profileId AND FolderName = $name;";
-            update.Parameters.AddWithValue("$profileId", profileId);
-            update.Parameters.AddWithValue("$name", name);
-            await update.ExecuteNonQueryAsync(cancellationToken);
+            check.Transaction = transaction;
+            check.CommandText = "SELECT EXISTS(SELECT 1 FROM ProfileSubscriptions WHERE ProfileId = $profileId AND FolderName = $name COLLATE NOCASE);";
+            check.Parameters.AddWithValue("$profileId", profileId);
+            check.Parameters.AddWithValue("$name", name);
+            if (Convert.ToInt64(await check.ExecuteScalarAsync(cancellationToken)) != 0)
+            {
+                throw new InvalidOperationException("Move or unfollow the sources in this folder before deleting it.");
+            }
         }
 
         await using (var delete = connection.CreateCommand())
@@ -157,13 +191,13 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
     public Task SetFeedFolderAsync(
         string profileId,
         string feedId,
-        string? folderName,
+        string folderName,
         CancellationToken cancellationToken = default) => ExecuteAsync(
         "UPDATE ProfileSubscriptions SET FolderName = $folder WHERE ProfileId = $profileId AND FeedId = $feedId;",
         cancellationToken,
         ("$profileId", profileId),
         ("$feedId", feedId),
-        ("$folder", (object?)folderName ?? DBNull.Value));
+        ("$folder", folderName));
 
     public async Task<IReadOnlyList<ProfileFeedTag>> GetFeedTagsAsync(
         string profileId,
@@ -213,7 +247,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT article.Id, article.FeedId, article.ExternalId, article.Title, article.Link,
-                   article.PublishedAt, article.Summary, article.Content, feed.Name,
+                     article.PublishedAt, article.Summary, article.Content, article.ImageUrl, feed.Name,
                    subscription.FolderName, state.IsRead, state.IsSaved
             FROM Articles AS article
             INNER JOIN ProfileSubscriptions AS subscription ON subscription.FeedId = article.FeedId
@@ -239,13 +273,14 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 publishedAt,
                 reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.IsDBNull(7) ? null : reader.GetString(7));
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8));
             articles.Add(new ArticleForProfile(
                 article,
-                reader.GetString(8),
-                reader.IsDBNull(9) ? null : reader.GetString(9),
-                !reader.IsDBNull(10) && reader.GetInt64(10) == 1,
-                !reader.IsDBNull(11) && reader.GetInt64(11) == 1));
+                reader.GetString(9),
+                reader.GetString(10),
+                !reader.IsDBNull(11) && reader.GetInt64(11) == 1,
+                !reader.IsDBNull(12) && reader.GetInt64(12) == 1));
         }
 
         return articles;
@@ -268,14 +303,15 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content)
-                VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content)
+                INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content, ImageUrl)
+                VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content, $imageUrl)
                 ON CONFLICT(Id) DO UPDATE SET
                     Title = excluded.Title,
                     Link = excluded.Link,
                     PublishedAt = excluded.PublishedAt,
                     Summary = excluded.Summary,
-                    Content = excluded.Content;
+                    Content = excluded.Content,
+                    ImageUrl = excluded.ImageUrl;
                 """;
             command.Parameters.AddWithValue("$id", article.Id);
             command.Parameters.AddWithValue("$feedId", feedId);
@@ -285,6 +321,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             command.Parameters.AddWithValue("$publishedAt", article.PublishedAt?.ToUniversalTime().ToString("O") ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("$summary", (object?)article.Summary ?? DBNull.Value);
             command.Parameters.AddWithValue("$content", (object?)article.Content ?? DBNull.Value);
+            command.Parameters.AddWithValue("$imageUrl", (object?)article.ImageUrl ?? DBNull.Value);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 

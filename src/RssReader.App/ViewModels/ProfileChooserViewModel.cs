@@ -11,6 +11,7 @@ public sealed class ProfileChooserViewModel : ObservableObject
     private bool _isCreatingProfile;
     private bool _isUnlockingProfile;
     private bool _isCatalogMasterRevealed;
+    private bool _isDeleteModeActive;
     private Profile? _profileToUnlock;
     private string _profileName = string.Empty;
     private string _createPassword = string.Empty;
@@ -100,8 +101,25 @@ public sealed class ProfileChooserViewModel : ObservableObject
         private set => SetProperty(ref _errorMessage, value);
     }
 
+    public bool IsDeleteModeActive
+    {
+        get => _isDeleteModeActive;
+        set => SetProperty(ref _isDeleteModeActive, value);
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default) =>
         await RefreshProfilesAsync(cancellationToken);
+
+    public async Task DeleteProfileAsync(Profile profile, CancellationToken cancellationToken = default)
+    {
+        if (profile.IsCatalogMaster)
+        {
+            return;
+        }
+
+        await _profileService.DeleteProfileAsync(profile.Id, cancellationToken);
+        await RefreshProfilesAsync(cancellationToken);
+    }
 
     public async Task SetCatalogMasterRevealedAsync(
         bool revealed,

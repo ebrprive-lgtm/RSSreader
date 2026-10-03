@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using RssReader.App.ViewModels;
+using RssReader.Domain;
 
 namespace RssReader.App;
 
@@ -21,6 +22,7 @@ public partial class ProfileChooserWindow : Window
         if (e.Key is Key.LeftShift or Key.RightShift && !_shiftRevealActive)
         {
             _shiftRevealActive = true;
+            _viewModel.IsDeleteModeActive = true;
             await UpdateCatalogMasterVisibilityAsync(true);
         }
     }
@@ -31,6 +33,7 @@ public partial class ProfileChooserWindow : Window
             !Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
         {
             _shiftRevealActive = false;
+            _viewModel.IsDeleteModeActive = false;
             await UpdateCatalogMasterVisibilityAsync(false);
         }
     }
@@ -40,7 +43,41 @@ public partial class ProfileChooserWindow : Window
         if (_shiftRevealActive)
         {
             _shiftRevealActive = false;
+            _viewModel.IsDeleteModeActive = false;
             await UpdateCatalogMasterVisibilityAsync(false);
+        }
+    }
+
+    private async void DeleteProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: Profile profile } || profile.IsCatalogMaster)
+        {
+            return;
+        }
+
+        var result = MessageBox.Show(
+            this,
+            $"Delete the profile \"{profile.Name}\"? Its subscriptions, folders, and reading state will be removed from this device. This action cannot be undone.",
+            "Delete profile",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            await _viewModel.DeleteProfileAsync(profile);
+        }
+        catch (Exception)
+        {
+            MessageBox.Show(
+                this,
+                "The profile could not be deleted.",
+                "RSS Reader",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 

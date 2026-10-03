@@ -4,12 +4,42 @@ using RssReader.Application;
 using RssReader.Domain;
 using RssReader.Infrastructure;
 using Microsoft.Data.Sqlite;
+using System.Threading;
 
 namespace RssReader.App.Tests;
 
 [TestClass]
 public sealed class MainWindowViewModelTests
 {
+    [TestMethod]
+    public void MainWindowCanBeConstructedForARegularProfile()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new RssReader.App.App();
+                app.InitializeComponent();
+                var window = new RssReader.App.MainWindow(
+                    new MainWindowViewModel(Profile.CreateRegular("Reader")));
+                window.Show();
+                window.UpdateLayout();
+                window.Close();
+                app.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
     [TestMethod]
     public async Task InitializeLoadsPersistedArticlesAndProfileNavigation()
     {
@@ -26,9 +56,8 @@ public sealed class MainWindowViewModelTests
             await profileStore.AddAsync(profile);
             var feed = new CatalogFeed("feed-1", "Gaming News", "https://example.com/feed.xml", "News", null);
             await catalogStore.AddFeedAsync(feed);
-            await readerStore.SubscribeAsync(profile.Id, feed.Id);
             await readerStore.AddFolderAsync(profile.Id, "Gaming");
-            await readerStore.SetFeedFolderAsync(profile.Id, feed.Id, "Gaming");
+            await readerStore.SubscribeAsync(profile.Id, feed.Id, "Gaming");
             await readerStore.AddFeedTagAsync(profile.Id, feed.Id, "Reviews");
             await readerStore.SaveArticlesAsync(feed.Id,
             [
@@ -48,7 +77,71 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(viewModel.CatalogFeeds.Single().IsSubscribed);
             Assert.IsTrue(viewModel.FeedLinks.Any(link => link.Route == "folder:Gaming"));
             Assert.IsTrue(viewModel.FeedLinks.Any(link => link.Route == "feed:feed-1"));
+            var allLink = viewModel.FeedLinks.Single(link => link.Route == "All");
+            var folderLink = viewModel.FeedLinks.Single(link => link.Route == "folder:Gaming");
+            var feedLink = viewModel.FeedLinks.Single(link => link.Route == "feed:feed-1");
+            Assert.IsTrue(allLink.IndentMargin.Left < folderLink.IndentMargin.Left);
+            Assert.IsTrue(folderLink.IndentMargin.Left < feedLink.IndentMargin.Left);
             Assert.IsTrue(viewModel.TagLinks.Any(link => link.Route == "tag:Reviews"));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task FollowUsesPickerFolderAndCancelLeavesFeedUnfollowed()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-app-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+            var profile = Profile.CreateRegular("Reader");
+            await profileStore.AddAsync(profile);
+            var selectedFeed = new CatalogFeed("feed-selected", "DIY Source", "https://example.com/diy.xml", null, null);
+            var cancelledFeed = new CatalogFeed("feed-cancelled", "Other Source", "https://example.com/other.xml", null, null);
+            await catalogStore.AddFeedAsync(selectedFeed);
+            await catalogStore.AddFeedAsync(cancelledFeed);
+
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                null);
+            await viewModel.InitializeAsync();
+            viewModel.FolderSelectionRequested = async (folders, _, createFolderAsync) =>
+            {
+                Assert.AreEqual(0, folders.Count);
+                await createFolderAsync("DIY");
+                return "DIY";
+            };
+
+            await viewModel.ToggleSubscriptionCommand.ExecuteAsync(
+                viewModel.CatalogFeeds.Single(feed => feed.Id == selectedFeed.Id));
+
+            var subscription = (await readerStore.GetSubscriptionsAsync(profile.Id)).Single();
+            Assert.AreEqual(selectedFeed.Id, subscription.FeedId);
+            Assert.AreEqual("DIY", subscription.FolderName);
+            Assert.IsTrue(viewModel.FeedLinks.Any(link => link.Route == "folder:DIY"));
+
+            viewModel.FolderSelectionRequested = (_, _, _) => Task.FromResult<string?>(null);
+            await viewModel.ToggleSubscriptionCommand.ExecuteAsync(
+                viewModel.CatalogFeeds.Single(feed => feed.Id == cancelledFeed.Id));
+
+            Assert.AreEqual(1, (await readerStore.GetSubscriptionsAsync(profile.Id)).Count);
         }
         finally
         {
@@ -73,6 +166,54 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual("Gaming", viewModel.WorkspaceTitle);
         Assert.AreEqual(2, viewModel.VisibleArticles.Count);
         Assert.IsTrue(viewModel.IsArticleListVisible);
+    }
+
+    [TestMethod]
+    public void ArticleViewModeCanSwitchBetweenCardsAndList()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+
+        Assert.IsTrue(viewModel.IsCardsView);
+        Assert.IsFalse(viewModel.IsListView);
+
+        viewModel.IsListView = true;
+
+        Assert.IsFalse(viewModel.IsCardsView);
+        Assert.IsTrue(viewModel.IsListView);
+
+        viewModel.IsCardsView = true;
+
+        Assert.IsTrue(viewModel.IsCardsView);
+        Assert.IsFalse(viewModel.IsListView);
+    }
+
+    [TestMethod]
+    public void CatalogFeedSubscriptionLabelReflectsItsFollowingState()
+    {
+        var feed = new CatalogFeedListItem(
+            "feed-1",
+            "Example",
+            "https://example.com/feed.xml",
+            null,
+            null);
+
+        Assert.AreEqual("Follow", feed.SubscriptionLabel);
+
+        feed.IsSubscribed = true;
+        Assert.AreEqual("Unfollow", feed.SubscriptionLabel);
+    }
+
+    [TestMethod]
+    public void FollowSourcesHidesTheProfileSubtitle()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var followSources = viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources");
+
+        Assert.IsTrue(viewModel.IsProfileSubtitleVisible);
+
+        viewModel.NavigateCommand.Execute(followSources);
+
+        Assert.IsFalse(viewModel.IsProfileSubtitleVisible);
     }
 
     [TestMethod]
@@ -201,6 +342,23 @@ public sealed class ProfileChooserViewModelTests
         Assert.AreEqual(0, viewModel.Profiles.Count);
     }
 
+    [TestMethod]
+    public async Task DeleteProfileRemovesItFromTheChooser()
+    {
+        var store = new EmptyProfileStore();
+        var profileService = new ProfileService(store, new FakeHasher());
+        await profileService.InitializeAsync();
+        var profile = await profileService.CreateProfileAsync("Reader", null, null);
+        var viewModel = new ProfileChooserViewModel(profileService);
+        await viewModel.InitializeAsync();
+        viewModel.IsDeleteModeActive = true;
+
+        await viewModel.DeleteProfileAsync(profile);
+
+        Assert.IsTrue(viewModel.IsEmptyStateVisible);
+        Assert.AreEqual(0, viewModel.Profiles.Count);
+    }
+
     private sealed class EmptyProfileStore : IProfileStore
     {
         private readonly List<Profile> _profiles = [];
@@ -226,6 +384,12 @@ public sealed class ProfileChooserViewModelTests
         public Task AddAsync(Profile profile, CancellationToken cancellationToken = default)
         {
             _profiles.Add(profile);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+        {
+            _profiles.RemoveAll(profile => profile.Id == id && !profile.IsCatalogMaster);
             return Task.CompletedTask;
         }
     }

@@ -13,4 +13,5 @@ public sealed record DownloadedFeedItem(
     string? Link,
     DateTimeOffset? PublishedAt,
     string? Summary,
-    string? Content);
+    string? Content,
+    string? ImageUrl = null);

@@ -71,6 +71,24 @@ public sealed class ProfileServiceTests
         Assert.AreEqual(profile.Id, opened?.Id);
     }
 
+    [TestMethod]
+    public async Task DeleteProfileRemovesRegularProfileAndProtectsCatalogMaster()
+    {
+        var store = new FakeProfileStore();
+        var service = new ProfileService(store, new FakePasswordHasher());
+        await service.InitializeAsync();
+        var profile = await service.CreateProfileAsync("Reader", null, null);
+        var catalogMaster = (await service.GetAvailableProfilesAsync(revealCatalogMaster: true))
+            .Single(candidate => candidate.IsCatalogMaster);
+
+        await service.DeleteProfileAsync(profile.Id);
+
+        Assert.IsNull(await store.GetByIdAsync(profile.Id));
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => service.DeleteProfileAsync(catalogMaster.Id));
+        Assert.IsNotNull(await store.GetByIdAsync(catalogMaster.Id));
+    }
+
     private static ProfileService CreateService() => new(new FakeProfileStore(), new FakePasswordHasher());
 
     private sealed class FakeProfileStore : IProfileStore
@@ -102,6 +120,12 @@ public sealed class ProfileServiceTests
         public Task AddAsync(Profile profile, CancellationToken cancellationToken = default)
         {
             _profiles.Add(profile);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+        {
+            _profiles.RemoveAll(profile => profile.Id == id && !profile.IsCatalogMaster);
             return Task.CompletedTask;
         }
     }

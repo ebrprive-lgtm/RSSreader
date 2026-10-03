@@ -19,16 +19,29 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         CancellationToken cancellationToken = default) =>
         store.GetFeedTagsAsync(profileId, cancellationToken);
 
-    public async Task SubscribeAsync(Profile profile, string feedId, CancellationToken cancellationToken = default)
+    public async Task SubscribeAsync(
+        Profile profile,
+        string feedId,
+        string folderName,
+        CancellationToken cancellationToken = default)
     {
         EnsureRegularProfile(profile);
+        var normalizedFolderName = RequireLabel(folderName, nameof(folderName));
         var feeds = await catalogStore.GetFeedsAsync(cancellationToken);
         if (feeds.All(feed => feed.Id != feedId))
         {
             throw new ArgumentException("The feed does not exist in the catalog.", nameof(feedId));
         }
 
-        await store.SubscribeAsync(profile.Id, feedId, cancellationToken);
+        var folders = await store.GetFoldersAsync(profile.Id, cancellationToken);
+        var existingFolder = folders.FirstOrDefault(folder =>
+            string.Equals(folder, normalizedFolderName, StringComparison.OrdinalIgnoreCase));
+        if (existingFolder is null)
+        {
+            throw new ArgumentException("The folder does not exist in this profile.", nameof(folderName));
+        }
+
+        await store.SubscribeAsync(profile.Id, feedId, existingFolder, cancellationToken);
     }
 
     public Task UnsubscribeAsync(Profile profile, string feedId, CancellationToken cancellationToken = default)
@@ -41,6 +54,11 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
     {
         EnsureRegularProfile(profile);
         var normalized = RequireLabel(name, nameof(name));
+        if (string.Equals(normalized, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("All is reserved for the aggregate feed view.", nameof(name));
+        }
+
         await store.AddFolderAsync(profile.Id, normalized, cancellationToken);
     }
 
@@ -53,7 +71,7 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
     public async Task SetFeedFolderAsync(
         Profile profile,
         string feedId,
-        string? folderName,
+        string folderName,
         CancellationToken cancellationToken = default)
     {
         EnsureRegularProfile(profile);
@@ -63,16 +81,16 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
             throw new ArgumentException("The feed is not subscribed in this profile.", nameof(feedId));
         }
 
-        if (folderName is not null)
+        var normalizedFolderName = RequireLabel(folderName, nameof(folderName));
+        var folders = await store.GetFoldersAsync(profile.Id, cancellationToken);
+        var existingFolder = folders.FirstOrDefault(folder =>
+            string.Equals(folder, normalizedFolderName, StringComparison.OrdinalIgnoreCase));
+        if (existingFolder is null)
         {
-            var folders = await store.GetFoldersAsync(profile.Id, cancellationToken);
-            if (!folders.Contains(folderName, StringComparer.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException("The folder does not exist in this profile.", nameof(folderName));
-            }
+            throw new ArgumentException("The folder does not exist in this profile.", nameof(folderName));
         }
 
-        await store.SetFeedFolderAsync(profile.Id, feedId, folderName, cancellationToken);
+        await store.SetFeedFolderAsync(profile.Id, feedId, existingFolder, cancellationToken);
     }
 
     public async Task AddFeedTagAsync(

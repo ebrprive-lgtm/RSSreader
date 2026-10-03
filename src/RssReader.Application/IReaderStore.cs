@@ -5,12 +5,12 @@ namespace RssReader.Application;
 public interface IReaderStore
 {
     Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default);
-    Task SubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default);
+    Task SubscribeAsync(string profileId, string feedId, string folderName, CancellationToken cancellationToken = default);
     Task UnsubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<string>> GetFoldersAsync(string profileId, CancellationToken cancellationToken = default);
     Task AddFolderAsync(string profileId, string name, CancellationToken cancellationToken = default);
     Task DeleteFolderAsync(string profileId, string name, CancellationToken cancellationToken = default);
-    Task SetFeedFolderAsync(string profileId, string feedId, string? folderName, CancellationToken cancellationToken = default);
+    Task SetFeedFolderAsync(string profileId, string feedId, string folderName, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ProfileFeedTag>> GetFeedTagsAsync(string profileId, CancellationToken cancellationToken = default);
     Task AddFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default);
     Task RemoveFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default);

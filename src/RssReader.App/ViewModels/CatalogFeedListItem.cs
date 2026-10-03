@@ -5,7 +5,6 @@ namespace RssReader.App.ViewModels;
 public sealed class CatalogFeedListItem : ObservableObject
 {
     private bool _isSubscribed;
-    private string? _folderName;
     private string _newTagName = string.Empty;
 
     public CatalogFeedListItem(string id, string name, string feedUrl, string? description, string? categoryName)
@@ -37,12 +36,6 @@ public sealed class CatalogFeedListItem : ObservableObject
     }
 
     public string SubscriptionLabel => IsSubscribed ? "Unfollow" : "Follow";
-
-    public string? FolderName
-    {
-        get => _folderName;
-        set => SetProperty(ref _folderName, value);
-    }
 
     public string NewTagName
     {

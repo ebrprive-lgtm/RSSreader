@@ -2,6 +2,8 @@ using RssReader.Domain;
 
 namespace RssReader.Application;
 
+public sealed record FeedImportSummary(int AddedCount, int SkippedCount);
+
 public sealed class CatalogService(ICatalogStore store)
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -31,14 +33,13 @@ public sealed class CatalogService(ICatalogStore store)
     {
         EnsureCatalogMaster(actor);
         var normalizedName = RequireName(name, "feed");
-        if (!Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (!TryNormalizeFeedUrl(feedUrl, out var normalizedUrl))
         {
             throw new ArgumentException("Feed URLs must use HTTP or HTTPS.", nameof(feedUrl));
         }
 
         var existingFeeds = await store.GetFeedsAsync(cancellationToken);
-        if (existingFeeds.Any(feed => string.Equals(feed.FeedUrl, uri.AbsoluteUri, StringComparison.OrdinalIgnoreCase)))
+        if (existingFeeds.Any(feed => string.Equals(feed.FeedUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException("That feed URL is already in the catalog.");
         }
@@ -55,11 +56,72 @@ public sealed class CatalogService(ICatalogStore store)
         var feed = new CatalogFeed(
             Guid.NewGuid().ToString("N"),
             normalizedName,
-            uri.AbsoluteUri,
+            normalizedUrl,
             string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
             categoryId);
         await store.AddFeedAsync(feed, cancellationToken);
         return feed;
+    }
+
+    public async Task<FeedImportSummary> ImportFeedsAsync(
+        Profile actor,
+        IEnumerable<OpmlFeed> importedFeeds,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCatalogMaster(actor);
+        ArgumentNullException.ThrowIfNull(importedFeeds);
+
+        var categories = (await store.GetCategoriesAsync(cancellationToken)).ToList();
+        var existingUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var feed in await store.GetFeedsAsync(cancellationToken))
+        {
+            if (TryNormalizeFeedUrl(feed.FeedUrl, out var normalizedUrl))
+            {
+                existingUrls.Add(normalizedUrl);
+            }
+        }
+
+        var addedCount = 0;
+        var skippedCount = 0;
+        foreach (var importedFeed in importedFeeds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(importedFeed.Name) ||
+                !TryNormalizeFeedUrl(importedFeed.FeedUrl, out var normalizedUrl) ||
+                !existingUrls.Add(normalizedUrl))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            var normalizedName = RequireName(importedFeed.Name, "feed");
+            string? categoryId = null;
+            if (!string.IsNullOrWhiteSpace(importedFeed.CategoryName))
+            {
+                var categoryName = importedFeed.CategoryName.Trim();
+                var category = categories.FirstOrDefault(item =>
+                    string.Equals(item.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+                if (category is null)
+                {
+                    category = new CatalogCategory(Guid.NewGuid().ToString("N"), RequireName(categoryName, "category"));
+                    await store.AddCategoryAsync(category, cancellationToken);
+                    categories.Add(category);
+                }
+
+                categoryId = category.Id;
+            }
+
+            var feed = new CatalogFeed(
+                Guid.NewGuid().ToString("N"),
+                normalizedName,
+                normalizedUrl,
+                string.IsNullOrWhiteSpace(importedFeed.Description) ? null : importedFeed.Description.Trim(),
+                categoryId);
+            await store.AddFeedAsync(feed, cancellationToken);
+            addedCount++;
+        }
+
+        return new FeedImportSummary(addedCount, skippedCount);
     }
 
     public async Task<CatalogCategory> AddCategoryAsync(
@@ -159,5 +221,18 @@ public sealed class CatalogService(ICatalogStore store)
         }
 
         return name.Trim();
+    }
+
+    private static bool TryNormalizeFeedUrl(string? feedUrl, out string normalizedUrl)
+    {
+        if (Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            normalizedUrl = uri.AbsoluteUri;
+            return true;
+        }
+
+        normalizedUrl = string.Empty;
+        return false;
     }
 }

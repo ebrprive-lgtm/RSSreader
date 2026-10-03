@@ -113,10 +113,22 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         }
     }
 
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM Profiles WHERE Id = $id AND IsCatalogMaster = 0;";
+        command.Parameters.AddWithValue("$id", id);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private async Task<SqliteConnection> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA foreign_keys = ON;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
         return connection;
     }
 

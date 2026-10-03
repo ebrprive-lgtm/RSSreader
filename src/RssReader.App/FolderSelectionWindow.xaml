@@ -1,0 +1,118 @@
+<Window x:Class="RssReader.App.FolderSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Choose folder"
+        Width="400"
+        Height="330"
+        MinWidth="340"
+        MinHeight="260"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Foreground="{StaticResource TextBrush}"
+        Loaded="Window_Loaded"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#F3F7F4" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="8">
+        <Border Background="{StaticResource WindowBrush}"
+                BorderBrush="#D8DFDB"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="9">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.16" />
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="46" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="42" />
+                </Grid.RowDefinitions>
+                <TextBox x:Name="FolderSearchBox"
+                         Padding="10,7"
+                         FontSize="14"
+                         VerticalContentAlignment="Center"
+                         ToolTip="Search folders"
+                         TextChanged="FolderSearchBox_TextChanged" />
+                <Border Grid.Row="1" Height="1" Margin="-9,9" Background="#E1E6E3" />
+                <Grid Grid.Row="2">
+                    <ListBox x:Name="FoldersListBox"
+                             ItemsSource="{Binding VisibleFolders}"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             PreviewMouseLeftButtonUp="FoldersListBox_PreviewMouseLeftButtonUp">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE8B7;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="16"
+                                               Foreground="#8B9690"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding}"
+                                               Margin="12,0,0,0"
+                                               FontSize="14"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="EmptyFoldersMessage"
+                               Text="No folders yet. Create one to follow this source."
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               MaxWidth="250"
+                               TextAlignment="Center"
+                               Visibility="Collapsed" />
+                </Grid>
+                <Border Grid.Row="3" Height="1" Margin="-9,0" VerticalAlignment="Top" Background="#E1E6E3" />
+                <Button Grid.Row="3"
+                        Click="NewFolder_Click"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Bottom"
+                        Padding="8,8"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Foreground="{StaticResource AccentBrush}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" />
+                        <TextBlock Text="New Folder" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

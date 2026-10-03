@@ -67,6 +67,42 @@ public sealed class CatalogServiceTests
                 null));
     }
 
+    [TestMethod]
+    public async Task ImportFeedsMapsCategoriesAndSkipsInvalidOrDuplicateEntries()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        var catalogMaster = Profile.CreateCatalogMaster();
+        var category = await service.AddCategoryAsync(catalogMaster, "Technology");
+
+        var result = await service.ImportFeedsAsync(catalogMaster,
+        [
+            new OpmlFeed("The Verge", "https://example.com/feed.xml", null, "technology"),
+            new OpmlFeed("Duplicate", "https://EXAMPLE.com/feed.xml", null, "Technology"),
+            new OpmlFeed("Invalid URL", "file:///feed.xml", null, null),
+            new OpmlFeed(" ", "https://example.com/unnamed.xml", null, null)
+        ]);
+
+        Assert.AreEqual(1, result.AddedCount);
+        Assert.AreEqual(3, result.SkippedCount);
+        Assert.AreEqual(category.Id, (await service.GetFeedsAsync()).Single().CategoryId);
+        Assert.AreEqual(1, (await service.GetCategoriesAsync()).Count);
+    }
+
+    [TestMethod]
+    public async Task RegularProfileCannotImportFeedsIntoSharedCatalog()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+
+        await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(
+            () => service.ImportFeedsAsync(
+                Profile.CreateRegular("Reader"),
+                [new OpmlFeed("Example", "https://example.com/feed.xml", null, null)]));
+
+        Assert.AreEqual(0, (await store.GetFeedsAsync()).Count);
+    }
+
     private sealed class MemoryCatalogStore : ICatalogStore
     {
         private readonly List<CatalogFeed> _feeds = [];

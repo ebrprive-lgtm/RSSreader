@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using RssReader.App.Commands;
 using RssReader.Application;
 using RssReader.Domain;
@@ -7,6 +8,16 @@ namespace RssReader.App.ViewModels;
 
 public sealed class CatalogManagementViewModel : ObservableObject
 {
+    private static readonly OpmlFeed[] StarterFeeds =
+    [
+        new("BBC News", "https://feeds.bbci.co.uk/news/rss.xml", "BBC News front page", "News"),
+        new("NPR News", "https://feeds.npr.org/1001/rss.xml", "NPR news and reporting", "News"),
+        new("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index", "All Ars Technica stories", "Technology"),
+        new("The Verge", "https://www.theverge.com/rss/index.xml", "Technology and culture", "Technology"),
+        new("NASA", "https://www.nasa.gov/feed/", "Official NASA news", "Science"),
+        new("The GitHub Blog", "https://github.blog/feed/", "GitHub product and engineering updates", "Developer tools")
+    ];
+
     private readonly Profile _actor;
     private readonly CatalogService _catalogService;
     private string _feedName = string.Empty;
@@ -15,6 +26,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     private string _categoryName = string.Empty;
     private string _collectionName = string.Empty;
     private string _errorMessage = string.Empty;
+    private string _importMessage = string.Empty;
     private CatalogCategory? _selectedCategory;
     private CatalogFeedListItem? _selectedFeed;
     private CatalogCollection? _selectedCollection;
@@ -24,6 +36,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
         _actor = actor;
         _catalogService = catalogService;
         AddFeedCommand = new AsyncCommand(AddFeedAsync);
+        LoadStarterPackCommand = new AsyncCommand(LoadStarterPackAsync);
         DeleteFeedCommand = new AsyncCommand<CatalogFeedListItem>(DeleteFeedAsync);
         AddCategoryCommand = new AsyncCommand(AddCategoryAsync);
         DeleteCategoryCommand = new AsyncCommand<CatalogCategory>(DeleteCategoryAsync);
@@ -38,6 +51,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public ObservableCollection<CatalogCollection> Collections { get; } = [];
 
     public AsyncCommand AddFeedCommand { get; }
+    public AsyncCommand LoadStarterPackCommand { get; }
     public AsyncCommand<CatalogFeedListItem> DeleteFeedCommand { get; }
     public AsyncCommand AddCategoryCommand { get; }
     public AsyncCommand<CatalogCategory> DeleteCategoryCommand { get; }
@@ -82,6 +96,12 @@ public sealed class CatalogManagementViewModel : ObservableObject
         private set => SetProperty(ref _errorMessage, value);
     }
 
+    public string ImportMessage
+    {
+        get => _importMessage;
+        private set => SetProperty(ref _importMessage, value);
+    }
+
     public CatalogCategory? SelectedCategory
     {
         get => _selectedCategory;
@@ -102,6 +122,21 @@ public sealed class CatalogManagementViewModel : ObservableObject
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default) =>
         await RefreshAsync(cancellationToken);
+
+    public async Task ImportOpmlAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        ErrorMessage = string.Empty;
+        ImportMessage = string.Empty;
+        try
+        {
+            var parsed = OpmlFeedParser.Parse(stream);
+            await ImportFeedsAsync(parsed.Feeds, parsed.SkippedCount, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ErrorMessage = $"Could not import OPML: {exception.Message}";
+        }
+    }
 
     private async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
@@ -157,6 +192,30 @@ public sealed class CatalogManagementViewModel : ObservableObject
             ErrorMessage = exception.Message;
         }
         catch (InvalidOperationException exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+    }
+
+    private async Task LoadStarterPackAsync()
+    {
+        ErrorMessage = string.Empty;
+        ImportMessage = string.Empty;
+        await ImportFeedsAsync(StarterFeeds, 0, CancellationToken.None);
+    }
+
+    private async Task ImportFeedsAsync(
+        IReadOnlyList<OpmlFeed> feeds,
+        int parserSkippedCount,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _catalogService.ImportFeedsAsync(_actor, feeds, cancellationToken);
+            await RefreshAsync(cancellationToken);
+            ImportMessage = $"Added {result.AddedCount} feed(s); skipped {result.SkippedCount + parserSkippedCount}.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             ErrorMessage = exception.Message;
         }

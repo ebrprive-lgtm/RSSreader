@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "RSS Reader",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build RSS Reader",
+      "program": "${workspaceFolder}/src/RssReader.App/bin/Debug/net8.0-windows/RssReader.App.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/RssReader.App",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "justMyCode": true
+    }
+  ]
+}

@@ -68,7 +68,8 @@ public sealed class FeedRefreshService(
             item.Link,
             item.PublishedAt,
             item.Summary,
-            item.Content);
+            item.Content,
+            item.ImageUrl);
     }
 }
 

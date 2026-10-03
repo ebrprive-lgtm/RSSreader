@@ -52,6 +52,45 @@ public sealed class SqliteProfileStoreTests
     }
 
     [TestMethod]
+    public async Task DeleteProfileCascadesProfileDataAndKeepsSharedArticles()
+    {
+        using var database = new TemporaryDatabase();
+        var profiles = new SqliteProfileStore(database.Path);
+        var catalog = new SqliteCatalogStore(database.Path);
+        var reader = new SqliteReaderStore(database.Path);
+        await profiles.InitializeAsync();
+        await catalog.InitializeAsync();
+        await reader.InitializeAsync();
+        var profile = Profile.CreateRegular("Reader");
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        await profiles.AddAsync(profile);
+        await catalog.AddFeedAsync(feed);
+        await reader.AddFolderAsync(profile.Id, "News");
+        await reader.SubscribeAsync(profile.Id, feed.Id, "News");
+        await reader.SetFeedFolderAsync(profile.Id, feed.Id, "News");
+        await reader.AddFeedTagAsync(profile.Id, feed.Id, "Saved topic");
+        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", null, null, null, null);
+        await reader.SaveArticlesAsync(feed.Id, [article]);
+        await reader.SetArticleReadAsync(profile.Id, article.Id, true);
+        await reader.SetArticleSavedAsync(profile.Id, article.Id, true);
+
+        await profiles.DeleteAsync(profile.Id);
+
+        Assert.IsNull(await profiles.GetByIdAsync(profile.Id));
+        Assert.AreEqual(0, (await reader.GetSubscriptionsAsync(profile.Id)).Count);
+        Assert.AreEqual(0, (await reader.GetFoldersAsync(profile.Id)).Count);
+        Assert.AreEqual(0, (await reader.GetFeedTagsAsync(profile.Id)).Count);
+
+        await profiles.AddAsync(profile);
+        await reader.AddFolderAsync(profile.Id, "News");
+        await reader.SubscribeAsync(profile.Id, feed.Id, "News");
+        var reopenedArticle = (await reader.GetArticlesAsync(profile.Id)).Single();
+        Assert.AreEqual(article.Id, reopenedArticle.Article.Id);
+        Assert.IsFalse(reopenedArticle.IsRead);
+        Assert.IsFalse(reopenedArticle.IsSaved);
+    }
+
+    [TestMethod]
     public void Pbkdf2PasswordHasher_VerifiesPasswordAndRejectsInvalidHashes()
     {
         var hasher = new Pbkdf2PasswordHasher();

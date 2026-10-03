@@ -46,12 +46,14 @@ public sealed class ReadingServiceTests
         var service = new ReadingService(readerStore, new MemoryCatalogStore([catalogFeed]));
         var profile = Profile.CreateRegular("Reader");
 
-        await service.SubscribeAsync(profile, catalogFeed.Id);
+        await service.SubscribeAsync(profile, catalogFeed.Id, "Gaming");
 
         Assert.AreEqual(profile.Id, readerStore.Subscriptions.Single().ProfileId);
-        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.SubscribeAsync(profile, "unknown-feed"));
+        Assert.AreEqual("Gaming", readerStore.Subscriptions.Single().FolderName);
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.SubscribeAsync(profile, "unknown-feed", "Gaming"));
+        await Assert.ThrowsExceptionAsync<ArgumentException>(() => service.SubscribeAsync(profile, catalogFeed.Id, "Missing"));
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => service.SubscribeAsync(Profile.CreateCatalogMaster(), catalogFeed.Id));
+            () => service.SubscribeAsync(Profile.CreateCatalogMaster(), catalogFeed.Id, "Gaming"));
     }
 
     private sealed class MemoryCatalogStore(IReadOnlyList<CatalogFeed> feeds) : ICatalogStore
@@ -73,19 +75,24 @@ public sealed class ReadingServiceTests
 
     private sealed class MemoryReaderStore : IReaderStore
     {
+        public List<string> Folders { get; } = ["Gaming"];
         public List<ProfileSubscription> Subscriptions { get; } = [];
         public List<ProfileFeedTag> Tags { get; } = [];
         public List<ArticleForProfile> Articles { get; } = [];
 
         public Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileSubscription>>(Subscriptions.Where(item => item.ProfileId == profileId).ToArray());
-        public Task SubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) =>
-            Task.Run(() => Subscriptions.Add(new ProfileSubscription(profileId, feedId, "Gaming News", "https://example.com/feed.xml", null)), cancellationToken);
+        public Task SubscribeAsync(string profileId, string feedId, string folderName, CancellationToken cancellationToken = default) =>
+            Task.Run(() => Subscriptions.Add(new ProfileSubscription(profileId, feedId, "Gaming News", "https://example.com/feed.xml", folderName)), cancellationToken);
         public Task UnsubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<IReadOnlyList<string>> GetFoldersAsync(string profileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
-        public Task AddFolderAsync(string profileId, string name, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<string>> GetFoldersAsync(string profileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>(Folders);
+        public Task AddFolderAsync(string profileId, string name, CancellationToken cancellationToken = default)
+        {
+            Folders.Add(name);
+            return Task.CompletedTask;
+        }
         public Task DeleteFolderAsync(string profileId, string name, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SetFeedFolderAsync(string profileId, string feedId, string? folderName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetFeedFolderAsync(string profileId, string feedId, string folderName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProfileFeedTag>> GetFeedTagsAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileFeedTag>>(Tags.Where(item => item.ProfileId == profileId).ToArray());
         public Task AddFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;

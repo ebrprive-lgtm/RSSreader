@@ -8,4 +8,5 @@ public sealed record FeedArticle(
     string? Link,
     DateTimeOffset? PublishedAt,
     string? Summary,
-    string? Content);
+    string? Content,
+    string? ImageUrl = null);

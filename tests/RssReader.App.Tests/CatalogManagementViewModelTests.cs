@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text;
 using RssReader.App.ViewModels;
 using RssReader.Application;
 using RssReader.Domain;
@@ -7,6 +9,41 @@ namespace RssReader.App.Tests;
 [TestClass]
 public sealed class CatalogManagementViewModelTests
 {
+    [TestMethod]
+    public async Task OpmlImportAddsFeedsAndMapsFoldersToCategories()
+    {
+        const string opml = "<opml version=\"2.0\"><body><outline text=\"Science\"><outline text=\"NASA\" xmlUrl=\"https://example.com/nasa.xml\" /></outline></body></opml>";
+        var viewModel = new CatalogManagementViewModel(
+            Profile.CreateCatalogMaster(),
+            new CatalogService(new MemoryCatalogStore()));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(opml));
+
+        await viewModel.ImportOpmlAsync(stream);
+
+        Assert.AreEqual(1, viewModel.Feeds.Count);
+        Assert.AreEqual("NASA", viewModel.Feeds.Single().Name);
+        Assert.AreEqual("Science", viewModel.Feeds.Single().CategoryName);
+        Assert.AreEqual("Added 1 feed(s); skipped 0.", viewModel.ImportMessage);
+        Assert.AreEqual(string.Empty, viewModel.ErrorMessage);
+    }
+
+    [TestMethod]
+    public async Task StarterPackAddsCuratedFeedsAndSkipsThemWhenRepeated()
+    {
+        var viewModel = new CatalogManagementViewModel(
+            Profile.CreateCatalogMaster(),
+            new CatalogService(new MemoryCatalogStore()));
+
+        await viewModel.LoadStarterPackCommand.ExecuteAsync();
+        Assert.AreEqual(6, viewModel.Feeds.Count);
+        Assert.AreEqual("Added 6 feed(s); skipped 0.", viewModel.ImportMessage);
+
+        await viewModel.LoadStarterPackCommand.ExecuteAsync();
+
+        Assert.AreEqual(6, viewModel.Feeds.Count);
+        Assert.AreEqual("Added 0 feed(s); skipped 6.", viewModel.ImportMessage);
+    }
+
     [TestMethod]
     public async Task CatalogMasterCommandsCreateAndOrganizeCatalogEntries()
     {

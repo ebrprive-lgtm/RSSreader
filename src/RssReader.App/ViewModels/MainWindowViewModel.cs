@@ -15,13 +15,13 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _activeRoute;
     private string _searchQuery = string.Empty;
     private string _quickQuery = string.Empty;
-    private string _newFolderName = string.Empty;
     private string _statusMessage = string.Empty;
     private ArticleRowViewModel? _selectedArticle;
     private bool _isSidebarExpanded = true;
     private bool _isRefreshing;
     private bool _unreadOnly;
     private bool _savedOnly;
+    private bool _isCardsView = true;
 
     public MainWindowViewModel(Profile profile) : this(profile, null, null, null)
     {
@@ -59,8 +59,8 @@ public sealed class MainWindowViewModel : ObservableObject
             ?
             [
                 new("All", "All", "\uE8A5", "5"),
-                new("folder:Gaming", "Gaming", "\uE8B7", "2"),
-                new("folder:tech", "tech", "\uE8B7", "3")
+                new("folder:Gaming", "Gaming", "\uE8B7", "2", indentLevel: 1),
+                new("folder:tech", "tech", "\uE8B7", "3", indentLevel: 1)
             ]
             : [new("All", "All", "\uE8A5")];
         TagLinks = readingService is null
@@ -102,9 +102,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsRefreshing && !IsCatalogMaster);
-        AddFolderCommand = new RelayCommand(() => _ = AddFolderAsync());
-        ToggleSubscriptionCommand = new RelayCommand<CatalogFeedListItem>(item => _ = ToggleSubscriptionAsync(item));
-        SaveFeedFolderCommand = new RelayCommand<CatalogFeedListItem>(item => _ = SaveFeedFolderAsync(item));
+        ToggleSubscriptionCommand = new AsyncCommand<CatalogFeedListItem>(ToggleSubscriptionAsync);
         AddFeedTagCommand = new RelayCommand<CatalogFeedListItem>(item => _ = AddFeedTagAsync(item));
         RemoveFeedTagCommand = new RelayCommand<FeedTagListItem>(tag => _ = RemoveFeedTagAsync(tag));
 
@@ -140,13 +138,17 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand RefreshCommand { get; }
-    public RelayCommand AddFolderCommand { get; }
-    public RelayCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
-    public RelayCommand<CatalogFeedListItem> SaveFeedFolderCommand { get; }
+    public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
     public RelayCommand<CatalogFeedListItem> AddFeedTagCommand { get; }
     public RelayCommand<FeedTagListItem> RemoveFeedTagCommand { get; }
 
     public event Action? ProfileSwitchRequested;
+
+    public Func<
+        IReadOnlyList<string>,
+        IReadOnlyList<string>,
+        Func<string, Task>,
+        Task<string?>>? FolderSelectionRequested { get; set; }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -206,6 +208,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsGoToRoute));
                 OnPropertyChanged(nameof(IsArticleListVisible));
                 OnPropertyChanged(nameof(IsCatalogBrowserVisible));
+                OnPropertyChanged(nameof(IsProfileSubtitleVisible));
                 OnPropertyChanged(nameof(IsCatalogAdminVisible));
                 ApplyArticleFilters();
             }
@@ -234,12 +237,6 @@ public sealed class MainWindowViewModel : ObservableObject
                 ApplyQuickFilter();
             }
         }
-    }
-
-    public string NewFolderName
-    {
-        get => _newFolderName;
-        set => SetProperty(ref _newFolderName, value);
     }
 
     public string StatusMessage
@@ -284,6 +281,30 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    public bool IsCardsView
+    {
+        get => _isCardsView;
+        set
+        {
+            if (value && SetProperty(ref _isCardsView, true))
+            {
+                OnPropertyChanged(nameof(IsListView));
+            }
+        }
+    }
+
+    public bool IsListView
+    {
+        get => !_isCardsView;
+        set
+        {
+            if (value && SetProperty(ref _isCardsView, false))
+            {
+                OnPropertyChanged(nameof(IsCardsView));
+            }
+        }
+    }
+
     public ArticleRowViewModel? SelectedArticle
     {
         get => _selectedArticle;
@@ -309,6 +330,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsSearchRoute => ActiveRoute == "Search";
     public bool IsGoToRoute => ActiveRoute == "Go to...";
+    public bool IsProfileSubtitleVisible => !IsCatalogBrowserVisible;
     public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible && !IsGoToRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
@@ -366,12 +388,16 @@ public sealed class MainWindowViewModel : ObservableObject
         FeedLinks.Add(new SidebarLink("All", "All", "\uE8A5"));
         foreach (var folder in folders)
         {
-            FeedLinks.Add(new SidebarLink($"folder:{folder}", folder, "\uE8B7"));
-        }
-
-        foreach (var subscription in subscriptions)
-        {
-            FeedLinks.Add(new SidebarLink($"feed:{subscription.FeedId}", subscription.FeedName, "\uE774"));
+            FeedLinks.Add(new SidebarLink($"folder:{folder}", folder, "\uE8B7", indentLevel: 1));
+            foreach (var subscription in subscriptions.Where(item =>
+                         string.Equals(item.FolderName, folder, StringComparison.OrdinalIgnoreCase)))
+            {
+                FeedLinks.Add(new SidebarLink(
+                    $"feed:{subscription.FeedId}",
+                    subscription.FeedName,
+                    "\uE774",
+                    indentLevel: 2));
+            }
         }
 
         TagLinks.Clear();
@@ -382,8 +408,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         foreach (var feed in CatalogFeeds)
         {
-            feed.IsSubscribed = subscriptionsByFeed.TryGetValue(feed.Id, out var subscription);
-            feed.FolderName = subscription?.FolderName;
+            feed.IsSubscribed = subscriptionsByFeed.ContainsKey(feed.Id);
             feed.Tags.Clear();
             if (tagsByFeed.TryGetValue(feed.Id, out var feedTags))
             {
@@ -401,7 +426,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 item.Article.Title,
                 item.Source,
                 item.Article.PublishedAt ?? DateTimeOffset.Now,
-                item.FolderName ?? string.Empty,
+                item.FolderName,
                 tagsByFeed.GetValueOrDefault(item.Article.FeedId, []),
                 item.Article.Summary ?? string.Empty,
                 item.IsRead,
@@ -409,7 +434,8 @@ public sealed class MainWindowViewModel : ObservableObject
                 item.Article.Id,
                 item.Article.FeedId,
                 item.Article.Link,
-                item.Article.Content);
+                item.Article.Content,
+                item.Article.ImageUrl);
             row.PropertyChanged += OnArticlePropertyChanged;
             _allArticles.Add(row);
         }
@@ -461,7 +487,35 @@ public sealed class MainWindowViewModel : ObservableObject
             }
             else
             {
-                await _readingService.SubscribeAsync(ActiveProfile, feed.Id);
+                if (FolderSelectionRequested is null)
+                {
+                    return;
+                }
+
+                var suggestions = CatalogFeeds
+                    .Select(item => item.CategoryName)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Select(name => name!.Trim())
+                    .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (suggestions.Length == 0)
+                {
+                    suggestions = new[] { "News", "Technology", "Gaming", "Culture" }
+                        .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                        .ToArray();
+                }
+
+                var folderName = await FolderSelectionRequested(
+                    FolderNames.ToArray(),
+                    suggestions,
+                    CreateFolderFromPickerAsync);
+                if (string.IsNullOrWhiteSpace(folderName))
+                {
+                    return;
+                }
+
+                await _readingService.SubscribeAsync(ActiveProfile, feed.Id, folderName);
             }
 
             await LoadProfileReaderDataAsync(CancellationToken.None);
@@ -473,41 +527,15 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task AddFolderAsync()
+    private async Task CreateFolderFromPickerAsync(string folderName)
     {
-        if (_readingService is null || string.IsNullOrWhiteSpace(NewFolderName))
+        if (_readingService is null)
         {
-            return;
+            throw new InvalidOperationException("Folder creation is unavailable.");
         }
 
-        try
-        {
-            await _readingService.AddFolderAsync(ActiveProfile, NewFolderName);
-            NewFolderName = string.Empty;
-            await LoadProfileReaderDataAsync(CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            StatusMessage = exception.Message;
-        }
-    }
-
-    private async Task SaveFeedFolderAsync(CatalogFeedListItem feed)
-    {
-        if (_readingService is null || !feed.IsSubscribed)
-        {
-            return;
-        }
-
-        try
-        {
-            await _readingService.SetFeedFolderAsync(ActiveProfile, feed.Id, feed.FolderName);
-            await LoadProfileReaderDataAsync(CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            StatusMessage = exception.Message;
-        }
+        await _readingService.AddFolderAsync(ActiveProfile, folderName);
+        await LoadProfileReaderDataAsync(CancellationToken.None);
     }
 
     private async Task AddFeedTagAsync(CatalogFeedListItem feed)

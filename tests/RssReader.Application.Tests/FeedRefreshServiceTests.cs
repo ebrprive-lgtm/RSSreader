@@ -14,8 +14,8 @@ public sealed class FeedRefreshServiceTests
         var secondFeed = new CatalogFeed("feed-2", "Broken feed", "https://example.com/broken.xml", null, null);
         var readerStore = new ReaderStoreStub(
         [
-            new ProfileSubscription("profile-1", firstFeed.Id, firstFeed.Name, firstFeed.FeedUrl, null),
-            new ProfileSubscription("profile-1", secondFeed.Id, secondFeed.Name, secondFeed.FeedUrl, null)
+            new ProfileSubscription("profile-1", firstFeed.Id, firstFeed.Name, firstFeed.FeedUrl, "Unfiled"),
+            new ProfileSubscription("profile-1", secondFeed.Id, secondFeed.Name, secondFeed.FeedUrl, "Unfiled")
         ]);
         var downloader = new FeedDownloaderStub(new Dictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>>
         {
@@ -67,12 +67,12 @@ public sealed class FeedRefreshServiceTests
 
         public Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileSubscription>>(subscriptions.Where(item => item.ProfileId == profileId).ToArray());
-        public Task SubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SubscribeAsync(string profileId, string feedId, string folderName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task UnsubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<string>> GetFoldersAsync(string profileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
         public Task AddFolderAsync(string profileId, string name, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteFolderAsync(string profileId, string name, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task SetFeedFolderAsync(string profileId, string feedId, string? folderName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task SetFeedFolderAsync(string profileId, string feedId, string folderName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProfileFeedTag>> GetFeedTagsAsync(string profileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ProfileFeedTag>>([]);
         public Task AddFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RemoveFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;
