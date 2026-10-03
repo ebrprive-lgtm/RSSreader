@@ -120,6 +120,17 @@ public sealed class CatalogManagementViewModel : ObservableObject
         set => SetProperty(ref _selectedCollection, value);
     }
 
+    public void ResetEntryForm()
+    {
+        ErrorMessage = string.Empty;
+        FeedName = string.Empty;
+        FeedUrl = string.Empty;
+        FeedDescription = string.Empty;
+        SelectedCategory = null;
+        CategoryName = string.Empty;
+        CollectionName = string.Empty;
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default) =>
         await RefreshAsync(cancellationToken);
 

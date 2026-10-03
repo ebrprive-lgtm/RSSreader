@@ -9,6 +9,82 @@
         Background="White"
         Foreground="{StaticResource TextBrush}">
     <Window.Resources>
+        <Style x:Key="ArticleRowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#F6F8F7" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ReadLaterToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Content" Value="&#xE734;" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="#87938D" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="ToggleBorder" Background="{TemplateBinding Background}" CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="#E8EEEB" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ArticleFilterToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="FilterBorder" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FilterBorder" Property="Background" Value="#E8EEEB" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="FilterBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <DataTemplate x:Key="SidebarLinkTemplate">
                 <Button Style="{DynamicResource SidebarButtonStyle}"
                     ToolTip="{Binding Label}"
@@ -39,41 +115,147 @@
             </Button>
         </DataTemplate>
         <DataTemplate x:Key="ArticleRowTemplate">
-            <Button Style="{DynamicResource ArticleRowButtonStyle}"
-                    Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                    CommandParameter="{Binding}">
-                <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,15">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="110" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock Text="{Binding Title}"
-                                       FontSize="15"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap" />
+            <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,5">
+                <Grid MinHeight="28">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ToggleButton x:Name="ReadLaterToggle"
+                                  IsChecked="{Binding IsSaved, Mode=TwoWay}"
+                              Style="{StaticResource ReadLaterToggleStyle}"
+                                  ToolTip="Click to add to read later" />
+                    <Button Grid.Column="1"
+                            Style="{StaticResource ArticleRowButtonStyle}"
+                            HorizontalContentAlignment="Stretch"
+                            Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="84" />
+                            </Grid.ColumnDefinitions>
                             <TextBlock Text="{Binding Source}"
-                                       Margin="0,6,0,0"
-                                       FontSize="12"
-                                       Foreground="{StaticResource MutedTextBrush}" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
-                            <TextBlock Text="{Binding AgeLabel}"
-                                       FontSize="12"
-                                       HorizontalAlignment="Right" />
-                            <TextBlock Text="{Binding PublishedDateLabel}"
-                                       Margin="0,4,0,0"
+                                       ToolTip="{Binding Source}"
+                                       VerticalAlignment="Center"
                                        FontSize="11"
                                        Foreground="{StaticResource MutedTextBrush}"
-                                       HorizontalAlignment="Right" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-            </Button>
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Folder}"
+                                       ToolTip="{Binding Folder}"
+                                       Margin="0,0,12,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding DataContext.IsSortByDate, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <TextBlock Grid.Column="2"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding Title, Mode=OneWay}" FontSize="12" FontWeight="SemiBold" />
+                                <Run Text="  " />
+                                <Run Text="{Binding Summary, Mode=OneWay}" FontSize="12" Foreground="{StaticResource MutedTextBrush}" />
+                            </TextBlock>
+                            <TextBlock Grid.Column="3"
+                                       Text="{Binding AgeLabel}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedTextBrush}" />
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSaved}" Value="True">
+                    <Setter TargetName="ReadLaterToggle" Property="ToolTip" Value="Remove from read later" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <DataTemplate x:Key="ArticleMagazineTemplate">
+            <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,12">
+                <Grid MinHeight="106">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ToggleButton x:Name="MagazineReadLaterToggle"
+                                  IsChecked="{Binding IsSaved, Mode=TwoWay}"
+                                  Style="{StaticResource ReadLaterToggleStyle}"
+                                  ToolTip="Click to add to read later" />
+                    <Button Grid.Column="1"
+                            Style="{StaticResource ArticleRowButtonStyle}"
+                            HorizontalContentAlignment="Stretch"
+                            Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="154" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0" Height="96" Background="#E8EEEB" VerticalAlignment="Top">
+                                <Border x:Name="MagazineImageFallback" Background="#E8EEEB">
+                                    <TextBlock Text="&#xE91B;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="24"
+                                               Foreground="#87938D"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                                <Image x:Name="MagazineArticleImage"
+                                       Source="{Binding ImageUrl, TargetNullValue={x:Null}}"
+                                       Stretch="UniformToFill" />
+                            </Grid>
+                            <StackPanel Grid.Column="1" Margin="18,0,0,0">
+                                <TextBlock Text="{Binding Title}"
+                                           MaxHeight="42"
+                                           FontSize="15"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           TextTrimming="CharacterEllipsis" />
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                    <TextBlock Text="{Binding Source}"
+                                               ToolTip="{Binding Source}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="  •  " FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+                                    <TextBlock Text="{Binding AgeLabel}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource MutedTextBrush}" />
+                                    <TextBlock Text="{Binding Folder}"
+                                               Margin="10,0,0,0"
+                                               FontSize="11"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Visibility="{Binding DataContext.IsSortByDate, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Summary}"
+                                           Height="54"
+                                           Margin="0,5,0,0"
+                                           FontSize="12"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextWrapping="Wrap"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSaved}" Value="True">
+                    <Setter TargetName="MagazineReadLaterToggle" Property="ToolTip" Value="Remove from read later" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ImageUrl}" Value="{x:Null}">
+                    <Setter TargetName="MagazineArticleImage" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
         <DataTemplate x:Key="ArticleCardTemplate">
-            <Button Style="{DynamicResource ArticleRowButtonStyle}"
+            <Button Style="{StaticResource ArticleRowButtonStyle}"
                     Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                     CommandParameter="{Binding}">
                 <Border Width="310"
@@ -99,7 +281,7 @@
                                 </StackPanel>
                             </Border>
                             <Image x:Name="ArticleImage"
-                                   Source="{Binding ImageUrl}"
+                                Source="{Binding ImageUrl, TargetNullValue={x:Null}}"
                                    Stretch="UniformToFill" />
                             <Border HorizontalAlignment="Left"
                                     VerticalAlignment="Bottom"
@@ -171,26 +353,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <Style x:Key="ArticleRowButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}">
-                            <ContentPresenter />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#F6F8F7" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
         <Style x:Key="ArticleViewModeStyle" TargetType="RadioButton">
             <Setter Property="Padding" Value="10,6" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
@@ -242,12 +404,24 @@
                             Padding="9,8"
                             Background="Transparent"
                             BorderThickness="0" />
-                    <Button Command="{Binding SwitchProfileCommand}"
+                    <Button x:Name="ProfileMenuButton"
+                            Click="ProfileMenuButton_Click"
                             Background="Transparent"
                             BorderThickness="0"
                             Padding="8,9"
                             HorizontalContentAlignment="Stretch"
-                            ToolTip="Switch profile">
+                            ToolTip="Profile options">
+                        <Button.ContextMenu>
+                            <ContextMenu x:Name="ProfileContextMenu"
+                                         Background="White"
+                                         BorderBrush="#DDE3E0"
+                                         BorderThickness="1"
+                                         Padding="5">
+                                <MenuItem Header="Preferences" Click="PreferencesMenuItem_Click" Padding="12,8" />
+                                <Separator />
+                                <MenuItem Header="Log Out" Click="LogoutMenuItem_Click" Padding="12,8" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="34" />
@@ -320,11 +494,11 @@
             <DockPanel LastChildFill="False" Margin="0,0,0,22">
                 <StackPanel DockPanel.Dock="Left">
                     <TextBlock Text="{Binding WorkspaceTitle}" FontSize="25" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding ActiveProfileName}"
+                    <TextBlock Text="{Binding VisibleArticles.Count, StringFormat={}{0} articles}"
                                Margin="0,4,0,0"
                                FontSize="12"
                                Foreground="{StaticResource MutedTextBrush}"
-                               Visibility="{Binding IsProfileSubtitleVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                               Visibility="{Binding IsArticleCountVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <TextBlock Text="{Binding StatusMessage}"
                                Margin="0,5,0,0"
                                FontSize="11"
@@ -355,41 +529,116 @@
                     </Grid.RowDefinitions>
                     <DockPanel Margin="0,0,0,12">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <CheckBox Content="Unread only"
-                                      IsChecked="{Binding UnreadOnly, Mode=TwoWay}"
-                                      Margin="0,0,14,0" />
-                            <CheckBox Content="Saved only"
-                                      IsChecked="{Binding SavedOnly, Mode=TwoWay}"
-                                      Margin="0,0,14,0" />
+                            <ToggleButton Content="&#xE8D4;"
+                                          FontFamily="Segoe MDL2 Assets"
+                                          IsChecked="{Binding UnreadOnly, Mode=TwoWay}"
+                                          Style="{StaticResource ArticleFilterToggleStyle}"
+                                          ToolTip="Show unread articles only"
+                                          AutomationProperties.Name="Unread only"
+                                          Margin="0,0,6,0" />
+                            <ToggleButton Content="&#xE734;"
+                                          FontFamily="Segoe MDL2 Assets"
+                                          IsChecked="{Binding SavedOnly, Mode=TwoWay}"
+                                          Style="{StaticResource ArticleFilterToggleStyle}"
+                                          ToolTip="Show saved articles only"
+                                          AutomationProperties.Name="Saved only"
+                                          Margin="0,0,10,0" />
                             <Border BorderBrush="#DDE3E0" BorderThickness="1" CornerRadius="5" Padding="2">
                                 <StackPanel Orientation="Horizontal">
                                     <RadioButton Content="Cards"
                                                  GroupName="ArticleViewMode"
                                                  IsChecked="{Binding IsCardsView, Mode=TwoWay}"
                                                  Style="{StaticResource ArticleViewModeStyle}" />
-                                    <RadioButton Content="List"
+                                    <RadioButton Content="Title-Only"
                                                  GroupName="ArticleViewMode"
                                                  IsChecked="{Binding IsListView, Mode=TwoWay}"
+                                                 Style="{StaticResource ArticleViewModeStyle}" />
+                                    <RadioButton Content="Magazine"
+                                                 GroupName="ArticleViewMode"
+                                                 IsChecked="{Binding IsMagazineView, Mode=TwoWay}"
+                                                 Style="{StaticResource ArticleViewModeStyle}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="8,0,0,0"
+                                    BorderBrush="#DDE3E0"
+                                    BorderThickness="1"
+                                    CornerRadius="5"
+                                    Padding="2"
+                                    Visibility="{Binding IsArticleListVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Sort by date"
+                                                 GroupName="ArticleSortMode"
+                                                 IsChecked="{Binding IsSortByDate, Mode=TwoWay}"
+                                                 Style="{StaticResource ArticleViewModeStyle}" />
+                                    <RadioButton Content="Sort by Folder"
+                                                 GroupName="ArticleSortMode"
+                                                 IsChecked="{Binding IsSortByFolder, Mode=TwoWay}"
                                                  Style="{StaticResource ArticleViewModeStyle}" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
-                        <TextBlock Text="{Binding VisibleArticles.Count, StringFormat={}{0} articles}"
-                                   FontSize="12"
-                                   Foreground="{StaticResource MutedTextBrush}"
-                                   VerticalAlignment="Center" />
                     </DockPanel>
                     <ScrollViewer Grid.Row="1"
-                                  VerticalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Hidden"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Visibility="{Binding IsListView, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <ItemsControl ItemsSource="{Binding VisibleArticles}" ItemTemplate="{StaticResource ArticleRowTemplate}" />
+                        <ItemsControl ItemsSource="{Binding ArticleListView}" ItemTemplate="{StaticResource ArticleRowTemplate}">
+                            <ItemsControl.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,14,0,7">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrush}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ItemsControl.GroupStyle>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Hidden"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{Binding IsMagazineView, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ItemsControl ItemsSource="{Binding ArticleListView}" ItemTemplate="{StaticResource ArticleMagazineTemplate}">
+                            <ItemsControl.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,14,0,7">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrush}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ItemsControl.GroupStyle>
+                        </ItemsControl>
                     </ScrollViewer>
                     <ScrollViewer Grid.Row="1"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   Visibility="{Binding IsCardsView, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <ItemsControl ItemsSource="{Binding VisibleArticles}" ItemTemplate="{StaticResource ArticleCardTemplate}">
+                        <ItemsControl ItemsSource="{Binding ArticleListView}" ItemTemplate="{StaticResource ArticleCardTemplate}">
+                            <ItemsControl.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.HeaderTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#E7ECE9" BorderThickness="0,0,0,1" Padding="0,14,0,7">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="13"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrush}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </GroupStyle.HeaderTemplate>
+                                </GroupStyle>
+                            </ItemsControl.GroupStyle>
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel ItemWidth="322" ItemHeight="326" />
@@ -505,36 +754,6 @@
                                                         HorizontalAlignment="Right"
                                                         MinWidth="82"
                                                         Padding="9,5" />
-                                                <StackPanel Visibility="{Binding IsSubscribed, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                    <DockPanel Margin="0,6,0,0">
-                                                        <Button DockPanel.Dock="Right"
-                                                                Content="Add tag"
-                                                                Command="{Binding DataContext.AddFeedTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                CommandParameter="{Binding}"
-                                                                Margin="5,0,0,0"
-                                                                Padding="6,4" />
-                                                        <TextBox Text="{Binding NewTagName, UpdateSourceTrigger=PropertyChanged}"
-                                                                 Padding="5,4"
-                                                                 ToolTip="Personal tag" />
-                                                    </DockPanel>
-                                                    <ItemsControl ItemsSource="{Binding Tags}" Margin="0,4,0,0">
-                                                        <ItemsControl.ItemsPanel>
-                                                            <ItemsPanelTemplate>
-                                                                <WrapPanel />
-                                                            </ItemsPanelTemplate>
-                                                        </ItemsControl.ItemsPanel>
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Button Padding="5,2"
-                                                                        Margin="0,0,4,3"
-                                                                        Content="{Binding Name, StringFormat='{}{0}  x'}"
-                                                                        ToolTip="Remove tag"
-                                                                        Command="{Binding DataContext.RemoveFeedTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                        CommandParameter="{Binding}" />
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </StackPanel>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -568,9 +787,23 @@
                                 <ColumnDefinition Width="1.15*" />
                                 <ColumnDefinition Width="0.85*" />
                             </Grid.ColumnDefinitions>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,24,0">
+                            <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" Margin="0,0,24,0">
                                 <StackPanel>
-                                    <TextBlock Text="Feeds" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Feeds" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Content="&#xE710;"
+                                                FontFamily="Segoe MDL2 Assets"
+                                                Width="30"
+                                                Height="30"
+                                                ToolTip="Add feed"
+                                                AutomationProperties.Name="Add feed"
+                                                Click="AddFeed_Click" />
+                                    </Grid>
                                     <ItemsControl ItemsSource="{Binding CatalogManagement.Feeds}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -604,7 +837,21 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
-                                    <TextBlock Text="Categories" FontSize="15" FontWeight="SemiBold" Margin="0,24,0,8" />
+                                    <Grid Margin="0,24,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Categories" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Content="&#xE710;"
+                                                FontFamily="Segoe MDL2 Assets"
+                                                Width="30"
+                                                Height="30"
+                                                ToolTip="Add category"
+                                                AutomationProperties.Name="Add category"
+                                                Click="AddCategory_Click" />
+                                    </Grid>
                                     <ItemsControl ItemsSource="{Binding CatalogManagement.Categories}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -620,7 +867,21 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
-                                    <TextBlock Text="Collections" FontSize="15" FontWeight="SemiBold" Margin="0,24,0,8" />
+                                    <Grid Margin="0,24,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Collections" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                Content="&#xE710;"
+                                                FontFamily="Segoe MDL2 Assets"
+                                                Width="30"
+                                                Height="30"
+                                                ToolTip="Add collection"
+                                                AutomationProperties.Name="Add collection"
+                                                Click="AddCollection_Click" />
+                                    </Grid>
                                     <ItemsControl ItemsSource="{Binding CatalogManagement.Collections}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -638,7 +899,7 @@
                                 </StackPanel>
                             </ScrollViewer>
 
-                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel>
                                     <TextBlock Text="Import feeds" FontSize="15" FontWeight="SemiBold" />
                                     <Button Content="Import OPML file"
@@ -649,39 +910,6 @@
                                         Command="{Binding CatalogManagement.LoadStarterPackCommand}"
                                         Margin="0,0,0,6"
                                         Padding="10,7" />
-
-                                    <TextBlock Text="Add feed" FontSize="15" FontWeight="SemiBold" />
-                                    <TextBox Text="{Binding CatalogManagement.FeedName, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,8,0,6"
-                                             Padding="9,7"
-                                             ToolTip="Feed name" />
-                                    <TextBox Text="{Binding CatalogManagement.FeedUrl, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,6"
-                                             Padding="9,7"
-                                             ToolTip="Feed URL (HTTP or HTTPS)" />
-                                    <TextBox Text="{Binding CatalogManagement.FeedDescription, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,0,0,6"
-                                             Padding="9,7"
-                                             ToolTip="Description (optional)" />
-                                    <ComboBox ItemsSource="{Binding CatalogManagement.Categories}"
-                                              SelectedItem="{Binding CatalogManagement.SelectedCategory}"
-                                              DisplayMemberPath="Name"
-                                              Margin="0,0,0,8"
-                                              Padding="7"
-                                              ToolTip="Category (optional)" />
-                                    <Button Content="Add feed" Command="{Binding CatalogManagement.AddFeedCommand}" Padding="10,7" />
-
-                                    <TextBlock Text="Add category" FontSize="15" FontWeight="SemiBold" Margin="0,24,0,4" />
-                                    <TextBox Text="{Binding CatalogManagement.CategoryName, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,6,0,6"
-                                             Padding="9,7" />
-                                    <Button Content="Add category" Command="{Binding CatalogManagement.AddCategoryCommand}" Padding="10,7" />
-
-                                    <TextBlock Text="Add collection" FontSize="15" FontWeight="SemiBold" Margin="0,24,0,4" />
-                                    <TextBox Text="{Binding CatalogManagement.CollectionName, UpdateSourceTrigger=PropertyChanged}"
-                                             Margin="0,6,0,6"
-                                             Padding="9,7" />
-                                    <Button Content="Add collection" Command="{Binding CatalogManagement.AddCollectionCommand}" Padding="10,7" />
 
                                     <TextBlock Text="Collection feeds" FontSize="15" FontWeight="SemiBold" Margin="0,24,0,4" />
                                     <ComboBox ItemsSource="{Binding CatalogManagement.Feeds}"

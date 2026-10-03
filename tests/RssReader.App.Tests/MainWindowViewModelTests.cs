@@ -1,4 +1,7 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using RssReader.App.ViewModels;
 using RssReader.Application;
 using RssReader.Domain;
@@ -21,9 +24,51 @@ public sealed class MainWindowViewModelTests
             {
                 var app = new RssReader.App.App();
                 app.InitializeComponent();
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
                 var window = new RssReader.App.MainWindow(
-                    new MainWindowViewModel(Profile.CreateRegular("Reader")));
+                    viewModel);
+                var preferencesRequested = false;
+                var logoutRequested = false;
+                window.PreferencesRequested += () => preferencesRequested = true;
+                window.LogoutRequested += () => logoutRequested = true;
                 window.Show();
+                window.UpdateLayout();
+                var preferences = new ProfilePreferences(
+                    ProfileStartPage.FirstFolder,
+                    ProfileArticlePresentation.Magazine,
+                    ProfileArticleSort.Newest,
+                    true,
+                    25);
+                var preferencesWindow = new RssReader.App.PreferencesWindow(preferences) { Owner = window };
+                preferencesWindow.Show();
+                preferencesWindow.UpdateLayout();
+                Assert.IsTrue(((RadioButton)preferencesWindow.FindName("StartFirstFolderOption")).IsChecked);
+                Assert.IsTrue(((RadioButton)preferencesWindow.FindName("PresentationMagazineOption")).IsChecked);
+                Assert.AreEqual("25", ((TextBox)preferencesWindow.FindName("FolderArticleLimitBox")).Text);
+                preferencesWindow.Close();
+
+                var profileButton = (Button)window.FindName("ProfileMenuButton");
+                profileButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, profileButton));
+                Assert.IsTrue(profileButton.ContextMenu?.IsOpen);
+                Assert.IsFalse(logoutRequested);
+                var menuItems = profileButton.ContextMenu!.Items.OfType<MenuItem>().ToArray();
+                menuItems.Single(item => Equals(item.Header, "Preferences"))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Assert.IsTrue(preferencesRequested);
+                Assert.IsFalse(logoutRequested);
+
+                profileButton.ContextMenu.IsOpen = false;
+                profileButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, profileButton));
+                menuItems.Single(item => Equals(item.Header, "Log Out"))
+                    .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                Assert.IsTrue(logoutRequested);
+                profileButton.ContextMenu.IsOpen = false;
+
+                viewModel.IsMagazineView = true;
+                window.UpdateLayout();
+                viewModel.IsListView = true;
+                window.UpdateLayout();
+                viewModel.IsCardsView = true;
                 window.UpdateLayout();
                 window.Close();
                 app.Shutdown();
@@ -169,7 +214,91 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
-    public void ArticleViewModeCanSwitchBetweenCardsAndList()
+    public async Task FolderRouteShowsAtMostTenNewestArticlesPerFeedOnlyWhenSortedByFolder()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-app-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+
+            var profile = Profile.CreateRegular("Reader");
+            await profileStore.AddAsync(profile);
+            var feeds = new[]
+            {
+                new CatalogFeed("feed-one", "Source One", "https://example.com/one.xml", null, null),
+                new CatalogFeed("feed-two", "Source Two", "https://example.com/two.xml", null, null)
+            };
+            await readerStore.AddFolderAsync(profile.Id, "Gaming");
+            foreach (var feed in feeds)
+            {
+                await catalogStore.AddFeedAsync(feed);
+                await readerStore.SubscribeAsync(profile.Id, feed.Id, "Gaming");
+                await readerStore.SaveArticlesAsync(feed.Id, Enumerable.Range(0, 12)
+                    .Select(index => new FeedArticle(
+                        $"{feed.Id}-article-{index}",
+                        feed.Id,
+                        $"item-{index}",
+                        $"{feed.Name} article {index}",
+                        null,
+                        DateTimeOffset.UtcNow.AddMinutes(-index),
+                        null,
+                        null))
+                    .ToArray());
+            }
+
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                null);
+            await viewModel.InitializeAsync();
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "folder:Gaming"));
+
+            Assert.AreEqual(20, viewModel.VisibleArticles.Count);
+            var feedGroups = viewModel.VisibleArticles.GroupBy(article => article.FeedId).ToArray();
+            Assert.AreEqual(2, feedGroups.Length);
+            foreach (var group in feedGroups)
+            {
+                Assert.AreEqual(10, group.Count());
+                Assert.IsTrue(group.Any(article => article.Title.EndsWith("article 0", StringComparison.Ordinal)));
+                Assert.IsFalse(group.Any(article => article.Title.EndsWith("article 10", StringComparison.Ordinal)));
+                Assert.IsFalse(group.Any(article => article.Title.EndsWith("article 11", StringComparison.Ordinal)));
+            }
+
+            viewModel.ApplyPreferences(new ProfilePreferences(
+                ProfileStartPage.FirstFolder,
+                FolderArticleLimitPerFeed: 5));
+
+            Assert.AreEqual(10, viewModel.VisibleArticles.Count);
+
+            viewModel.IsSortByDate = true;
+
+            Assert.AreEqual(24, viewModel.VisibleArticles.Count);
+
+            viewModel.IsSortByFolder = true;
+
+            Assert.AreEqual(10, viewModel.VisibleArticles.Count);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public void ArticleViewModeCanSwitchBetweenCardsTitleOnlyAndMagazine()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
 
@@ -181,10 +310,17 @@ public sealed class MainWindowViewModelTests
         Assert.IsFalse(viewModel.IsCardsView);
         Assert.IsTrue(viewModel.IsListView);
 
+        viewModel.IsMagazineView = true;
+
+        Assert.IsFalse(viewModel.IsCardsView);
+        Assert.IsFalse(viewModel.IsListView);
+        Assert.IsTrue(viewModel.IsMagazineView);
+
         viewModel.IsCardsView = true;
 
         Assert.IsTrue(viewModel.IsCardsView);
         Assert.IsFalse(viewModel.IsListView);
+        Assert.IsFalse(viewModel.IsMagazineView);
     }
 
     [TestMethod]
@@ -204,16 +340,16 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
-    public void FollowSourcesHidesTheProfileSubtitle()
+    public void ArticleCountSubtitleHidesOnFollowSources()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
         var followSources = viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources");
 
-        Assert.IsTrue(viewModel.IsProfileSubtitleVisible);
+        Assert.IsTrue(viewModel.IsArticleCountVisible);
 
         viewModel.NavigateCommand.Execute(followSources);
 
-        Assert.IsFalse(viewModel.IsProfileSubtitleVisible);
+        Assert.IsFalse(viewModel.IsArticleCountVisible);
     }
 
     [TestMethod]
@@ -258,6 +394,45 @@ public sealed class MainWindowViewModelTests
 
         Assert.AreEqual(2, viewModel.VisibleArticles.Count);
         Assert.IsTrue(viewModel.VisibleArticles.All(article => article.IsSaved));
+    }
+
+    [TestMethod]
+    public void GroupedArticlesAreSortedByFolderAndNewestFirst()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        Assert.IsTrue(viewModel.IsSortByFolder);
+        var groups = viewModel.ArticleListView.Groups;
+
+        Assert.IsNotNull(groups);
+        Assert.AreEqual(2, groups.Count);
+        var gamingGroup = (CollectionViewGroup)groups[0];
+        var techGroup = (CollectionViewGroup)groups[1];
+        Assert.AreEqual("Gaming", gamingGroup.Name);
+        Assert.AreEqual("tech", techGroup.Name);
+
+        var gamingArticles = gamingGroup.Items.Cast<ArticleRowViewModel>().ToArray();
+        Assert.AreEqual("The next generation of handheld gaming is here", gamingArticles[0].Title);
+        Assert.AreEqual("A new chapter for the world of Hyrule", gamingArticles[1].Title);
+    }
+
+    [TestMethod]
+    public void DateSortShowsAFlatNewestFirstListWithFolderData()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+
+        viewModel.IsSortByDate = true;
+
+        Assert.IsTrue(viewModel.IsSortByDate);
+        Assert.IsFalse(viewModel.IsSortByFolder);
+        Assert.IsNull(viewModel.ArticleListView.Groups);
+        var articles = viewModel.ArticleListView.Cast<ArticleRowViewModel>().ToArray();
+        Assert.AreEqual(5, articles.Length);
+        Assert.AreEqual("Gaming", articles[0].Folder);
+        Assert.AreEqual("tech", articles[2].Folder);
+        for (var index = 1; index < articles.Length; index++)
+        {
+            Assert.IsTrue(articles[index - 1].PublishedAt >= articles[index].PublishedAt);
+        }
     }
 
     [TestMethod]
@@ -371,6 +546,12 @@ public sealed class ProfileChooserViewModelTests
 
         public Task<IReadOnlyList<Profile>> GetAllAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<Profile>>(_profiles.ToArray());
+
+        public Task<ProfilePreferences> GetPreferencesAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ProfilePreferences());
+
+        public Task SavePreferencesAsync(string profileId, ProfilePreferences preferences, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
 
         public Task<Profile?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
             Task.FromResult(_profiles.SingleOrDefault(profile => profile.Id == id));

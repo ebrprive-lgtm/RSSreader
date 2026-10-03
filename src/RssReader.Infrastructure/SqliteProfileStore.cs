@@ -31,12 +31,74 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             );
             CREATE UNIQUE INDEX IF NOT EXISTS IX_Profiles_CatalogMaster
                 ON Profiles(IsCatalogMaster) WHERE IsCatalogMaster = 1;
+            CREATE TABLE IF NOT EXISTS ProfilePreferences (
+                ProfileId TEXT NOT NULL PRIMARY KEY REFERENCES Profiles(Id) ON DELETE CASCADE,
+                StartPage INTEGER NOT NULL CHECK (StartPage BETWEEN 0 AND 2),
+                Presentation INTEGER NOT NULL CHECK (Presentation BETWEEN 0 AND 2),
+                ArticleSort INTEGER NOT NULL CHECK (ArticleSort BETWEEN 0 AND 1),
+                HideReadArticles INTEGER NOT NULL CHECK (HideReadArticles IN (0, 1)),
+                FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100)
+            );
             INSERT INTO Profiles (Id, Name, IsCatalogMaster, PasswordHash, RecoveryEmail)
             VALUES ($id, $name, 1, NULL, NULL)
             ON CONFLICT(Id) DO NOTHING;
             """;
         command.Parameters.AddWithValue("$id", Profile.CreateCatalogMaster().Id);
         command.Parameters.AddWithValue("$name", ProfileNameValidator.CatalogMasterName);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<ProfilePreferences> GetPreferencesAsync(
+        string profileId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed
+            FROM ProfilePreferences
+            WHERE ProfileId = $profileId;
+            """;
+        command.Parameters.AddWithValue("$profileId", profileId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return new ProfilePreferences();
+        }
+
+        return new ProfilePreferences(
+            (ProfileStartPage)reader.GetInt32(0),
+            (ProfileArticlePresentation)reader.GetInt32(1),
+            (ProfileArticleSort)reader.GetInt32(2),
+            reader.GetInt64(3) == 1,
+            reader.GetInt32(4));
+    }
+
+    public async Task SavePreferencesAsync(
+        string profileId,
+        ProfilePreferences preferences,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO ProfilePreferences (
+                ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed)
+            VALUES ($profileId, $startPage, $presentation, $articleSort, $hideReadArticles, $folderArticleLimitPerFeed)
+            ON CONFLICT(ProfileId) DO UPDATE SET
+                StartPage = excluded.StartPage,
+                Presentation = excluded.Presentation,
+                ArticleSort = excluded.ArticleSort,
+                HideReadArticles = excluded.HideReadArticles,
+                FolderArticleLimitPerFeed = excluded.FolderArticleLimitPerFeed;
+            """;
+        command.Parameters.AddWithValue("$profileId", profileId);
+        command.Parameters.AddWithValue("$startPage", (int)preferences.StartPage);
+        command.Parameters.AddWithValue("$presentation", (int)preferences.Presentation);
+        command.Parameters.AddWithValue("$articleSort", (int)preferences.Sort);
+        command.Parameters.AddWithValue("$hideReadArticles", preferences.HideReadArticles ? 1 : 0);
+        command.Parameters.AddWithValue("$folderArticleLimitPerFeed", preferences.FolderArticleLimitPerFeed);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

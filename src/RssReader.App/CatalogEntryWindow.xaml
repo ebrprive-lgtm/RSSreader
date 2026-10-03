@@ -1,0 +1,54 @@
+<Window x:Class="RssReader.App.CatalogEntryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add catalog entry"
+        Width="440"
+        SizeToContent="Height"
+        MinHeight="260"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="White">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="DialogHeading"
+                   FontSize="20"
+                   FontWeight="SemiBold" />
+        <StackPanel x:Name="FeedFields" Grid.Row="1" Margin="0,20,0,0">
+            <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold" />
+            <TextBox x:Name="FeedNameBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBlock Text="Feed URL" FontSize="12" FontWeight="SemiBold" />
+            <TextBox x:Name="FeedUrlBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBlock Text="Description (optional)" FontSize="12" FontWeight="SemiBold" />
+            <TextBox x:Name="FeedDescriptionBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBlock Text="Category (optional)" FontSize="12" FontWeight="SemiBold" />
+            <ComboBox x:Name="FeedCategoryBox"
+                      ItemsSource="{Binding Categories}"
+                      DisplayMemberPath="Name"
+                      Margin="0,5,0,0"
+                      Padding="7" />
+        </StackPanel>
+        <StackPanel x:Name="CategoryFields" Grid.Row="1" Margin="0,20,0,0" Visibility="Collapsed">
+            <TextBlock Text="Category name" FontSize="12" FontWeight="SemiBold" />
+            <TextBox x:Name="CategoryNameBox" Margin="0,5,0,0" Padding="9,7" />
+        </StackPanel>
+        <StackPanel x:Name="CollectionFields" Grid.Row="1" Margin="0,20,0,0" Visibility="Collapsed">
+            <TextBlock Text="Collection name" FontSize="12" FontWeight="SemiBold" />
+            <TextBox x:Name="CollectionNameBox" Margin="0,5,0,0" Padding="9,7" />
+        </StackPanel>
+        <TextBlock Grid.Row="2"
+                   Text="{Binding ErrorMessage}"
+                   Foreground="#A33C35"
+                   Margin="0,12,0,0"
+                   TextWrapping="Wrap" />
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+            <Button Content="Cancel" IsCancel="True" MinWidth="82" Padding="10,7" Margin="0,0,8,0" />
+            <Button x:Name="SubmitButton" Content="Add" IsDefault="True" Click="SubmitButton_Click" MinWidth="82" Padding="10,7" />
+        </StackPanel>
+    </Grid>
+</Window>

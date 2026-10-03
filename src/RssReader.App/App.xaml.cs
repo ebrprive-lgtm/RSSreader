@@ -124,10 +124,13 @@ public partial class App : System.Windows.Application
 			var catalogService = _host!.Services.GetRequiredService<CatalogService>();
 			var readingService = _host.Services.GetRequiredService<ReadingService>();
 			var feedRefreshService = _host.Services.GetRequiredService<FeedRefreshService>();
-			var viewModel = new MainWindowViewModel(profile, catalogService, readingService, feedRefreshService);
+			var profileService = _host.Services.GetRequiredService<ProfileService>();
+			var preferences = await profileService.GetPreferencesAsync(profile.Id);
+			var viewModel = new MainWindowViewModel(profile, catalogService, readingService, feedRefreshService, preferences);
 			await viewModel.InitializeAsync();
 			var window = new MainWindow(viewModel);
-			window.ProfileSwitchRequested += SwitchProfile;
+			window.LogoutRequested += LogOut;
+			window.PreferencesRequested += () => ShowPreferences(window, viewModel);
 
 			var chooser = _profileChooserWindow;
 			_readerWindow = window;
@@ -147,7 +150,30 @@ public partial class App : System.Windows.Application
 		}
 	}
 
-	private async void SwitchProfile()
+	private async void ShowPreferences(MainWindow owner, MainWindowViewModel viewModel)
+	{
+		try
+		{
+			var profileService = _host!.Services.GetRequiredService<ProfileService>();
+			var preferences = await profileService.GetPreferencesAsync(viewModel.ActiveProfile.Id);
+			var dialog = new PreferencesWindow(preferences) { Owner = owner };
+			if (dialog.ShowDialog() == true)
+			{
+				await profileService.SavePreferencesAsync(viewModel.ActiveProfile.Id, dialog.Preferences);
+				viewModel.ApplyPreferences(dialog.Preferences);
+			}
+		}
+		catch (Exception exception)
+		{
+			System.Windows.MessageBox.Show(
+				$"Preferences could not be saved.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
+				"RSS Reader",
+				System.Windows.MessageBoxButton.OK,
+				System.Windows.MessageBoxImage.Error);
+		}
+	}
+
+	private async void LogOut()
 	{
 		var previousWindow = _readerWindow;
 		try

@@ -1,11 +1,8 @@
-using System.Collections.ObjectModel;
-
 namespace RssReader.App.ViewModels;
 
 public sealed class CatalogFeedListItem : ObservableObject
 {
     private bool _isSubscribed;
-    private string _newTagName = string.Empty;
 
     public CatalogFeedListItem(string id, string name, string feedUrl, string? description, string? categoryName)
     {
@@ -21,7 +18,6 @@ public sealed class CatalogFeedListItem : ObservableObject
     public string FeedUrl { get; }
     public string? Description { get; }
     public string? CategoryName { get; }
-    public ObservableCollection<FeedTagListItem> Tags { get; } = [];
 
     public bool IsSubscribed
     {
@@ -36,12 +32,4 @@ public sealed class CatalogFeedListItem : ObservableObject
     }
 
     public string SubscriptionLabel => IsSubscribed ? "Unfollow" : "Follow";
-
-    public string NewTagName
-    {
-        get => _newTagName;
-        set => SetProperty(ref _newTagName, value);
-    }
 }
-
-public sealed record FeedTagListItem(string FeedId, string Name);

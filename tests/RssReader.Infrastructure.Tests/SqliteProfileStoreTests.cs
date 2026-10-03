@@ -40,6 +40,31 @@ public sealed class SqliteProfileStoreTests
     }
 
     [TestMethod]
+    public async Task ProfilePreferences_ArePersistedPerProfile()
+    {
+        using var database = new TemporaryDatabase();
+        var store = new SqliteProfileStore(database.Path);
+        await store.InitializeAsync();
+        var firstProfile = Profile.CreateRegular("First");
+        var secondProfile = Profile.CreateRegular("Second");
+        await store.AddAsync(firstProfile);
+        await store.AddAsync(secondProfile);
+        var preferences = new ProfilePreferences(
+            ProfileStartPage.FirstFolder,
+            ProfileArticlePresentation.Magazine,
+            ProfileArticleSort.Newest,
+            true,
+            25);
+
+        await store.SavePreferencesAsync(firstProfile.Id, preferences);
+        var reopenedStore = new SqliteProfileStore(database.Path);
+        await reopenedStore.InitializeAsync();
+
+        Assert.AreEqual(preferences, await reopenedStore.GetPreferencesAsync(firstProfile.Id));
+        Assert.AreEqual(new ProfilePreferences(), await reopenedStore.GetPreferencesAsync(secondProfile.Id));
+    }
+
+    [TestMethod]
     public async Task AddProfile_RejectsDuplicateNameIgnoringCase()
     {
         using var database = new TemporaryDatabase();

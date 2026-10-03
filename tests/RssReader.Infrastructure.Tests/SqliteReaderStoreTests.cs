@@ -28,7 +28,7 @@ public sealed class SqliteReaderStoreTests
         await reader.AddFolderAsync(secondProfile.Id, "News");
         await reader.SubscribeAsync(firstProfile.Id, feed.Id, "News");
         await reader.SubscribeAsync(secondProfile.Id, feed.Id, "News");
-        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", "https://example.com/story", DateTimeOffset.UtcNow, "Summary", "Content", "https://example.com/cover.jpg");
+        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", "https://example.com/story", DateTimeOffset.UtcNow, "<p>Summary &amp; <strong>details</strong></p>", "<p>Body<br/>second line</p>", "https://example.com/cover.jpg");
         await reader.SaveArticlesAsync(feed.Id, [article]);
         await reader.SetArticleReadAsync(firstProfile.Id, article.Id, true);
         await reader.SetArticleSavedAsync(firstProfile.Id, article.Id, true);
@@ -37,6 +37,8 @@ public sealed class SqliteReaderStoreTests
         var secondArticles = await reader.GetArticlesAsync(secondProfile.Id);
 
         Assert.AreEqual(1, firstArticles.Count);
+        Assert.AreEqual("Summary & details", firstArticles[0].Article.Summary);
+        Assert.AreEqual($"Body{Environment.NewLine}second line", firstArticles[0].Article.Content);
         Assert.AreEqual("https://example.com/cover.jpg", firstArticles[0].Article.ImageUrl);
         Assert.IsTrue(firstArticles[0].IsRead);
         Assert.IsTrue(firstArticles[0].IsSaved);

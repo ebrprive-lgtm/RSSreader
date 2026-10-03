@@ -7,6 +7,35 @@ public sealed class ProfileService(IProfileStore store, IPasswordHasher password
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
         store.InitializeAsync(cancellationToken);
 
+    public Task<ProfilePreferences> GetPreferencesAsync(
+        string profileId,
+        CancellationToken cancellationToken = default) =>
+        store.GetPreferencesAsync(profileId, cancellationToken);
+
+    public Task SavePreferencesAsync(
+        string profileId,
+        ProfilePreferences preferences,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+        if (!Enum.IsDefined(preferences.StartPage) ||
+            !Enum.IsDefined(preferences.Presentation) ||
+            !Enum.IsDefined(preferences.Sort))
+        {
+            throw new ArgumentOutOfRangeException(nameof(preferences), "A profile preference has an unsupported value.");
+        }
+
+        if (preferences.FolderArticleLimitPerFeed is < ProfilePreferences.MinimumFolderArticleLimitPerFeed or
+            > ProfilePreferences.MaximumFolderArticleLimitPerFeed)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(preferences),
+                $"The folder article limit must be between {ProfilePreferences.MinimumFolderArticleLimitPerFeed} and {ProfilePreferences.MaximumFolderArticleLimitPerFeed}.");
+        }
+
+        return store.SavePreferencesAsync(profileId, preferences, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Profile>> GetAvailableProfilesAsync(
         bool revealCatalogMaster,
         CancellationToken cancellationToken = default)

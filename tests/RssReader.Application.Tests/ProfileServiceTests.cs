@@ -72,6 +72,22 @@ public sealed class ProfileServiceTests
     }
 
     [TestMethod]
+    public async Task ProfilePreferences_AreValidatedAndSavedForTheProfile()
+    {
+        var store = new FakeProfileStore();
+        var service = new ProfileService(store, new FakePasswordHasher());
+        await service.InitializeAsync();
+        var profile = await service.CreateProfileAsync("Reader", null, null);
+        var preferences = new ProfilePreferences(FolderArticleLimitPerFeed: 25);
+
+        await service.SavePreferencesAsync(profile.Id, preferences);
+
+        Assert.AreEqual(preferences, await service.GetPreferencesAsync(profile.Id));
+        await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() =>
+            service.SavePreferencesAsync(profile.Id, new ProfilePreferences(FolderArticleLimitPerFeed: 101)));
+    }
+
+    [TestMethod]
     public async Task DeleteProfileRemovesRegularProfileAndProtectsCatalogMaster()
     {
         var store = new FakeProfileStore();
@@ -94,6 +110,7 @@ public sealed class ProfileServiceTests
     private sealed class FakeProfileStore : IProfileStore
     {
         private readonly List<Profile> _profiles = [];
+        private readonly Dictionary<string, ProfilePreferences> _preferences = new(StringComparer.Ordinal);
 
         public Task InitializeAsync(CancellationToken cancellationToken = default)
         {
@@ -107,6 +124,15 @@ public sealed class ProfileServiceTests
 
         public Task<IReadOnlyList<Profile>> GetAllAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<Profile>>(_profiles.ToArray());
+
+        public Task<ProfilePreferences> GetPreferencesAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_preferences.GetValueOrDefault(profileId, new ProfilePreferences()));
+
+        public Task SavePreferencesAsync(string profileId, ProfilePreferences preferences, CancellationToken cancellationToken = default)
+        {
+            _preferences[profileId] = preferences;
+            return Task.CompletedTask;
+        }
 
         public Task<Profile?> GetByIdAsync(string id, CancellationToken cancellationToken = default) =>
             Task.FromResult(_profiles.SingleOrDefault(profile => profile.Id == id));

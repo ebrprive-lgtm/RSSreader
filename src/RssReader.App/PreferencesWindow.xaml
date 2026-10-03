@@ -1,0 +1,165 @@
+<Window x:Class="RssReader.App.PreferencesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Preferences"
+        Width="900"
+        Height="680"
+        MinWidth="760"
+        MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="White"
+        Foreground="{StaticResource TextBrush}">
+    <Window.Resources>
+        <Style x:Key="PreferenceNavigationStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="NavigationBorder"
+                                Background="Transparent"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="4">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavigationBorder" Property="Background" Value="#F2F5F3" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="NavigationBorder" Property="Background" Value="#F1F3F2" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PreferenceOptionStyle" TargetType="RadioButton">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Margin" Value="0,4" />
+            <Setter Property="Padding" Value="2" />
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" BorderBrush="#E1E5E3" BorderThickness="0,0,1,0" Padding="16,22">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top"
+                           Text="Preferences"
+                           FontSize="19"
+                           FontWeight="SemiBold"
+                           Margin="8,0,0,20" />
+                <StackPanel>
+                    <RadioButton x:Name="GeneralNavigation"
+                                 Content="General"
+                                 GroupName="PreferenceSections"
+                                 IsChecked="True"
+                                 Style="{StaticResource PreferenceNavigationStyle}"
+                                 Click="GeneralNavigation_Click" />
+                    <RadioButton x:Name="AppearanceNavigation"
+                                 Content="Appearance"
+                                 GroupName="PreferenceSections"
+                                 Style="{StaticResource PreferenceNavigationStyle}"
+                                 Click="AppearanceNavigation_Click" />
+                    <RadioButton x:Name="ReadingNavigation"
+                                 Content="Reading"
+                                 GroupName="PreferenceSections"
+                                 Style="{StaticResource PreferenceNavigationStyle}"
+                                 Click="ReadingNavigation_Click" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="26,22,26,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="SectionTitle"
+                       Text="General"
+                       FontSize="19"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,16" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <StackPanel x:Name="GeneralPanel">
+                        <TextBlock Text="Start page" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Choose the page shown when you open this profile."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,10" />
+                        <RadioButton x:Name="StartTodayOption" Content="Today" GroupName="StartPage" Style="{StaticResource PreferenceOptionStyle}" />
+                        <RadioButton x:Name="StartFirstFolderOption" Content="First folder" GroupName="StartPage" Style="{StaticResource PreferenceOptionStyle}" />
+                        <RadioButton x:Name="StartAllOption" Content="All" GroupName="StartPage" Style="{StaticResource PreferenceOptionStyle}" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="AppearancePanel" Visibility="Collapsed">
+                        <TextBlock Text="Default presentation" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Choose how articles appear when this profile opens."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,10" />
+                        <RadioButton x:Name="PresentationTitleOnlyOption" Content="Title-only view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
+                        <RadioButton x:Name="PresentationMagazineOption" Content="Magazine view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
+                        <RadioButton x:Name="PresentationCardsOption" Content="Cards view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
+                        <Border Height="1" Background="#E3E7E5" Margin="0,24,0,20" />
+                        <TextBlock Text="Default sort" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Choose the article order used in this profile."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,10" />
+                        <RadioButton x:Name="SortFolderOption" Content="By folder" GroupName="ArticleSort" Style="{StaticResource PreferenceOptionStyle}" />
+                        <RadioButton x:Name="SortNewestOption" Content="Newest first" GroupName="ArticleSort" Style="{StaticResource PreferenceOptionStyle}" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="ReadingPanel" Visibility="Collapsed">
+                        <TextBlock Text="Article visibility" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Control which articles appear in your reading lists."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,12" />
+                        <CheckBox x:Name="HideReadArticlesCheckBox"
+                                  Content="Hide read articles"
+                                  FontSize="13"
+                                  Padding="2" />
+                        <Border Height="1" Background="#E3E7E5" Margin="0,24,0,20" />
+                        <TextBlock Text="Folder article limit" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Maximum articles shown per feed inside a folder."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,10"
+                                   TextWrapping="Wrap" />
+                        <TextBox x:Name="FolderArticleLimitBox"
+                                 Width="110"
+                                 HorizontalAlignment="Left"
+                                 Padding="8,6"
+                                 MaxLength="3"
+                                 ToolTip="Enter a number from 1 to 100" />
+                        <TextBlock x:Name="ValidationMessage"
+                                   Foreground="#A33C35"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+            <Grid Grid.Row="2" Margin="0,18,0,0">
+                <TextBlock Text="{Binding Name, RelativeSource={RelativeSource AncestorType=Window}}"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Cancel" IsCancel="True" MinWidth="82" Padding="12,7" Margin="0,0,8,0" />
+                    <Button Content="Save" IsDefault="True" MinWidth="82" Padding="12,7" Click="Save_Click"
+                            Background="{StaticResource AccentBrush}"
+                            Foreground="White"
+                            BorderThickness="0" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

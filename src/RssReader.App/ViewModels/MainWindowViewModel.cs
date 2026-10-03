@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Data;
 using RssReader.App.Commands;
 using RssReader.Application;
 using RssReader.Domain;
@@ -12,6 +14,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CatalogService? _catalogService;
     private readonly ReadingService? _readingService;
     private readonly FeedRefreshService? _feedRefreshService;
+    private ProfilePreferences _profilePreferences;
     private string _activeRoute;
     private string _searchQuery = string.Empty;
     private string _quickQuery = string.Empty;
@@ -22,6 +25,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _unreadOnly;
     private bool _savedOnly;
     private bool _isCardsView = true;
+    private bool _isMagazineView;
+    private bool _isSortByDate;
+    private bool _hasAppliedStartPage;
+    private int _folderArticlesPerFeedLimit;
 
     public MainWindowViewModel(Profile profile) : this(profile, null, null, null)
     {
@@ -35,13 +42,22 @@ public sealed class MainWindowViewModel : ObservableObject
         Profile profile,
         CatalogService? catalogService,
         ReadingService? readingService,
-        FeedRefreshService? feedRefreshService)
+        FeedRefreshService? feedRefreshService,
+        ProfilePreferences? profilePreferences = null)
     {
         ActiveProfile = profile;
         _catalogService = catalogService;
         _readingService = readingService;
         _feedRefreshService = feedRefreshService;
-        _activeRoute = profile.IsCatalogMaster ? "Manage catalog" : "Today";
+        _profilePreferences = profilePreferences ?? new ProfilePreferences();
+        _isCardsView = _profilePreferences.Presentation == ProfileArticlePresentation.Cards;
+        _isMagazineView = _profilePreferences.Presentation == ProfileArticlePresentation.Magazine;
+        _isSortByDate = _profilePreferences.Sort == ProfileArticleSort.Newest;
+        _unreadOnly = _profilePreferences.HideReadArticles;
+        _folderArticlesPerFeedLimit = _profilePreferences.FolderArticleLimitPerFeed;
+        _activeRoute = profile.IsCatalogMaster
+            ? "Manage catalog"
+            : _profilePreferences.StartPage == ProfileStartPage.All ? "All" : "Today";
 
         PrimaryLinks =
         [
@@ -93,6 +109,8 @@ public sealed class MainWindowViewModel : ObservableObject
             new("Why open standards still matter", "Wired", now.AddDays(-2), "tech", ["Analysis"], "A look at interoperability and the long life of open formats." , isRead: true, isSaved: true)
         ] : [];
         VisibleArticles = [];
+        ArticleListView = new ListCollectionView(VisibleArticles);
+        ConfigureArticleListView();
 
         NavigateCommand = new RelayCommand<SidebarLink>(NavigateTo);
         SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
@@ -103,8 +121,6 @@ public sealed class MainWindowViewModel : ObservableObject
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsRefreshing && !IsCatalogMaster);
         ToggleSubscriptionCommand = new AsyncCommand<CatalogFeedListItem>(ToggleSubscriptionAsync);
-        AddFeedTagCommand = new RelayCommand<CatalogFeedListItem>(item => _ = AddFeedTagAsync(item));
-        RemoveFeedTagCommand = new RelayCommand<FeedTagListItem>(tag => _ = RemoveFeedTagAsync(tag));
 
         UpdateSelectedLinks();
         ApplyArticleFilters();
@@ -123,6 +139,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<SidebarLink> TagLinks { get; }
     public ObservableCollection<SidebarLink> AdminLinks { get; }
     public ObservableCollection<ArticleRowViewModel> VisibleArticles { get; }
+    public ICollectionView ArticleListView { get; }
     public ObservableCollection<SidebarLink> QuickTargets { get; }
     public ObservableCollection<CatalogFeedListItem> CatalogFeeds { get; }
     public ObservableCollection<CatalogCategory> CatalogCategories { get; }
@@ -139,8 +156,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
-    public RelayCommand<CatalogFeedListItem> AddFeedTagCommand { get; }
-    public RelayCommand<FeedTagListItem> RemoveFeedTagCommand { get; }
 
     public event Action? ProfileSwitchRequested;
 
@@ -196,6 +211,30 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    public void ApplyPreferences(ProfilePreferences preferences)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+        _profilePreferences = preferences;
+        _folderArticlesPerFeedLimit = preferences.FolderArticleLimitPerFeed;
+        SetArticleViewModeIfSelected(
+            true,
+            preferences.Presentation == ProfileArticlePresentation.Cards,
+            preferences.Presentation == ProfileArticlePresentation.Magazine);
+        if (preferences.Sort == ProfileArticleSort.Newest)
+        {
+            IsSortByDate = true;
+        }
+        else
+        {
+            IsSortByFolder = true;
+        }
+
+        UnreadOnly = preferences.HideReadArticles;
+        ActiveRoute = GetStartPageRoute();
+        UpdateSelectedLinks();
+        ApplyArticleFilters();
+    }
+
     public string ActiveRoute
     {
         get => _activeRoute;
@@ -208,7 +247,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsGoToRoute));
                 OnPropertyChanged(nameof(IsArticleListVisible));
                 OnPropertyChanged(nameof(IsCatalogBrowserVisible));
-                OnPropertyChanged(nameof(IsProfileSubtitleVisible));
+                OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsCatalogAdminVisible));
                 ApplyArticleFilters();
             }
@@ -284,25 +323,81 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsCardsView
     {
         get => _isCardsView;
-        set
-        {
-            if (value && SetProperty(ref _isCardsView, true))
-            {
-                OnPropertyChanged(nameof(IsListView));
-            }
-        }
+        set => SetArticleViewModeIfSelected(value, isCardsView: true, isMagazineView: false);
     }
 
     public bool IsListView
     {
-        get => !_isCardsView;
+        get => !_isCardsView && !_isMagazineView;
+        set => SetArticleViewModeIfSelected(value, isCardsView: false, isMagazineView: false);
+    }
+
+    public bool IsMagazineView
+    {
+        get => _isMagazineView;
+        set => SetArticleViewModeIfSelected(value, isCardsView: false, isMagazineView: true);
+    }
+
+    public bool IsSortByDate
+    {
+        get => _isSortByDate;
         set
         {
-            if (value && SetProperty(ref _isCardsView, false))
+            if (value && SetProperty(ref _isSortByDate, true))
             {
-                OnPropertyChanged(nameof(IsCardsView));
+                OnPropertyChanged(nameof(IsSortByFolder));
+                ConfigureArticleListView();
+                ApplyArticleFilters();
             }
         }
+    }
+
+    public bool IsSortByFolder
+    {
+        get => !_isSortByDate;
+        set
+        {
+            if (value && SetProperty(ref _isSortByDate, false))
+            {
+                OnPropertyChanged(nameof(IsSortByDate));
+                ConfigureArticleListView();
+                ApplyArticleFilters();
+            }
+        }
+    }
+
+    private void ConfigureArticleListView()
+    {
+        using (ArticleListView.DeferRefresh())
+        {
+            ArticleListView.GroupDescriptions.Clear();
+            ArticleListView.SortDescriptions.Clear();
+            if (_isSortByDate)
+            {
+                ArticleListView.SortDescriptions.Add(new SortDescription(nameof(ArticleRowViewModel.PublishedAt), ListSortDirection.Descending));
+                ArticleListView.SortDescriptions.Add(new SortDescription(nameof(ArticleRowViewModel.Folder), ListSortDirection.Ascending));
+            }
+            else
+            {
+                ArticleListView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ArticleRowViewModel.Folder)));
+                ArticleListView.SortDescriptions.Add(new SortDescription(nameof(ArticleRowViewModel.Folder), ListSortDirection.Ascending));
+                ArticleListView.SortDescriptions.Add(new SortDescription(nameof(ArticleRowViewModel.PublishedAt), ListSortDirection.Descending));
+            }
+        }
+    }
+
+    private void SetArticleViewModeIfSelected(bool isSelected, bool isCardsView, bool isMagazineView)
+    {
+        if (!isSelected || (_isCardsView == isCardsView && _isMagazineView == isMagazineView))
+        {
+            return;
+        }
+
+        _isCardsView = isCardsView;
+        _isMagazineView = isMagazineView;
+        OnPropertyChanged(nameof(IsCardsView));
+        OnPropertyChanged(nameof(IsListView));
+        OnPropertyChanged(nameof(IsMagazineView));
     }
 
     public ArticleRowViewModel? SelectedArticle
@@ -313,6 +408,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _selectedArticle, value))
             {
                 OnPropertyChanged(nameof(IsArticleListVisible));
+                OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsReadingViewVisible));
             }
         }
@@ -330,7 +426,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsSearchRoute => ActiveRoute == "Search";
     public bool IsGoToRoute => ActiveRoute == "Go to...";
-    public bool IsProfileSubtitleVisible => !IsCatalogBrowserVisible;
+    public bool IsArticleCountVisible => IsArticleListVisible;
     public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible && !IsGoToRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
@@ -400,6 +496,12 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
 
+        if (!_hasAppliedStartPage)
+        {
+            _hasAppliedStartPage = true;
+            ActiveRoute = GetStartPageRoute();
+        }
+
         TagLinks.Clear();
         foreach (var tagName in tags.Select(item => item.Name).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name))
         {
@@ -409,14 +511,6 @@ public sealed class MainWindowViewModel : ObservableObject
         foreach (var feed in CatalogFeeds)
         {
             feed.IsSubscribed = subscriptionsByFeed.ContainsKey(feed.Id);
-            feed.Tags.Clear();
-            if (tagsByFeed.TryGetValue(feed.Id, out var feedTags))
-            {
-                foreach (var tagName in feedTags)
-                {
-                    feed.Tags.Add(new FeedTagListItem(feed.Id, tagName));
-                }
-            }
         }
 
         _allArticles.Clear();
@@ -538,43 +632,6 @@ public sealed class MainWindowViewModel : ObservableObject
         await LoadProfileReaderDataAsync(CancellationToken.None);
     }
 
-    private async Task AddFeedTagAsync(CatalogFeedListItem feed)
-    {
-        if (_readingService is null || !feed.IsSubscribed || string.IsNullOrWhiteSpace(feed.NewTagName))
-        {
-            return;
-        }
-
-        try
-        {
-            await _readingService.AddFeedTagAsync(ActiveProfile, feed.Id, feed.NewTagName);
-            feed.NewTagName = string.Empty;
-            await LoadProfileReaderDataAsync(CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            StatusMessage = exception.Message;
-        }
-    }
-
-    private async Task RemoveFeedTagAsync(FeedTagListItem tag)
-    {
-        if (_readingService is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await _readingService.RemoveFeedTagAsync(ActiveProfile, tag.FeedId, tag.Name);
-            await LoadProfileReaderDataAsync(CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            StatusMessage = exception.Message;
-        }
-    }
-
     private async void OnArticlePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (sender is not ArticleRowViewModel article || article.ArticleId is null || _readingService is null)
@@ -668,6 +725,14 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             articles = articles.Where(article => article.IsSaved);
         }
+        if (IsSortByFolder && ActiveRoute.StartsWith("folder:", StringComparison.Ordinal))
+        {
+            articles = articles
+                .GroupBy(article => article.FeedId, StringComparer.Ordinal)
+                .SelectMany(feedArticles => feedArticles
+                    .OrderByDescending(article => article.PublishedAt)
+                    .Take(_folderArticlesPerFeedLimit));
+        }
 
         VisibleArticles.Clear();
         foreach (var article in articles)
@@ -677,6 +742,14 @@ public sealed class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsArticleListEmpty));
     }
+
+    private string GetStartPageRoute() => _profilePreferences.StartPage switch
+    {
+        ProfileStartPage.All => "All",
+        ProfileStartPage.FirstFolder => FeedLinks.FirstOrDefault(link =>
+            link.Route.StartsWith("folder:", StringComparison.Ordinal))?.Route ?? "Today",
+        _ => "Today"
+    };
 
     private void ApplyQuickFilter()
     {

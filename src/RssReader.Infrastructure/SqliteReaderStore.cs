@@ -272,8 +272,8 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 publishedAt,
-                reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(6) ? null : HtmlTextParser.ToPlainText(reader.GetString(6)),
+                reader.IsDBNull(7) ? null : HtmlTextParser.ToPlainText(reader.GetString(7)),
                 reader.IsDBNull(8) ? null : reader.GetString(8));
             articles.Add(new ArticleForProfile(
                 article,

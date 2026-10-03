@@ -59,8 +59,8 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
                     : item.LastUpdatedTime != DateTimeOffset.MinValue
                         ? item.LastUpdatedTime
                         : null,
-                item.Summary?.Text,
-                (item.Content as TextSyndicationContent)?.Text,
+                HtmlTextParser.ToPlainText(item.Summary?.Text),
+                HtmlTextParser.ToPlainText((item.Content as TextSyndicationContent)?.Text),
                 FindImageUrl(item, uri)))
             .ToArray();
     }

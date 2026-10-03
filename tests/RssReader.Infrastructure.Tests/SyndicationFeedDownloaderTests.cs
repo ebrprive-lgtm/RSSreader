@@ -66,6 +66,39 @@ public sealed class SyndicationFeedDownloaderTests
     }
 
         [TestMethod]
+        public async Task Download_ConvertsHtmlSummaryToReadableText()
+        {
+                const string xml = """
+                        <rss version="2.0">
+                            <channel>
+                                <title>Sample feed</title>
+                                <item>
+                                    <title>HTML summary</title>
+                                    <guid>html-item-1</guid>
+                                    <link>https://example.test/html-story</link>
+                                    <pubDate>Sat, 03 Oct 2026 12:00:00 GMT</pubDate>
+                                    <description>&lt;p&gt;Read &lt;strong&gt;this&lt;/strong&gt; &amp;amp; enjoy.&lt;/p&gt;&lt;p&gt;Second&lt;br/&gt;line&lt;/p&gt;</description>
+                                </item>
+                                <item>
+                                    <title>CDATA summary</title>
+                                    <guid>html-item-2</guid>
+                                    <link>https://example.test/cdata-story</link>
+                                    <pubDate>Sat, 03 Oct 2026 13:00:00 GMT</pubDate>
+                                    <description><![CDATA[<p>CDATA <em>content</em></p><p>Second paragraph</p>]]></description>
+                                </item>
+                            </channel>
+                        </rss>
+                        """;
+                using var client = CreateClient(xml);
+                var downloader = new SyndicationFeedDownloader(client);
+
+                var items = await downloader.DownloadAsync(CreateFeed());
+
+                Assert.AreEqual($"Read this & enjoy.{Environment.NewLine}Second{Environment.NewLine}line", items[0].Summary);
+                Assert.AreEqual($"CDATA content{Environment.NewLine}Second paragraph", items[1].Summary);
+        }
+
+        [TestMethod]
         public async Task Download_RssReadsMediaThumbnailAndHtmlImage()
         {
                 const string xml = """
