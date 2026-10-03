@@ -85,6 +85,8 @@ public sealed class ProfileServiceTests
         Assert.AreEqual(preferences, await service.GetPreferencesAsync(profile.Id));
         await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() =>
             service.SavePreferencesAsync(profile.Id, new ProfilePreferences(FolderArticleLimitPerFeed: 101)));
+        await Assert.ThrowsExceptionAsync<ArgumentOutOfRangeException>(() =>
+            service.SavePreferencesAsync(profile.Id, new ProfilePreferences(AutoRefreshIntervalMinutes: 10)));
     }
 
     [TestMethod]

@@ -1,5 +1,6 @@
 using System.Net;
 using System.ServiceModel.Syndication;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -8,7 +9,7 @@ using RssReader.Domain;
 
 namespace RssReader.Infrastructure;
 
-public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDownloader
+public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDownloader, IRawFeedContentDownloader
 {
     private const int MaximumFeedCharacters = 5_000_000;
     private const int MaximumItems = 500;
@@ -63,6 +64,49 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
                 HtmlTextParser.ToPlainText((item.Content as TextSyndicationContent)?.Text),
                 FindImageUrl(item, uri)))
             .ToArray();
+    }
+
+    public async Task<string> DownloadRawContentAsync(
+        CatalogFeed feed,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Uri.TryCreate(feed.FeedUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException("The catalog contains an invalid feed URL.");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.UserAgent.ParseAdd("RssReader/1.0");
+        using var response = await httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        if (response.Content.Headers.ContentLength is > MaximumFeedCharacters)
+        {
+            throw new InvalidDataException("The feed response exceeds the supported size.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var charset = response.Content.Headers.ContentType?.CharSet?.Trim().Trim('"');
+        var encoding = string.IsNullOrWhiteSpace(charset) ? Encoding.UTF8 : Encoding.GetEncoding(charset);
+        using var textReader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true);
+        var content = new StringBuilder();
+        var buffer = new char[8192];
+        int charactersRead;
+        while ((charactersRead = await textReader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            if (content.Length + charactersRead > MaximumFeedCharacters)
+            {
+                throw new InvalidDataException("The feed response exceeds the supported size.");
+            }
+
+            content.Append(buffer, 0, charactersRead);
+        }
+
+        return content.ToString();
     }
 
     private static string? FindImageUrl(SyndicationItem item, Uri feedUri)

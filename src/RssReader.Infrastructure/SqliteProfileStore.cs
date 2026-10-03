@@ -37,7 +37,10 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 Presentation INTEGER NOT NULL CHECK (Presentation BETWEEN 0 AND 2),
                 ArticleSort INTEGER NOT NULL CHECK (ArticleSort BETWEEN 0 AND 1),
                 HideReadArticles INTEGER NOT NULL CHECK (HideReadArticles IN (0, 1)),
-                FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100)
+                FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100),
+                RefreshFeedsWhenOpened INTEGER NOT NULL DEFAULT 1 CHECK (RefreshFeedsWhenOpened IN (0, 1)),
+                AutoRefreshIntervalMinutes INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240)),
+                ShowRawFeedButton INTEGER NOT NULL DEFAULT 0 CHECK (ShowRawFeedButton IN (0, 1))
             );
             INSERT INTO Profiles (Id, Name, IsCatalogMaster, PasswordHash, RecoveryEmail)
             VALUES ($id, $name, 1, NULL, NULL)
@@ -46,6 +49,21 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         command.Parameters.AddWithValue("$id", Profile.CreateCatalogMaster().Id);
         command.Parameters.AddWithValue("$name", ProfileNameValidator.CatalogMasterName);
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "RefreshFeedsWhenOpened",
+            "INTEGER NOT NULL DEFAULT 1 CHECK (RefreshFeedsWhenOpened IN (0, 1))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "AutoRefreshIntervalMinutes",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ShowRawFeedButton",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (ShowRawFeedButton IN (0, 1))",
+            cancellationToken);
     }
 
     public async Task<ProfilePreferences> GetPreferencesAsync(
@@ -55,7 +73,8 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed
+                 SELECT StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
+                         RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton
             FROM ProfilePreferences
             WHERE ProfileId = $profileId;
             """;
@@ -72,7 +91,10 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             (ProfileArticlePresentation)reader.GetInt32(1),
             (ProfileArticleSort)reader.GetInt32(2),
             reader.GetInt64(3) == 1,
-            reader.GetInt32(4));
+            reader.GetInt32(4),
+            reader.GetInt64(5) == 1,
+            reader.GetInt32(6),
+            reader.GetInt64(7) == 1);
     }
 
     public async Task SavePreferencesAsync(
@@ -84,14 +106,19 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         await using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO ProfilePreferences (
-                ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed)
-            VALUES ($profileId, $startPage, $presentation, $articleSort, $hideReadArticles, $folderArticleLimitPerFeed)
+                ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
+                RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton)
+            VALUES ($profileId, $startPage, $presentation, $articleSort, $hideReadArticles, $folderArticleLimitPerFeed,
+                    $refreshFeedsWhenOpened, $autoRefreshIntervalMinutes, $showRawFeedButton)
             ON CONFLICT(ProfileId) DO UPDATE SET
                 StartPage = excluded.StartPage,
                 Presentation = excluded.Presentation,
                 ArticleSort = excluded.ArticleSort,
                 HideReadArticles = excluded.HideReadArticles,
-                FolderArticleLimitPerFeed = excluded.FolderArticleLimitPerFeed;
+                FolderArticleLimitPerFeed = excluded.FolderArticleLimitPerFeed,
+                RefreshFeedsWhenOpened = excluded.RefreshFeedsWhenOpened,
+                AutoRefreshIntervalMinutes = excluded.AutoRefreshIntervalMinutes,
+                ShowRawFeedButton = excluded.ShowRawFeedButton;
             """;
         command.Parameters.AddWithValue("$profileId", profileId);
         command.Parameters.AddWithValue("$startPage", (int)preferences.StartPage);
@@ -99,6 +126,9 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         command.Parameters.AddWithValue("$articleSort", (int)preferences.Sort);
         command.Parameters.AddWithValue("$hideReadArticles", preferences.HideReadArticles ? 1 : 0);
         command.Parameters.AddWithValue("$folderArticleLimitPerFeed", preferences.FolderArticleLimitPerFeed);
+        command.Parameters.AddWithValue("$refreshFeedsWhenOpened", preferences.RefreshFeedsWhenOpened ? 1 : 0);
+        command.Parameters.AddWithValue("$autoRefreshIntervalMinutes", preferences.AutoRefreshIntervalMinutes);
+        command.Parameters.AddWithValue("$showRawFeedButton", preferences.ShowRawFeedButton ? 1 : 0);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -192,6 +222,30 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         command.CommandText = "PRAGMA foreign_keys = ON;";
         await command.ExecuteNonQueryAsync(cancellationToken);
         return connection;
+    }
+
+    private static async Task EnsurePreferenceColumnAsync(
+        SqliteConnection connection,
+        string columnName,
+        string columnDefinition,
+        CancellationToken cancellationToken)
+    {
+        await using (var inspectCommand = connection.CreateCommand())
+        {
+            inspectCommand.CommandText = "PRAGMA table_info(ProfilePreferences);";
+            await using var reader = await inspectCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        await using var alterCommand = connection.CreateCommand();
+        alterCommand.CommandText = $"ALTER TABLE ProfilePreferences ADD COLUMN {columnName} {columnDefinition};";
+        await alterCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static Profile ReadProfile(SqliteDataReader reader) => new(

@@ -54,7 +54,10 @@ public sealed class SqliteProfileStoreTests
             ProfileArticlePresentation.Magazine,
             ProfileArticleSort.Newest,
             true,
-            25);
+            25,
+            false,
+            60,
+            true);
 
         await store.SavePreferencesAsync(firstProfile.Id, preferences);
         var reopenedStore = new SqliteProfileStore(database.Path);
@@ -62,6 +65,82 @@ public sealed class SqliteProfileStoreTests
 
         Assert.AreEqual(preferences, await reopenedStore.GetPreferencesAsync(firstProfile.Id));
         Assert.AreEqual(new ProfilePreferences(), await reopenedStore.GetPreferencesAsync(secondProfile.Id));
+    }
+
+    [TestMethod]
+    public async Task Initialize_AddsNewRefreshPreferenceColumnsToExistingDatabase()
+    {
+        using var database = new TemporaryDatabase();
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = database.Path }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE Profiles (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    IsCatalogMaster INTEGER NOT NULL CHECK (IsCatalogMaster IN (0, 1)),
+                    PasswordHash TEXT NULL,
+                    RecoveryEmail TEXT NULL
+                );
+                CREATE TABLE ProfilePreferences (
+                    ProfileId TEXT NOT NULL PRIMARY KEY REFERENCES Profiles(Id) ON DELETE CASCADE,
+                    StartPage INTEGER NOT NULL CHECK (StartPage BETWEEN 0 AND 2),
+                    Presentation INTEGER NOT NULL CHECK (Presentation BETWEEN 0 AND 2),
+                    ArticleSort INTEGER NOT NULL CHECK (ArticleSort BETWEEN 0 AND 1),
+                    HideReadArticles INTEGER NOT NULL CHECK (HideReadArticles IN (0, 1)),
+                    FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100)
+                );
+                INSERT INTO Profiles (Id, Name, IsCatalogMaster) VALUES ('profile-1', 'Reader', 0);
+                INSERT INTO ProfilePreferences (ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed)
+                VALUES ('profile-1', 0, 0, 0, 0, 10);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+        var store = new SqliteProfileStore(database.Path);
+
+        await store.InitializeAsync();
+
+        Assert.AreEqual(new ProfilePreferences(), await store.GetPreferencesAsync("profile-1"));
+    }
+
+    [TestMethod]
+    public async Task Initialize_AddsDebugPreferenceToExistingProfilePreferences()
+    {
+        using var database = new TemporaryDatabase();
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = database.Path }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE Profiles (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                    IsCatalogMaster INTEGER NOT NULL CHECK (IsCatalogMaster IN (0, 1)),
+                    PasswordHash TEXT NULL,
+                    RecoveryEmail TEXT NULL
+                );
+                CREATE TABLE ProfilePreferences (
+                    ProfileId TEXT NOT NULL PRIMARY KEY REFERENCES Profiles(Id) ON DELETE CASCADE,
+                    StartPage INTEGER NOT NULL CHECK (StartPage BETWEEN 0 AND 2),
+                    Presentation INTEGER NOT NULL CHECK (Presentation BETWEEN 0 AND 2),
+                    ArticleSort INTEGER NOT NULL CHECK (ArticleSort BETWEEN 0 AND 1),
+                    HideReadArticles INTEGER NOT NULL CHECK (HideReadArticles IN (0, 1)),
+                    FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100),
+                    RefreshFeedsWhenOpened INTEGER NOT NULL DEFAULT 1 CHECK (RefreshFeedsWhenOpened IN (0, 1)),
+                    AutoRefreshIntervalMinutes INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240))
+                );
+                INSERT INTO Profiles (Id, Name, IsCatalogMaster) VALUES ('profile-1', 'Reader', 0);
+                INSERT INTO ProfilePreferences (ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed)
+                VALUES ('profile-1', 0, 0, 0, 0, 10);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+        var store = new SqliteProfileStore(database.Path);
+
+        await store.InitializeAsync();
+
+        Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).ShowRawFeedButton);
     }
 
     [TestMethod]

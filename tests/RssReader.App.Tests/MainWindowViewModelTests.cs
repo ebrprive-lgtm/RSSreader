@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Input;
 using RssReader.App.ViewModels;
 using RssReader.Application;
 using RssReader.Domain;
@@ -38,13 +39,17 @@ public sealed class MainWindowViewModelTests
                     ProfileArticlePresentation.Magazine,
                     ProfileArticleSort.Newest,
                     true,
-                    25);
+                    25,
+                    false,
+                    60);
                 var preferencesWindow = new RssReader.App.PreferencesWindow(preferences) { Owner = window };
                 preferencesWindow.Show();
                 preferencesWindow.UpdateLayout();
                 Assert.IsTrue(((RadioButton)preferencesWindow.FindName("StartFirstFolderOption")).IsChecked);
                 Assert.IsTrue(((RadioButton)preferencesWindow.FindName("PresentationMagazineOption")).IsChecked);
                 Assert.AreEqual("25", ((TextBox)preferencesWindow.FindName("FolderArticleLimitBox")).Text);
+                Assert.IsFalse(((CheckBox)preferencesWindow.FindName("RefreshFeedsWhenOpenedCheckBox")).IsChecked);
+                Assert.AreEqual("Every hour", ((ComboBoxItem)((ComboBox)preferencesWindow.FindName("AutoRefreshIntervalComboBox")).SelectedItem).Content);
                 preferencesWindow.Close();
 
                 var profileButton = (Button)window.FindName("ProfileMenuButton");
@@ -63,6 +68,28 @@ public sealed class MainWindowViewModelTests
                     .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                 Assert.IsTrue(logoutRequested);
                 profileButton.ContextMenu.IsOpen = false;
+
+                var sidebarPanel = (Border)window.FindName("SidebarPanel");
+                var sidebarPeekButton = (Button)window.FindName("SidebarPeekButton");
+                var shellGrid = (Grid)window.FindName("ShellGrid");
+                viewModel.ToggleSidebarCommand.Execute(null);
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Visible, sidebarPeekButton.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, sidebarPanel.Visibility);
+                Assert.AreEqual(0, shellGrid.ColumnDefinitions[0].ActualWidth);
+
+                sidebarPeekButton.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, Environment.TickCount)
+                {
+                    RoutedEvent = UIElement.MouseEnterEvent
+                });
+                Assert.AreEqual(Visibility.Visible, sidebarPanel.Visibility);
+                Assert.AreEqual(0, shellGrid.ColumnDefinitions[0].ActualWidth);
+
+                viewModel.ToggleSidebarCommand.Execute(null);
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Collapsed, sidebarPeekButton.Visibility);
+                Assert.AreEqual(Visibility.Visible, sidebarPanel.Visibility);
+                Assert.AreEqual(286, shellGrid.ColumnDefinitions[0].ActualWidth);
 
                 viewModel.IsMagazineView = true;
                 window.UpdateLayout();
@@ -128,6 +155,76 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(allLink.IndentMargin.Left < folderLink.IndentMargin.Left);
             Assert.IsTrue(folderLink.IndentMargin.Left < feedLink.IndentMargin.Left);
             Assert.IsTrue(viewModel.TagLinks.Any(link => link.Route == "tag:Reviews"));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task FirstOpenRefreshesNewFeedAndOpenPreferenceRefreshesFolderFeeds()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-app-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+            var profile = Profile.CreateRegular("Reader");
+            await profileStore.AddAsync(profile);
+            var existingFeed = new CatalogFeed("feed-existing", "Existing", "https://example.com/existing.xml", null, null);
+            var newFeed = new CatalogFeed("feed-new", "New", "https://example.com/new.xml", null, null);
+            await catalogStore.AddFeedAsync(existingFeed);
+            await catalogStore.AddFeedAsync(newFeed);
+            await readerStore.AddFolderAsync(profile.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, existingFeed.Id, "News");
+            await readerStore.SaveArticlesAsync(existingFeed.Id,
+            [
+                new FeedArticle("existing-article", existingFeed.Id, "existing-item", "Existing article", null, DateTimeOffset.UtcNow, null, null)
+            ]);
+
+            var downloader = new RecordingFeedDownloader();
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                new FeedRefreshService(readerStore, catalogStore, downloader),
+                new ProfilePreferences(RefreshFeedsWhenOpened: false));
+            await viewModel.InitializeAsync();
+            viewModel.FolderSelectionRequested = (_, _, _) => Task.FromResult<string?>("News");
+            await viewModel.ToggleSubscriptionCommand.ExecuteAsync(
+                viewModel.CatalogFeeds.Single(feed => feed.Id == newFeed.Id));
+
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == $"feed:{newFeed.Id}"));
+            await WaitForRefreshCompletionAsync(viewModel);
+
+            CollectionAssert.AreEqual(new[] { newFeed.Id }, downloader.RequestedFeedIds.ToArray());
+            Assert.AreEqual(1, viewModel.VisibleArticles.Count);
+            Assert.AreEqual("New headline", viewModel.VisibleArticles[0].Title);
+
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == $"feed:{newFeed.Id}"));
+            await WaitForRefreshCompletionAsync(viewModel);
+            Assert.AreEqual(1, downloader.RequestedFeedIds.Count);
+
+            viewModel.ApplyPreferences(new ProfilePreferences(RefreshFeedsWhenOpened: true));
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "folder:News"));
+            await WaitForRefreshCompletionAsync(viewModel);
+
+            Assert.AreEqual(3, downloader.RequestedFeedIds.Count);
+            CollectionAssert.AreEquivalent(
+                new[] { existingFeed.Id, newFeed.Id },
+                downloader.RequestedFeedIds.Skip(1).ToArray());
         }
         finally
         {
@@ -466,19 +563,25 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
-    public void SidebarToggleChangesBetweenExpandedAndCompactWidths()
+    public void SidebarTogglePinsAtTheLeftOrCollapsesToAnOverlayTrigger()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
 
-        viewModel.ToggleSidebarCommand.Execute(null);
-
-        Assert.IsFalse(viewModel.IsSidebarExpanded);
-        Assert.AreEqual(64, viewModel.SidebarColumnWidth.Value);
-
-        viewModel.ToggleSidebarCommand.Execute(null);
-
-        Assert.IsTrue(viewModel.IsSidebarExpanded);
+        Assert.IsTrue(viewModel.IsSidebarPinned);
         Assert.AreEqual(286, viewModel.SidebarColumnWidth.Value);
+        Assert.AreEqual(1, viewModel.SidebarColumnSpan);
+
+        viewModel.ToggleSidebarCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsSidebarPinned);
+        Assert.AreEqual(0, viewModel.SidebarColumnWidth.Value);
+        Assert.AreEqual(2, viewModel.SidebarColumnSpan);
+
+        viewModel.ToggleSidebarCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.IsSidebarPinned);
+        Assert.AreEqual(286, viewModel.SidebarColumnWidth.Value);
+        Assert.AreEqual(1, viewModel.SidebarColumnSpan);
     }
 
     [TestMethod]
@@ -489,6 +592,34 @@ public sealed class MainWindowViewModelTests
         var age = ArticleRowViewModel.FormatAge(now.AddHours(-3), now);
 
         Assert.AreEqual("3h ago", age);
+    }
+
+    private static async Task WaitForRefreshCompletionAsync(MainWindowViewModel viewModel)
+    {
+        var timeout = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (viewModel.IsRefreshing && DateTimeOffset.UtcNow < timeout)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.IsFalse(viewModel.IsRefreshing, "Feed refresh did not complete in time.");
+    }
+
+    private sealed class RecordingFeedDownloader : IFeedDownloader
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> RequestedFeedIds { get; } = new();
+
+        public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
+            CatalogFeed feed,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedFeedIds.Enqueue(feed.Id);
+            IReadOnlyList<DownloadedFeedItem> items =
+            [
+                new DownloadedFeedItem($"{feed.Id}-item", "New headline", null, null, "Summary", "Content")
+            ];
+            return Task.FromResult(items);
+        }
     }
 }
 

@@ -33,6 +33,11 @@ public sealed class ProfileService(IProfileStore store, IPasswordHasher password
                 $"The folder article limit must be between {ProfilePreferences.MinimumFolderArticleLimitPerFeed} and {ProfilePreferences.MaximumFolderArticleLimitPerFeed}.");
         }
 
+            if (preferences.AutoRefreshIntervalMinutes is not (0 or 15 or 30 or 60 or 240))
+            {
+                throw new ArgumentOutOfRangeException(nameof(preferences), "The auto-refresh interval is not supported.");
+            }
+
         return store.SavePreferencesAsync(profileId, preferences, cancellationToken);
     }
 

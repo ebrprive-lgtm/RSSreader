@@ -14,13 +14,15 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CatalogService? _catalogService;
     private readonly ReadingService? _readingService;
     private readonly FeedRefreshService? _feedRefreshService;
+    private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
     private ProfilePreferences _profilePreferences;
+    private Dictionary<string, string[]> _feedIdsByFolder = new(StringComparer.OrdinalIgnoreCase);
     private string _activeRoute;
     private string _searchQuery = string.Empty;
     private string _quickQuery = string.Empty;
     private string _statusMessage = string.Empty;
     private ArticleRowViewModel? _selectedArticle;
-    private bool _isSidebarExpanded = true;
+    private bool _isSidebarPinned = true;
     private bool _isRefreshing;
     private bool _unreadOnly;
     private bool _savedOnly;
@@ -28,6 +30,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isMagazineView;
     private bool _isSortByDate;
     private bool _hasAppliedStartPage;
+    private bool _hasLoadedInitialReaderData;
     private int _folderArticlesPerFeedLimit;
 
     public MainWindowViewModel(Profile profile) : this(profile, null, null, null)
@@ -129,9 +132,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public Profile ActiveProfile { get; }
     public string ActiveProfileName => ActiveProfile.Name;
     public bool IsCatalogMaster => ActiveProfile.IsCatalogMaster;
-    public bool IsSidebarExpanded => _isSidebarExpanded;
-    public GridLength SidebarColumnWidth => new(IsSidebarExpanded ? 286 : 64);
-    public double SidebarMinimumWidth => IsSidebarExpanded ? 220 : 64;
+    public bool IsSidebarPinned => _isSidebarPinned;
+    public bool IsSidebarExpanded => true;
+    public GridLength SidebarColumnWidth => new(IsSidebarPinned ? 286 : 0);
+    public double SidebarPanelWidth => 286;
+    public int SidebarColumnSpan => IsSidebarPinned ? 1 : 2;
+    public Thickness SidebarHeaderMargin => IsSidebarPinned ? new Thickness(0) : new Thickness(42, 0, 0, 0);
 
     public ObservableCollection<SidebarLink> PrimaryLinks { get; }
     public ObservableCollection<SidebarLink> ReadingLinks { get; }
@@ -156,6 +162,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
+
+    public Task<string> GetRawFeedContentAsync(string feedId, CancellationToken cancellationToken = default) =>
+        _feedRefreshService is null
+            ? throw new InvalidOperationException("Raw feed content is unavailable.")
+            : _feedRefreshService.GetRawFeedContentAsync(ActiveProfile.Id, feedId, cancellationToken);
 
     public event Action? ProfileSwitchRequested;
 
@@ -216,6 +227,9 @@ public sealed class MainWindowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(preferences);
         _profilePreferences = preferences;
         _folderArticlesPerFeedLimit = preferences.FolderArticleLimitPerFeed;
+        OnPropertyChanged(nameof(RefreshFeedsWhenOpened));
+        OnPropertyChanged(nameof(AutoRefreshIntervalMinutes));
+        OnPropertyChanged(nameof(IsRawFeedButtonVisible));
         SetArticleViewModeIfSelected(
             true,
             preferences.Presentation == ProfileArticlePresentation.Cards,
@@ -410,6 +424,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsArticleListVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsReadingViewVisible));
+                OnPropertyChanged(nameof(IsRawFeedButtonVisible));
             }
         }
     }
@@ -426,9 +441,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsSearchRoute => ActiveRoute == "Search";
     public bool IsGoToRoute => ActiveRoute == "Go to...";
+    public bool RefreshFeedsWhenOpened => _profilePreferences.RefreshFeedsWhenOpened;
+    public int AutoRefreshIntervalMinutes => _profilePreferences.AutoRefreshIntervalMinutes;
     public bool IsArticleCountVisible => IsArticleListVisible;
     public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible && !IsGoToRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
+    public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
     public bool IsCatalogAdminVisible => IsCatalogMaster && ActiveRoute == "Manage catalog";
     public bool IsArticleListEmpty => VisibleArticles.Count == 0;
@@ -438,6 +456,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedArticle = null;
         ActiveRoute = link.Route;
         UpdateSelectedLinks();
+        _ = RefreshRouteFeedsAsync(link.Route);
     }
 
     private void OpenArticle(ArticleRowViewModel article)
@@ -471,6 +490,12 @@ public sealed class MainWindowViewModel : ObservableObject
         var tags = await _readingService.GetFeedTagsAsync(ActiveProfile.Id, cancellationToken);
         var articles = await _readingService.GetArticlesAsync(ActiveProfile.Id, new ArticleFilter(), cancellationToken);
         var subscriptionsByFeed = subscriptions.ToDictionary(item => item.FeedId, StringComparer.Ordinal);
+        _feedIdsByFolder = subscriptions
+            .GroupBy(item => item.FolderName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.FeedId).Distinct(StringComparer.Ordinal).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
         var tagsByFeed = tags.GroupBy(item => item.FeedId)
             .ToDictionary(group => group.Key, group => group.Select(item => item.Name).ToArray(), StringComparer.Ordinal);
 
@@ -534,6 +559,17 @@ public sealed class MainWindowViewModel : ObservableObject
             _allArticles.Add(row);
         }
 
+        if (!_hasLoadedInitialReaderData)
+        {
+            foreach (var subscription in subscriptions.Where(subscription =>
+                         !_allArticles.Any(article => article.FeedId == subscription.FeedId)))
+            {
+                _pendingInitialRefreshFeedIds.Add(subscription.FeedId);
+            }
+
+            _hasLoadedInitialReaderData = true;
+        }
+
         UpdateSelectedLinks();
         ApplyQuickFilter();
         ApplyArticleFilters();
@@ -541,7 +577,62 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private async Task RefreshAsync()
     {
-        if (_feedRefreshService is null || IsRefreshing)
+        if (_feedRefreshService is null)
+        {
+            return;
+        }
+
+        await RefreshUsingAsync(
+            () => _feedRefreshService.RefreshProfileAsync(ActiveProfile.Id),
+            refreshesAllFeeds: true);
+    }
+
+    public Task RefreshNowAsync() => RefreshAsync();
+
+    private async Task RefreshRouteFeedsAsync(string route)
+    {
+        if (_feedRefreshService is null || IsCatalogMaster || IsRefreshing)
+        {
+            return;
+        }
+
+        string[] feedIds;
+        if (route.StartsWith("feed:", StringComparison.Ordinal))
+        {
+            feedIds = [route["feed:".Length..]];
+        }
+        else if (route.StartsWith("folder:", StringComparison.Ordinal) &&
+                 _feedIdsByFolder.TryGetValue(route["folder:".Length..], out var folderFeedIds))
+        {
+            feedIds = folderFeedIds;
+        }
+        else
+        {
+            return;
+        }
+
+        var pendingFeedIds = feedIds.Where(_pendingInitialRefreshFeedIds.Contains).ToArray();
+        var feedIdsToRefresh = _profilePreferences.RefreshFeedsWhenOpened
+            ? feedIds
+            : pendingFeedIds;
+        if (feedIdsToRefresh.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var feedId in pendingFeedIds)
+        {
+            _pendingInitialRefreshFeedIds.Remove(feedId);
+        }
+
+        await RefreshUsingAsync(() => _feedRefreshService.RefreshFeedsAsync(ActiveProfile.Id, feedIdsToRefresh));
+    }
+
+    private async Task RefreshUsingAsync(
+        Func<Task<FeedRefreshSummary>> refresh,
+        bool refreshesAllFeeds = false)
+    {
+        if (IsRefreshing)
         {
             return;
         }
@@ -550,7 +641,12 @@ public sealed class MainWindowViewModel : ObservableObject
         StatusMessage = "Refreshing feeds...";
         try
         {
-            var summary = await _feedRefreshService.RefreshProfileAsync(ActiveProfile.Id);
+            var summary = await refresh();
+            if (refreshesAllFeeds)
+            {
+                _pendingInitialRefreshFeedIds.Clear();
+            }
+
             await LoadProfileReaderDataAsync(CancellationToken.None);
             StatusMessage = summary.Failures.Count == 0
                 ? $"Checked {summary.FeedsChecked} feeds; fetched {summary.ArticlesFetched} articles."
@@ -578,6 +674,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (feed.IsSubscribed)
             {
                 await _readingService.UnsubscribeAsync(ActiveProfile, feed.Id);
+                _pendingInitialRefreshFeedIds.Remove(feed.Id);
             }
             else
             {
@@ -610,6 +707,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 }
 
                 await _readingService.SubscribeAsync(ActiveProfile, feed.Id, folderName);
+                _pendingInitialRefreshFeedIds.Add(feed.Id);
             }
 
             await LoadProfileReaderDataAsync(CancellationToken.None);
@@ -664,10 +762,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void ToggleSidebar()
     {
-        _isSidebarExpanded = !_isSidebarExpanded;
-        OnPropertyChanged(nameof(IsSidebarExpanded));
+        _isSidebarPinned = !_isSidebarPinned;
+        OnPropertyChanged(nameof(IsSidebarPinned));
         OnPropertyChanged(nameof(SidebarColumnWidth));
-        OnPropertyChanged(nameof(SidebarMinimumWidth));
+        OnPropertyChanged(nameof(SidebarColumnSpan));
+        OnPropertyChanged(nameof(SidebarHeaderMargin));
     }
 
     private void UpdateSelectedLinks()

@@ -36,12 +36,66 @@ public sealed class FeedRefreshServiceTests
         Assert.IsTrue(readerStore.SavedArticles.All(item => item.FeedId == "feed-1" && item.Article.FeedId == "feed-1"));
     }
 
+    [TestMethod]
+    public async Task RefreshFeedsOnlyRefreshesRequestedProfileSubscriptions()
+    {
+        var firstFeed = new CatalogFeed("feed-1", "First feed", "https://example.com/first.xml", null, null);
+        var secondFeed = new CatalogFeed("feed-2", "Second feed", "https://example.com/second.xml", null, null);
+        var readerStore = new ReaderStoreStub(
+        [
+            new ProfileSubscription("profile-1", firstFeed.Id, firstFeed.Name, firstFeed.FeedUrl, "News"),
+            new ProfileSubscription("profile-1", secondFeed.Id, secondFeed.Name, secondFeed.FeedUrl, "Tech")
+        ]);
+        var downloader = new FeedDownloaderStub(new Dictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>>
+        {
+            [firstFeed.Id] = () => [new DownloadedFeedItem("first-item", "First", null, null, null, null)],
+            [secondFeed.Id] = () => [new DownloadedFeedItem("second-item", "Second", null, null, null, null)]
+        });
+        var service = new FeedRefreshService(
+            readerStore,
+            new CatalogStoreStub([firstFeed, secondFeed]),
+            downloader);
+
+        var result = await service.RefreshFeedsAsync("profile-1", [secondFeed.Id]);
+
+        Assert.AreEqual(1, result.FeedsChecked);
+        Assert.AreEqual(1, result.ArticlesFetched);
+        Assert.AreEqual(secondFeed.Id, readerStore.SavedArticles.Single().FeedId);
+    }
+
+    [TestMethod]
+    public async Task GetRawFeedContent_RequiresSubscriptionAndReturnsUnmodifiedSource()
+    {
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        var readerStore = new ReaderStoreStub(
+        [new ProfileSubscription("profile-1", feed.Id, feed.Name, feed.FeedUrl, "News")]);
+        var downloader = new RawFeedDownloaderStub("<?xml version=\"1.0\"?><rss><channel /></rss>");
+        var service = new FeedRefreshService(readerStore, new CatalogStoreStub([feed]), downloader);
+
+        var rawContent = await service.GetRawFeedContentAsync("profile-1", feed.Id);
+
+        Assert.AreEqual("<?xml version=\"1.0\"?><rss><channel /></rss>", rawContent);
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => service.GetRawFeedContentAsync("other-profile", feed.Id));
+    }
+
     private sealed class FeedDownloaderStub(
         IReadOnlyDictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>> responses) : IFeedDownloader
     {
         public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
             CatalogFeed feed,
             CancellationToken cancellationToken = default) => Task.FromResult(responses[feed.Id]());
+    }
+
+    private sealed class RawFeedDownloaderStub(string rawContent) : IFeedDownloader, IRawFeedContentDownloader
+    {
+        public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
+            CatalogFeed feed,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<DownloadedFeedItem>>([]);
+
+        public Task<string> DownloadRawContentAsync(CatalogFeed feed, CancellationToken cancellationToken = default) =>
+            Task.FromResult(rawContent);
     }
 
     private sealed class CatalogStoreStub(IReadOnlyList<CatalogFeed> feeds) : ICatalogStore

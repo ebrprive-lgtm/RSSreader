@@ -353,6 +353,47 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <DataTemplate x:Key="SidebarIconTemplate">
+            <Border Width="18"
+                    Height="14"
+                    BorderBrush="{StaticResource MutedTextBrush}"
+                    BorderThickness="1"
+                    CornerRadius="2">
+                <Grid Margin="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="5" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Background="{StaticResource AccentWashBrush}" />
+                    <Border Grid.Column="1"
+                            BorderBrush="{StaticResource MutedTextBrush}"
+                            BorderThickness="1,0,0,0" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+        <Style x:Key="SidebarIconButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="IconButtonBorder" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="IconButtonBorder" Property="Background" Value="#E8EEEB" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ArticleViewModeStyle" TargetType="RadioButton">
             <Setter Property="Padding" Value="10,6" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
@@ -381,29 +422,36 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid x:Name="ShellGrid">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="{Binding SidebarColumnWidth}" MinWidth="{Binding SidebarMinimumWidth}" />
+            <ColumnDefinition Width="{Binding SidebarColumnWidth}" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Background="{StaticResource SidebarBrush}" Padding="14,14,12,12">
+        <Border x:Name="SidebarPanel"
+                Grid.Column="0"
+                Grid.ColumnSpan="{Binding SidebarColumnSpan}"
+                Width="{Binding SidebarPanelWidth}"
+                HorizontalAlignment="Left"
+                Panel.ZIndex="10"
+                Background="{StaticResource SidebarBrush}"
+                Padding="14,14,12,12"
+                MouseEnter="SidebarPanel_MouseEnter"
+                MouseLeave="SidebarPanel_MouseLeave">
+            <Border.RenderTransform>
+                <TranslateTransform X="-286" />
+            </Border.RenderTransform>
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <StackPanel>
-                    <Button Command="{Binding ToggleSidebarCommand}"
-                            Content="&#xE76B;"
-                            FontFamily="Segoe MDL2 Assets"
-                            FontSize="15"
-                            ToolTip="Collapse or expand navigation"
-                            HorizontalAlignment="Left"
-                            Padding="9,8"
-                            Background="Transparent"
-                            BorderThickness="0" />
+                <Grid Margin="{Binding SidebarHeaderMargin}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="34" />
+                    </Grid.ColumnDefinitions>
                     <Button x:Name="ProfileMenuButton"
                             Click="ProfileMenuButton_Click"
                             Background="Transparent"
@@ -440,18 +488,22 @@
                                        Text="{Binding ActiveProfileName}"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                       TextTrimming="CharacterEllipsis" />
                             <TextBlock Grid.Column="2"
                                        Text="&#xE70D;"
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="11"
                                        Foreground="{StaticResource MutedTextBrush}"
-                                       VerticalAlignment="Center"
-                                       Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                       VerticalAlignment="Center" />
                         </Grid>
                     </Button>
-                </StackPanel>
+                    <Button x:Name="SidebarPinButton"
+                            Grid.Column="1"
+                            Command="{Binding ToggleSidebarCommand}"
+                            Style="{StaticResource SidebarIconButtonStyle}"
+                            ContentTemplate="{StaticResource SidebarIconTemplate}"
+                            ToolTip="Hide sidebar" />
+                </Grid>
                 <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <ItemsControl ItemsSource="{Binding PrimaryLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
@@ -690,7 +742,12 @@
                                           IsChecked="{Binding SelectedArticle.IsSaved, Mode=TwoWay}"
                                           Margin="0,0,22,0" />
                                 <CheckBox Content="Read"
-                                          IsChecked="{Binding SelectedArticle.IsRead, Mode=TwoWay}" />
+                                      IsChecked="{Binding SelectedArticle.IsRead, Mode=TwoWay}"
+                                      Margin="0,0,22,0" />
+                                <Button Content="Show RAW"
+                                    Click="ShowRawFeed_Click"
+                                    Padding="10,4"
+                                    Visibility="{Binding IsRawFeedButtonVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             </StackPanel>
                             <Border Height="1" Background="#E3E9E6" />
                             <TextBlock Text="{Binding SelectedArticle.Summary}"
@@ -948,5 +1005,19 @@
                 </Grid>
             </Grid>
         </Grid>
+
+        <Button x:Name="SidebarPeekButton"
+                Grid.ColumnSpan="2"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="8,8,0,0"
+                Command="{Binding ToggleSidebarCommand}"
+                Style="{StaticResource SidebarIconButtonStyle}"
+                ContentTemplate="{StaticResource SidebarIconTemplate}"
+                ToolTip="Show sidebar"
+                Visibility="Collapsed"
+                Panel.ZIndex="20"
+                MouseEnter="SidebarPeekButton_MouseEnter"
+                MouseLeave="SidebarPeekButton_MouseLeave" />
     </Grid>
 </Window>

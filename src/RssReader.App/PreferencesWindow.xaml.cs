@@ -20,6 +20,11 @@ public partial class PreferencesWindow : Window
         SortNewestOption.IsChecked = preferences.Sort == ProfileArticleSort.Newest;
         HideReadArticlesCheckBox.IsChecked = preferences.HideReadArticles;
         FolderArticleLimitBox.Text = preferences.FolderArticleLimitPerFeed.ToString(CultureInfo.InvariantCulture);
+        RefreshFeedsWhenOpenedCheckBox.IsChecked = preferences.RefreshFeedsWhenOpened;
+        ShowRawFeedButtonCheckBox.IsChecked = preferences.ShowRawFeedButton;
+        AutoRefreshIntervalComboBox.SelectedItem = AutoRefreshIntervalComboBox.Items
+            .OfType<System.Windows.Controls.ComboBoxItem>()
+            .First(item => int.Parse((string)item.Tag, CultureInfo.InvariantCulture) == preferences.AutoRefreshIntervalMinutes);
     }
 
     public ProfilePreferences Preferences { get; private set; }
@@ -30,12 +35,15 @@ public partial class PreferencesWindow : Window
 
     private void ReadingNavigation_Click(object sender, RoutedEventArgs e) => ShowSection("Reading", ReadingPanel);
 
+    private void DebuggingNavigation_Click(object sender, RoutedEventArgs e) => ShowSection("Debugging", DebuggingPanel);
+
     private void ShowSection(string title, UIElement section)
     {
         SectionTitle.Text = title;
         GeneralPanel.Visibility = ReferenceEquals(section, GeneralPanel) ? Visibility.Visible : Visibility.Collapsed;
         AppearancePanel.Visibility = ReferenceEquals(section, AppearancePanel) ? Visibility.Visible : Visibility.Collapsed;
         ReadingPanel.Visibility = ReferenceEquals(section, ReadingPanel) ? Visibility.Visible : Visibility.Collapsed;
+        DebuggingPanel.Visibility = ReferenceEquals(section, DebuggingPanel) ? Visibility.Visible : Visibility.Collapsed;
         ValidationMessage.Text = string.Empty;
     }
 
@@ -63,7 +71,10 @@ public partial class PreferencesWindow : Window
                     : ProfileArticlePresentation.Cards,
             SortNewestOption.IsChecked == true ? ProfileArticleSort.Newest : ProfileArticleSort.Folder,
             HideReadArticlesCheckBox.IsChecked == true,
-            limit);
+            limit,
+            RefreshFeedsWhenOpenedCheckBox.IsChecked == true,
+            int.Parse((string)((System.Windows.Controls.ComboBoxItem)AutoRefreshIntervalComboBox.SelectedItem).Tag, CultureInfo.InvariantCulture),
+            ShowRawFeedButtonCheckBox.IsChecked == true);
         DialogResult = true;
     }
 }

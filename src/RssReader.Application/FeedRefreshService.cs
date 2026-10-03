@@ -15,6 +15,53 @@ public sealed class FeedRefreshService(
         CancellationToken cancellationToken = default)
     {
         var subscriptions = await readerStore.GetSubscriptionsAsync(profileId, cancellationToken);
+        return await RefreshSubscriptionsAsync(subscriptions, cancellationToken);
+    }
+
+    public async Task<FeedRefreshSummary> RefreshFeedsAsync(
+        string profileId,
+        IReadOnlyCollection<string> feedIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(feedIds);
+        if (feedIds.Count == 0)
+        {
+            return new FeedRefreshSummary(0, 0, []);
+        }
+
+        var requestedFeedIds = feedIds.ToHashSet(StringComparer.Ordinal);
+        var subscriptions = await readerStore.GetSubscriptionsAsync(profileId, cancellationToken);
+        return await RefreshSubscriptionsAsync(
+            subscriptions.Where(subscription => requestedFeedIds.Contains(subscription.FeedId)).ToArray(),
+            cancellationToken);
+    }
+
+    public async Task<string> GetRawFeedContentAsync(
+        string profileId,
+        string feedId,
+        CancellationToken cancellationToken = default)
+    {
+        if (feedDownloader is not IRawFeedContentDownloader rawFeedContentDownloader)
+        {
+            throw new InvalidOperationException("Raw feed content is not supported by the configured downloader.");
+        }
+
+        var subscriptions = await readerStore.GetSubscriptionsAsync(profileId, cancellationToken);
+        if (!subscriptions.Any(subscription => subscription.FeedId == feedId))
+        {
+            throw new InvalidOperationException("The feed is not followed by this profile.");
+        }
+
+        var feed = (await catalogStore.GetFeedsAsync(cancellationToken))
+            .FirstOrDefault(candidate => candidate.Id == feedId)
+            ?? throw new InvalidOperationException("The feed is no longer in the catalog.");
+        return await rawFeedContentDownloader.DownloadRawContentAsync(feed, cancellationToken);
+    }
+
+    private async Task<FeedRefreshSummary> RefreshSubscriptionsAsync(
+        IReadOnlyList<ProfileSubscription> subscriptions,
+        CancellationToken cancellationToken)
+    {
         var feeds = await catalogStore.GetFeedsAsync(cancellationToken);
         var feedLookup = feeds.ToDictionary(feed => feed.Id, StringComparer.Ordinal);
         var failures = new ConcurrentBag<string>();

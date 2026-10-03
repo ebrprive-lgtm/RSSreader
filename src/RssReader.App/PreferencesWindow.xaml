@@ -76,6 +76,11 @@
                                  GroupName="PreferenceSections"
                                  Style="{StaticResource PreferenceNavigationStyle}"
                                  Click="ReadingNavigation_Click" />
+                    <RadioButton x:Name="DebuggingNavigation"
+                                 Content="Debugging"
+                                 GroupName="PreferenceSections"
+                                 Style="{StaticResource PreferenceNavigationStyle}"
+                                 Click="DebuggingNavigation_Click" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -145,6 +150,44 @@
                                    Foreground="#A33C35"
                                    Margin="0,6,0,0"
                                    TextWrapping="Wrap" />
+                        <Border Height="1" Background="#E3E7E5" Margin="0,24,0,20" />
+                        <TextBlock Text="Feed updates" FontSize="13" FontWeight="SemiBold" />
+                        <CheckBox x:Name="RefreshFeedsWhenOpenedCheckBox"
+                                  Content="Refresh feeds when opening a feed or folder"
+                                  FontSize="13"
+                                  Margin="0,10,0,0"
+                                  Padding="2" />
+                        <TextBlock Text="Newly followed feeds refresh the first time they are opened."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="24,3,0,12"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Text="Refresh on a timer" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Periodically check all feeds followed by this profile."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,8"
+                                   TextWrapping="Wrap" />
+                        <ComboBox x:Name="AutoRefreshIntervalComboBox"
+                                  Width="190"
+                                  HorizontalAlignment="Left"
+                                  Padding="7">
+                            <ComboBoxItem Content="Off" Tag="0" />
+                            <ComboBoxItem Content="Every 15 minutes" Tag="15" />
+                            <ComboBoxItem Content="Every 30 minutes" Tag="30" />
+                            <ComboBoxItem Content="Every hour" Tag="60" />
+                            <ComboBoxItem Content="Every 4 hours" Tag="240" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel x:Name="DebuggingPanel" Visibility="Collapsed">
+                        <TextBlock Text="Feed diagnostics" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Inspect the source XML used to parse an article's feed."
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Margin="0,4,0,12"
+                                   TextWrapping="Wrap" />
+                        <CheckBox x:Name="ShowRawFeedButtonCheckBox"
+                                  Content="Show RAW in the article viewer"
+                                  FontSize="13"
+                                  Padding="2" />
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
