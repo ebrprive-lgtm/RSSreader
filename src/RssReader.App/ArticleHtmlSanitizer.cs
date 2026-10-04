@@ -34,7 +34,7 @@ public static class ArticleHtmlSanitizer
         sanitizer.AllowedAttributes.Clear();
         sanitizer.AllowedAttributes.UnionWith(
         [
-            "alt", "colspan", "datetime", "height", "href", "rowspan", "scope", "src", "title", "width"
+            "alt", "class", "colspan", "datetime", "height", "href", "rowspan", "scope", "src", "title", "width"
         ]);
 
         sanitizer.AllowedSchemes.Clear();

@@ -366,6 +366,35 @@
                         </Style>
                     </Button.Style>
                 </Button>
+                <Button Width="28"
+                        Height="28"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Margin="0,0,6,0"
+                        Content="&#xE8D2;"
+                        FontFamily="Segoe MDL2 Assets"
+                        FontSize="14"
+                        Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Click="ManageFeedTags_Click"
+                        AutomationProperties.Name="{Binding Label, StringFormat='Manage tags for {0}'}"
+                        ToolTip="Manage feed tags">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
+                            <Setter Property="Opacity" Value="0" />
+                            <Setter Property="IsHitTestVisible" Value="False" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                    <Setter Property="Opacity" Value="1" />
+                                    <Setter Property="IsHitTestVisible" Value="True" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                    <Setter Property="Opacity" Value="1" />
+                                    <Setter Property="IsHitTestVisible" Value="True" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </Grid>
         </DataTemplate>
         <DataTemplate x:Key="ArticleRowTemplate">
@@ -386,6 +415,11 @@
                             Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             CommandParameter="{Binding}">
                         <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="Auto" />
@@ -421,6 +455,26 @@
                                        HorizontalAlignment="Right"
                                        FontSize="11"
                                        Foreground="{StaticResource MutedTextBrush}" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.ColumnSpan="4"
+                                       Margin="0,2,0,0"
+                                       FontSize="10"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Run Text="Topics: " FontWeight="SemiBold" />
+                                <Run Text="{Binding TopicSummary, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Grid.Row="2"
+                                       Grid.ColumnSpan="4"
+                                       Margin="0,2,0,0"
+                                       FontSize="10"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Run Text="Feed tags: " FontWeight="SemiBold" />
+                                <Run Text="{Binding FeedTagSummary, Mode=OneWay}" />
+                            </TextBlock>
                         </Grid>
                     </Button>
                 </Grid>
@@ -496,6 +550,22 @@
                                            Foreground="{StaticResource MutedTextBrush}"
                                            TextWrapping="Wrap"
                                            TextTrimming="CharacterEllipsis" />
+                                <TextBlock Margin="0,4,0,0"
+                                           FontSize="10"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Run Text="Topics: " FontWeight="SemiBold" />
+                                    <Run Text="{Binding TopicSummary, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Margin="0,3,0,0"
+                                           FontSize="10"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Run Text="Feed tags: " FontWeight="SemiBold" />
+                                    <Run Text="{Binding FeedTagSummary, Mode=OneWay}" />
+                                </TextBlock>
                             </StackPanel>
                         </Grid>
                     </Button>
@@ -515,7 +585,7 @@
                     Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                     CommandParameter="{Binding}">
                 <Border Width="310"
-                        Height="314"
+                    Height="370"
                         Margin="0,0,12,12"
                         Background="White"
                         BorderBrush="{StaticResource SeparatorBrush}"
@@ -589,6 +659,24 @@
                                        Margin="0,8,0,0"
                                        FontSize="11"
                                        Foreground="{StaticResource MutedTextBrush}" />
+                            <TextBlock Height="14"
+                                       Margin="0,4,0,0"
+                                       FontSize="10"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Run Text="Topics: " FontWeight="SemiBold" />
+                                <Run Text="{Binding TopicSummary, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Height="14"
+                                       Margin="0,3,0,0"
+                                       FontSize="10"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Run Text="Feed tags: " FontWeight="SemiBold" />
+                                <Run Text="{Binding FeedTagSummary, Mode=OneWay}" />
+                            </TextBlock>
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -852,7 +940,28 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <DockPanel Margin="0,0,0,12">
+                    <DockPanel Margin="0,0,0,12" LastChildFill="False">
+                        <StackPanel DockPanel.Dock="Left"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Topic"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       FontSize="13" />
+                            <ComboBox x:Name="ArticleTopicFilterComboBox"
+                                      Width="210"
+                                      Height="34"
+                                      AutomationProperties.Name="Filter articles by topic"
+                                      ItemsSource="{Binding ArticleTopicOptions}"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedItem="{Binding SelectedArticleTopic, Mode=TwoWay}" />
+                            <Button Content="Clear topic"
+                                    Margin="6,0,0,0"
+                                    Padding="8,5"
+                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                    Command="{Binding ClearArticleTopicCommand}"
+                                    Visibility="{Binding IsArticleTopicFilterActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </StackPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <ToggleButton Content="&#xE8D4;"
                                           FontFamily="Segoe MDL2 Assets"
@@ -1017,6 +1126,12 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -1033,24 +1148,91 @@
                                 BorderThickness="0"
                                 Foreground="{StaticResource AccentBrush}"
                                 Command="{Binding BackToListCommand}" />
-                        <TextBlock x:Name="SelectedArticleTitle"
+                        <Grid Grid.Column="1" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="SelectedArticleWebsiteLink"
+                                       Grid.Column="0"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding SelectedArticle.IsWebsiteLinkVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       ToolTip="Open publisher website"
+                                       AutomationProperties.Name="Open publisher website">
+                                <Hyperlink NavigateUri="{Binding SelectedArticle.WebsiteUrl}"
+                                           RequestNavigate="SourceLink_RequestNavigate"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           TextDecorations="{x:Null}"
+                                           Cursor="Hand">
+                                    <Run Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="16" />
+                                </Hyperlink>
+                            </TextBlock>
+                            <TextBlock x:Name="SelectedArticleTitle"
+                                       Grid.Column="1"
+                                       VerticalAlignment="Center"
+                                       FontSize="22"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="NoWrap"
+                                       ToolTip="Open article source">
+                                <Hyperlink NavigateUri="{Binding SelectedArticle.Link}"
+                                           RequestNavigate="SourceLink_RequestNavigate"
+                                           Foreground="{StaticResource TextBrush}"
+                                           TextDecorations="{x:Null}"
+                                           Cursor="Hand">
+                                    <Run Text="{Binding SelectedArticle.Title, Mode=OneWay}" />
+                                </Hyperlink>
+                            </TextBlock>
+                        </Grid>
+                        <TextBlock x:Name="SelectedArticleFeedName"
+                                   Grid.Row="1"
                                    Grid.Column="1"
-                                   VerticalAlignment="Center"
-                                   FontSize="22"
-                                   FontWeight="SemiBold"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,2,0,0"
+                                   FontSize="12"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="NoWrap"
-                                   ToolTip="Open article source">
-                            <Hyperlink NavigateUri="{Binding SelectedArticle.Link}"
-                                       RequestNavigate="SourceLink_RequestNavigate"
-                                       Foreground="{StaticResource TextBrush}"
-                                       TextDecorations="{x:Null}"
-                                       Cursor="Hand">
-                                <Run Text="{Binding SelectedArticle.Title, Mode=OneWay}" />
+                                   Visibility="{Binding HasSelectedArticleFeed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Run Text="Feed: " Foreground="{StaticResource MutedTextBrush}" />
+                            <Hyperlink Command="{Binding NavigateToSelectedArticleFeedCommand}"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       TextDecorations="Underline"
+                                       Cursor="Hand"
+                                       ToolTip="Show articles from this feed"
+                                       AutomationProperties.Name="{Binding SelectedArticle.Source, StringFormat='Open feed {0}'}">
+                                <Run Text="{Binding SelectedArticle.Source, Mode=OneWay}" />
                             </Hyperlink>
                         </TextBlock>
+                        <TextBlock x:Name="SelectedArticleAuthor"
+                                   Grid.Row="2"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,2,0,0"
+                                   FontSize="12"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding SelectedArticle.HasAuthor, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Run Text="By: " FontWeight="SemiBold" />
+                            <Run Text="{Binding SelectedArticle.Author, Mode=OneWay}" />
+                            <Run Text=" (" />
+                            <Run Text="{Binding SelectedArticle.PublishedDateLabel, Mode=OneWay}" />
+                            <Run Text=")" />
+                        </TextBlock>
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,4,0,0"
+                                   FontSize="12"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.Name="Article topics"
+                                   Visibility="{Binding SelectedArticle.HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Run Text="Topics: " FontWeight="SemiBold" />
+                            <Run Text="{Binding SelectedArticle.FullTopicSummary, Mode=OneWay}" />
+                        </TextBlock>
                         <Button Grid.Column="2"
-                                Content="Show RAW"
+                                Content="Show XML"
                                 Click="ShowRawFeed_Click"
                             Style="{StaticResource SecondaryActionButtonStyle}"
                                 Margin="18,0,0,0"
@@ -1209,7 +1391,7 @@
                                         <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="38" />
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>

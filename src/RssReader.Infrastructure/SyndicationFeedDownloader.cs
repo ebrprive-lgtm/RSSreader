@@ -14,6 +14,7 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
 {
     private const int MaximumFeedCharacters = 5_000_000;
     private const int MaximumItems = 500;
+    private const string DublinCoreNamespace = "http://purl.org/dc/elements/1.1/";
     private const string MediaRssNamespace = "http://search.yahoo.com/mrss/";
     private const string RssContentNamespace = "http://purl.org/rss/1.0/modules/content/";
     private static readonly HashSet<string> ArticleMarkupElementNames = new(StringComparer.OrdinalIgnoreCase)
@@ -69,9 +70,55 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
                         : null,
                 HtmlTextParser.ToPlainText(item.Summary?.Text),
                 GetArticleContent(item) ?? GetTextContent(item.Summary),
-                FindImageUrl(item, uri)))
+                FindImageUrl(item, uri),
+                GetCategories(item),
+                GetAuthor(item)))
             .ToArray();
     }
+
+    private static string? GetAuthor(SyndicationItem item)
+    {
+        var creatorExtension = item.ElementExtensions.FirstOrDefault(extension =>
+            string.Equals(extension.OuterName, "creator", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(extension.OuterNamespace, DublinCoreNamespace, StringComparison.Ordinal));
+        if (creatorExtension is not null)
+        {
+            using var reader = creatorExtension.GetReader();
+            reader.MoveToContent();
+            return NormalizeCategoryValue(reader.ReadElementContentAsString());
+        }
+
+        return item.Authors
+            .Select(author => NormalizeCategoryValue(author.Name) ?? NormalizeCategoryValue(author.Email))
+            .FirstOrDefault(author => author is not null);
+    }
+
+    private static IReadOnlyList<ArticleCategory> GetCategories(SyndicationItem item)
+    {
+        var categories = new List<ArticleCategory>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var category in item.Categories)
+        {
+            var term = NormalizeCategoryValue(category.Name);
+            if (term is null)
+            {
+                continue;
+            }
+
+            var scheme = NormalizeCategoryValue(category.Scheme);
+            var label = NormalizeCategoryValue(category.Label);
+            var identity = $"{term}\0{scheme}";
+            if (seen.Add(identity))
+            {
+                categories.Add(new ArticleCategory(term, scheme, label));
+            }
+        }
+
+        return categories;
+    }
+
+    private static string? NormalizeCategoryValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     public async Task<string> DownloadRawContentAsync(
         CatalogFeed feed,

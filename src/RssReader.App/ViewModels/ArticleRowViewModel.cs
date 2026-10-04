@@ -1,3 +1,5 @@
+using RssReader.Domain;
+
 namespace RssReader.App.ViewModels;
 
 public sealed class ArticleRowViewModel(
@@ -15,7 +17,10 @@ public sealed class ArticleRowViewModel(
     string? content = null,
     string? imageUrl = null,
     string? externalId = null,
-    string? feedUrl = null) : ObservableObject
+    string? feedUrl = null,
+    IReadOnlyList<ArticleCategory>? topics = null,
+    string? websiteUrl = null,
+    string? author = null) : ObservableObject
 {
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
@@ -25,6 +30,12 @@ public sealed class ArticleRowViewModel(
     public DateTimeOffset PublishedAt { get; } = publishedAt;
     public string Folder { get; } = folder;
     public IReadOnlyList<string> Tags { get; } = tags;
+    public string FeedTagSummary { get; } = FormatFeedTagSummary(tags);
+    public bool HasFeedTags => !string.IsNullOrEmpty(FeedTagSummary);
+    public IReadOnlyList<ArticleCategory> Topics { get; } = topics ?? [];
+    public string TopicSummary { get; } = FormatTopicSummary(topics ?? []);
+    public string FullTopicSummary { get; } = FormatTopicSummary(topics ?? [], int.MaxValue);
+    public bool HasTopics => !string.IsNullOrEmpty(TopicSummary);
     public string Summary { get; } = summary;
     public string? ArticleId { get; } = articleId;
     public string? FeedId { get; } = feedId;
@@ -33,6 +44,9 @@ public sealed class ArticleRowViewModel(
     public string? ImageUrl { get; } = imageUrl;
     public string? ExternalId { get; } = externalId;
     public string? FeedUrl { get; } = feedUrl;
+    public string? WebsiteUrl { get; } = websiteUrl;
+    public string? Author { get; } = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
+    public bool HasAuthor => !string.IsNullOrWhiteSpace(Author);
     public string ReadLaterAutomationName => IsSaved ? "Remove from read later" : "Add to read later";
     public string SourceInitials
     {
@@ -57,6 +71,9 @@ public sealed class ArticleRowViewModel(
     public bool IsSourceLinkVisible =>
         Uri.TryCreate(Link, UriKind.Absolute, out var uri) &&
         (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    public bool IsWebsiteLinkVisible =>
+        Uri.TryCreate(WebsiteUrl, UriKind.Absolute, out var websiteUri) &&
+        (websiteUri.Scheme == Uri.UriSchemeHttp || websiteUri.Scheme == Uri.UriSchemeHttps);
     public string AgeLabel => FormatAge(PublishedAt, DateTimeOffset.Now);
     public string PublishedDateLabel => PublishedAt.ToLocalTime().ToString("MMM d, yyyy");
 
@@ -72,6 +89,32 @@ public sealed class ArticleRowViewModel(
         "rss",
         "the"
     };
+
+    private static string FormatTopicSummary(IReadOnlyList<ArticleCategory> topics, int maximumNames = 3)
+    {
+        var names = topics
+            .Select(topic => string.IsNullOrWhiteSpace(topic.Label) ? topic.Term.Trim() : topic.Label.Trim())
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var visibleNames = names.Take(maximumNames).ToArray();
+        return names.Length > maximumNames
+            ? $"{string.Join(" / ", visibleNames)} +{names.Length - maximumNames}"
+            : string.Join(" / ", visibleNames);
+    }
+
+    private static string FormatFeedTagSummary(IReadOnlyList<string> tags)
+    {
+        var names = tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var visibleNames = names.Take(3).ToArray();
+        return names.Length > 3
+            ? $"{string.Join(" / ", visibleNames)} +{names.Length - 3}"
+            : string.Join(" / ", visibleNames);
+    }
 
     public bool IsRead
     {

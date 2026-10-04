@@ -11,6 +11,8 @@ internal static class ArticleHtmlDocumentBuilder
         body { color: #202923; font: 16px/1.65 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
         main { max-width: 860px; margin: 0 auto; padding: 12px 0 24px; }
         img { max-width: 100%; height: auto; vertical-align: middle; }
+        img.reader-centered-image { display: block; margin: 16px auto; }
+        a.reader-centered-image-link { clear: both; display: block; text-align: center; }
         figure { margin: 16px 0; text-align: center; }
         figcaption { color: #5d6a62; font-size: 0.9em; margin-top: 6px; }
         a { color: #176b9a; text-decoration: underline; }
@@ -25,7 +27,6 @@ internal static class ArticleHtmlDocumentBuilder
     public static string Build(
         string? content,
         string? summary,
-        string? imageUrl,
         string? articleUrl,
         string? feedUrl)
     {
@@ -33,13 +34,9 @@ internal static class ArticleHtmlDocumentBuilder
         var bodyFragment = string.IsNullOrWhiteSpace(content)
             ? $"<p>{EncodePlainText(summary)}</p>"
             : content;
+        bodyFragment = RemoveDuplicateLeadingImage(bodyFragment, baseUrl);
+        bodyFragment = PreserveCenteredImageAlignment(bodyFragment);
         var sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl);
-
-        if (GetWebUrl(imageUrl) is { } leadImageUrl && !ContainsWebImage(sanitizedFragment))
-        {
-            var imageMarkup = $"<figure><img src=\"{WebUtility.HtmlEncode(leadImageUrl)}\" alt=\"Article image\"></figure>";
-            sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(imageMarkup + bodyFragment, baseUrl);
-        }
 
         return $"""
             <!doctype html>
@@ -65,13 +62,91 @@ internal static class ArticleHtmlDocumentBuilder
             ? uri.AbsoluteUri
             : null;
 
-    private static bool ContainsWebImage(string fragment)
+    private static string RemoveDuplicateLeadingImage(string fragment, string? baseUrl)
     {
         var document = new HtmlDocument();
         document.LoadHtml(fragment);
-        var images = document.DocumentNode.SelectNodes("//img[@src]");
-        return images?.Any(image =>
-            Uri.TryCreate(image.GetAttributeValue("src", string.Empty), UriKind.Absolute, out var uri) && IsWebUri(uri)) == true;
+        var images = document.DocumentNode.SelectNodes("//img[@src or @srcset]");
+        if (images is null || images.Count < 2)
+        {
+            return fragment;
+        }
+
+        var leadingImageSources = GetImageSources(images[0], baseUrl).ToHashSet(StringComparer.Ordinal);
+        if (leadingImageSources.Count == 0 || !images.Skip(1).Any(image =>
+                GetImageSources(image, baseUrl).Any(leadingImageSources.Contains)))
+        {
+            return fragment;
+        }
+
+        images[0].Remove();
+        return document.DocumentNode.InnerHtml;
+    }
+
+    private static string PreserveCenteredImageAlignment(string fragment)
+    {
+        var document = new HtmlDocument();
+        document.LoadHtml(fragment);
+        var centeredImages = document.DocumentNode.SelectNodes("//img[@class]")?
+            .Where(image => image.GetAttributeValue("class", string.Empty)
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Contains("aligncenter", StringComparer.OrdinalIgnoreCase))
+            .ToArray() ?? [];
+
+        foreach (var element in document.DocumentNode.DescendantsAndSelf())
+        {
+            element.Attributes.Remove("class");
+        }
+
+        foreach (var image in centeredImages)
+        {
+            image.Attributes.Add("class", "reader-centered-image");
+            if (image.ParentNode.Name.Equals("a", StringComparison.OrdinalIgnoreCase))
+            {
+                image.ParentNode.Attributes.Add("class", "reader-centered-image-link");
+            }
+        }
+
+        return document.DocumentNode.InnerHtml;
+    }
+
+    private static IEnumerable<string> GetImageSources(HtmlNode image, string? baseUrl)
+    {
+        var source = image.GetAttributeValue("src", string.Empty);
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            yield return NormalizeImageSource(source, baseUrl);
+        }
+
+        var sourceSet = image.GetAttributeValue("srcset", string.Empty);
+        if (string.IsNullOrWhiteSpace(sourceSet))
+        {
+            yield break;
+        }
+
+        foreach (var candidate in sourceSet.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidateSource = candidate.Trim()
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(candidateSource))
+            {
+                yield return NormalizeImageSource(candidateSource, baseUrl);
+            }
+        }
+    }
+
+    private static string NormalizeImageSource(string source, string? baseUrl)
+    {
+        if (Uri.TryCreate(source, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri.AbsoluteUri;
+        }
+
+        return Uri.TryCreate(baseUrl, UriKind.Absolute, out var baseUri) &&
+               Uri.TryCreate(baseUri, source, out var resolvedUri)
+            ? resolvedUri.AbsoluteUri
+            : source.Trim();
     }
 
     private static bool IsWebUri(Uri uri) =>

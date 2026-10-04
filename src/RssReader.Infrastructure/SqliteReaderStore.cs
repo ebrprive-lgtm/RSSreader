@@ -51,7 +51,15 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 Summary TEXT NULL,
                 Content TEXT NULL,
                 ImageUrl TEXT NULL,
+                Author TEXT NULL,
                 UNIQUE (FeedId, ExternalId)
+            );
+            CREATE TABLE IF NOT EXISTS ArticleCategories (
+                ArticleId TEXT NOT NULL REFERENCES Articles(Id) ON DELETE CASCADE,
+                Term TEXT NOT NULL COLLATE NOCASE,
+                Scheme TEXT NOT NULL COLLATE NOCASE DEFAULT '',
+                Label TEXT NULL,
+                PRIMARY KEY (ArticleId, Term, Scheme)
             );
             CREATE TABLE IF NOT EXISTS ProfileArticleStates (
                 ProfileId TEXT NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
@@ -61,6 +69,8 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 PRIMARY KEY (ProfileId, ArticleId)
             );
             CREATE INDEX IF NOT EXISTS IX_Articles_Feed_Published ON Articles(FeedId, PublishedAt DESC);
+            CREATE INDEX IF NOT EXISTS IX_ArticleCategories_Term_Scheme_Article
+                ON ArticleCategories(Term COLLATE NOCASE, Scheme COLLATE NOCASE, ArticleId);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
 
@@ -68,9 +78,11 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         columnsCommand.CommandText = "PRAGMA table_info(Articles);";
         await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken);
         var hasImageUrl = false;
+        var hasAuthor = false;
         while (await columnsReader.ReadAsync(cancellationToken))
         {
             hasImageUrl |= columnsReader.GetString(1) == "ImageUrl";
+            hasAuthor |= columnsReader.GetString(1) == "Author";
         }
 
         await columnsReader.DisposeAsync();
@@ -78,6 +90,13 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         {
             await using var migrationCommand = connection.CreateCommand();
             migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN ImageUrl TEXT NULL;";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!hasAuthor)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN Author TEXT NULL;";
             await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -97,7 +116,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT subscription.ProfileId, feed.Id, feed.Name, feed.FeedUrl, subscription.FolderName
+            SELECT subscription.ProfileId, feed.Id, feed.Name, feed.FeedUrl, subscription.FolderName, feed.WebsiteUrl
             FROM ProfileSubscriptions AS subscription
             INNER JOIN CatalogFeeds AS feed ON feed.Id = subscription.FeedId
             WHERE subscription.ProfileId = $profileId
@@ -113,7 +132,8 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetString(3),
-                reader.GetString(4)));
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5)));
         }
 
         return subscriptions;
@@ -241,11 +261,42 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
+        var categoriesByArticle = new Dictionary<string, List<ArticleCategory>>(StringComparer.Ordinal);
+        await using (var categoriesCommand = connection.CreateCommand())
+        {
+            categoriesCommand.CommandText = """
+                SELECT category.ArticleId, category.Term, category.Scheme, category.Label
+                FROM ArticleCategories AS category
+                INNER JOIN Articles AS article ON article.Id = category.ArticleId
+                INNER JOIN ProfileSubscriptions AS subscription ON subscription.FeedId = article.FeedId
+                WHERE subscription.ProfileId = $profileId
+                ORDER BY category.Term COLLATE NOCASE;
+                """;
+            categoriesCommand.Parameters.AddWithValue("$profileId", profileId);
+            await using var categoriesReader = await categoriesCommand.ExecuteReaderAsync(cancellationToken);
+            while (await categoriesReader.ReadAsync(cancellationToken))
+            {
+                var articleId = categoriesReader.GetString(0);
+                if (!categoriesByArticle.TryGetValue(articleId, out var categories))
+                {
+                    categories = [];
+                    categoriesByArticle.Add(articleId, categories);
+                }
+
+                var scheme = categoriesReader.GetString(2);
+                categories.Add(new ArticleCategory(
+                    categoriesReader.GetString(1),
+                    scheme.Length == 0 ? null : scheme,
+                    categoriesReader.IsDBNull(3) ? null : categoriesReader.GetString(3)));
+            }
+        }
+
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT article.Id, article.FeedId, article.ExternalId, article.Title, article.Link,
                      article.PublishedAt, article.Summary, article.Content, article.ImageUrl, feed.Name,
                    subscription.FolderName, state.IsRead, state.IsSaved
+                   , article.Author
             FROM Articles AS article
             INNER JOIN ProfileSubscriptions AS subscription ON subscription.FeedId = article.FeedId
             INNER JOIN CatalogFeeds AS feed ON feed.Id = article.FeedId
@@ -271,7 +322,11 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 publishedAt,
                 reader.IsDBNull(6) ? null : HtmlTextParser.ToPlainText(reader.GetString(6)),
                 reader.IsDBNull(7) ? null : reader.GetString(7),
-                reader.IsDBNull(8) ? null : reader.GetString(8));
+                reader.IsDBNull(8) ? null : reader.GetString(8))
+            {
+                Categories = categoriesByArticle.GetValueOrDefault(reader.GetString(0)) ?? [],
+                Author = reader.IsDBNull(13) ? null : reader.GetString(13)
+            };
             articles.Add(new ArticleForProfile(
                 article,
                 reader.GetString(9),
@@ -301,8 +356,8 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content, ImageUrl)
-                VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content, $imageUrl)
+                INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content, ImageUrl, Author)
+                VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content, $imageUrl, $author)
                 ON CONFLICT(Id) DO NOTHING;
                 """;
             command.Parameters.AddWithValue("$id", article.Id);
@@ -314,24 +369,55 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             command.Parameters.AddWithValue("$summary", (object?)article.Summary ?? DBNull.Value);
             command.Parameters.AddWithValue("$content", (object?)article.Content ?? DBNull.Value);
             command.Parameters.AddWithValue("$imageUrl", (object?)article.ImageUrl ?? DBNull.Value);
+            command.Parameters.AddWithValue("$author", (object?)article.Author ?? DBNull.Value);
             var inserted = await command.ExecuteNonQueryAsync(cancellationToken);
             if (inserted > 0)
             {
                 addedCount += inserted;
-                continue;
+            }
+            else
+            {
+                command.CommandText = """
+                    UPDATE Articles SET
+                        Title = $title,
+                        Link = $link,
+                        PublishedAt = $publishedAt,
+                        Summary = $summary,
+                        Content = $content,
+                        ImageUrl = $imageUrl,
+                        Author = $author
+                    WHERE Id = $id;
+                    """;
+                await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            command.CommandText = """
-                UPDATE Articles SET
-                    Title = $title,
-                    Link = $link,
-                    PublishedAt = $publishedAt,
-                    Summary = $summary,
-                    Content = $content,
-                    ImageUrl = $imageUrl
-                WHERE Id = $id;
-                """;
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            await using (var deleteCategoriesCommand = connection.CreateCommand())
+            {
+                deleteCategoriesCommand.Transaction = transaction;
+                deleteCategoriesCommand.CommandText = "DELETE FROM ArticleCategories WHERE ArticleId = $articleId;";
+                deleteCategoriesCommand.Parameters.AddWithValue("$articleId", article.Id);
+                await deleteCategoriesCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            foreach (var category in article.Categories)
+            {
+                if (string.IsNullOrWhiteSpace(category.Term))
+                {
+                    continue;
+                }
+
+                await using var categoryCommand = connection.CreateCommand();
+                categoryCommand.Transaction = transaction;
+                categoryCommand.CommandText = """
+                    INSERT OR IGNORE INTO ArticleCategories (ArticleId, Term, Scheme, Label)
+                    VALUES ($articleId, $term, $scheme, $label);
+                    """;
+                categoryCommand.Parameters.AddWithValue("$articleId", article.Id);
+                categoryCommand.Parameters.AddWithValue("$term", category.Term.Trim());
+                categoryCommand.Parameters.AddWithValue("$scheme", category.Scheme?.Trim() ?? string.Empty);
+                categoryCommand.Parameters.AddWithValue("$label", (object?)category.Label?.Trim() ?? DBNull.Value);
+                await categoryCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
         }
 
         await transaction.CommitAsync(cancellationToken);

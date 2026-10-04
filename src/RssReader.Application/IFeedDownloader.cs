@@ -24,4 +24,6 @@ public sealed record DownloadedFeedItem(
     DateTimeOffset? PublishedAt,
     string? Summary,
     string? Content,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    IReadOnlyList<ArticleCategory>? Categories = null,
+    string? Author = null);

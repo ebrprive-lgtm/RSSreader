@@ -82,6 +82,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     }
 
     public ObservableCollection<CatalogFeedListItem> Feeds { get; private set; } = [];
+    internal Func<CancellationToken, Task>? CatalogRefreshRequested { get; set; }
     public ICollectionView VisibleFeeds { get; private set; }
     public ObservableCollection<CatalogCategory> Categories { get; } = [];
     public ObservableCollection<CatalogCollection> Collections { get; } = [];
@@ -308,7 +309,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default) =>
-        await RefreshAsync(cancellationToken);
+        await RefreshAsync(cancellationToken, notifyMainCatalog: false);
 
     public async Task ImportOpmlAsync(Stream stream, CancellationToken cancellationToken = default)
     {
@@ -325,7 +326,9 @@ public sealed class CatalogManagementViewModel : ObservableObject
         }
     }
 
-    private async Task RefreshAsync(CancellationToken cancellationToken = default)
+    private async Task RefreshAsync(
+        CancellationToken cancellationToken = default,
+        bool notifyMainCatalog = true)
     {
         var selectedCategoryId = SelectedCategoryFilter?.CategoryId;
         var selectedCollectionId = SelectedCollectionFilter?.CollectionId;
@@ -419,6 +422,11 @@ public sealed class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(MetadataReviewSummary));
         OnPropertyChanged(nameof(FeedResultsEmptyMessage));
         RefreshVisibleFeeds();
+
+        if (notifyMainCatalog && CatalogRefreshRequested is { } refreshMainCatalogAsync)
+        {
+            await refreshMainCatalogAsync(cancellationToken);
+        }
     }
 
     private ListCollectionView CreateVisibleFeedView(ObservableCollection<CatalogFeedListItem> feeds) => new(feeds)

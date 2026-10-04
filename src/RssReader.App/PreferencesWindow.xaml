@@ -267,7 +267,7 @@
                                    Margin="0,4,0,12"
                                    TextWrapping="Wrap" />
                         <CheckBox x:Name="ShowRawFeedButtonCheckBox"
-                                  Content="Show RAW in the article viewer"
+                                  Content="Show XML in the article viewer"
                                   FontSize="13"
                                   Padding="2" />
                     </StackPanel>

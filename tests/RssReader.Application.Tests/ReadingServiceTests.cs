@@ -39,6 +39,39 @@ public sealed class ReadingServiceTests
     }
 
     [TestMethod]
+    public async Task GetArticlesFiltersPublisherTopicsSeparatelyFromProfileFeedTags()
+    {
+        var profile = Profile.CreateRegular("Reader");
+        var feed = new CatalogFeed("feed-1", "Press Desk", "https://example.com/feed.xml", null, null);
+        var readerStore = new MemoryReaderStore();
+        readerStore.Subscriptions.Add(new ProfileSubscription(profile.Id, feed.Id, feed.Name, feed.FeedUrl, "News"));
+        readerStore.Tags.Add(new ProfileFeedTag(profile.Id, feed.Id, "Reviews"));
+        readerStore.Tags.Add(new ProfileFeedTag(profile.Id, feed.Id, "Press Releases"));
+        readerStore.Articles.Add(new ArticleForProfile(
+            new FeedArticle("article-1", feed.Id, "item-1", "Official update", null, DateTimeOffset.UtcNow, null, null)
+            {
+                Categories = [new ArticleCategory("Press Releases", "https://example.com/topics")]
+            },
+            feed.Name,
+            "News",
+            false,
+            false));
+        readerStore.Articles.Add(new ArticleForProfile(
+            new FeedArticle("article-2", feed.Id, "item-2", "Review", null, DateTimeOffset.UtcNow, null, null),
+            feed.Name,
+            "News",
+            false,
+            false));
+        var service = new ReadingService(readerStore, new MemoryCatalogStore([feed]));
+
+        var result = await service.GetArticlesAsync(profile.Id, new ArticleFilter(
+            TagName: "Reviews",
+            Topic: new ArticleCategory("press releases", "https://example.com/topics")));
+
+        Assert.AreEqual("article-1", result.Single().Article.Id);
+    }
+
+    [TestMethod]
     public async Task SubscribeRequiresExistingCatalogFeedAndSupportsCatalogMaster()
     {
         var catalogFeed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);

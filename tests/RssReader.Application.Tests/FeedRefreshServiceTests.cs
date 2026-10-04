@@ -19,7 +19,18 @@ public sealed class FeedRefreshServiceTests
         ]);
         var downloader = new FeedDownloaderStub(new Dictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>>
         {
-            [firstFeed.Id] = () => [new DownloadedFeedItem("external-1", "Headline", "https://example.com/story", null, "Summary", "Content")],
+            [firstFeed.Id] = () =>
+            [
+                new DownloadedFeedItem(
+                    "external-1",
+                    "Headline",
+                    "https://example.com/story",
+                    null,
+                    "Summary",
+                    "Content",
+                    Categories: [new ArticleCategory("Press Releases")],
+                    Author: "Example Author")
+            ],
             [secondFeed.Id] = () => throw new HttpRequestException("Feed unavailable")
         });
         var service = new FeedRefreshService(readerStore, new CatalogStoreStub([firstFeed, secondFeed]), downloader);
@@ -36,6 +47,8 @@ public sealed class FeedRefreshServiceTests
         Assert.AreEqual(0, secondRefresh.ArticlesAdded);
         Assert.AreEqual(1, readerStore.SavedArticles.Select(item => item.Article.Id).Distinct().Count());
         Assert.IsTrue(readerStore.SavedArticles.All(item => item.FeedId == "feed-1" && item.Article.FeedId == "feed-1"));
+        Assert.AreEqual("Press Releases", readerStore.SavedArticles.First().Article.Categories.Single().Term);
+        Assert.AreEqual("Example Author", readerStore.SavedArticles.First().Article.Author);
     }
 
     [TestMethod]

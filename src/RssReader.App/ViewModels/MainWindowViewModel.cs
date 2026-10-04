@@ -11,6 +11,10 @@ namespace RssReader.App.ViewModels;
 
 public sealed record CatalogCategoryOption(string? CategoryId, string Name);
 public sealed record CatalogCollectionOption(string? CollectionId, string Name, IReadOnlySet<string> FeedIds);
+public sealed record ArticleTopicOption(string? Term, string? Scheme, string Name, int Count)
+{
+    public string DisplayName => $"{Name} ({Count:N0})";
+}
 
 public sealed class MainWindowViewModel : ObservableObject
 {
@@ -38,6 +42,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _catalogLoadErrorMessage = string.Empty;
     private CatalogCategoryOption? _selectedCatalogCategory;
     private CatalogCollectionOption? _selectedCatalogCollection;
+    private ArticleTopicOption? _selectedArticleTopic;
     private ArticleRowViewModel? _selectedArticle;
     private bool _isSidebarPinned = true;
     private bool _isRefreshing;
@@ -51,6 +56,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isCatalogLoaded;
     private bool _hasAppliedStartPage;
     private bool _hasLoadedInitialReaderData;
+    private bool _updatingArticleTopicOptions;
     private int _folderArticlesPerFeedLimit;
 
     public MainWindowViewModel(Profile profile) : this(profile, null, null, null)
@@ -118,6 +124,7 @@ public sealed class MainWindowViewModel : ObservableObject
         QuickTargets = [];
         CatalogCategories = [];
         CatalogCategoryOptions = [];
+        ArticleTopicOptions = [];
         var allCategoriesOption = new CatalogCategoryOption(null, $"All categories ({CatalogFeeds.Count})");
         CatalogCategoryOptions.Add(allCategoriesOption);
         _selectedCatalogCategory = allCategoriesOption;
@@ -134,6 +141,10 @@ public sealed class MainWindowViewModel : ObservableObject
         CatalogManagement = profile.IsCatalogMaster && catalogService is not null
             ? new CatalogManagementViewModel(profile, catalogService, catalogFeedPreviewService)
             : null;
+        if (CatalogManagement is not null)
+        {
+            CatalogManagement.CatalogRefreshRequested = RefreshCatalogAfterManagementChangeAsync;
+        }
         ApplyQuickFilter();
 
         var now = DateTimeOffset.Now;
@@ -153,12 +164,14 @@ public sealed class MainWindowViewModel : ObservableObject
         NavigateCommand = new RelayCommand<SidebarLink>(NavigateTo);
         ActivateSidebarLinkCommand = new RelayCommand<SidebarLink>(ActivateSidebarLink);
         SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
+        NavigateToSelectedArticleFeedCommand = new RelayCommand(NavigateToSelectedArticleFeed);
         BackToListCommand = new RelayCommand(() => SelectedArticle = null);
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
         ToggleReadCommand = new RelayCommand(ToggleRead);
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
+        ClearArticleTopicCommand = new RelayCommand(ClearArticleTopicFilter);
         RetryCatalogLoadCommand = new AsyncCommand(() => LoadCatalogAsync(CancellationToken.None), () => !IsCatalogLoading);
         FollowSelectedCatalogFeedsCommand = new AsyncCommand(FollowSelectedCatalogFeedsAsync);
         ClearSelectedCatalogFeedsCommand = new RelayCommand(ClearSelectedCatalogFeeds, () => HasSelectedCatalogFeeds);
@@ -198,6 +211,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<CatalogCategory> CatalogCategories { get; }
     public ObservableCollection<CatalogCategoryOption> CatalogCategoryOptions { get; }
     public ObservableCollection<CatalogCollectionOption> CatalogCollectionOptions { get; }
+    public ObservableCollection<ArticleTopicOption> ArticleTopicOptions { get; }
     public ICollectionView CatalogFeedListView { get; }
     public ObservableCollection<CatalogCollection> CatalogCollections { get; }
     public ObservableCollection<string> FolderNames { get; }
@@ -206,12 +220,14 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<SidebarLink> NavigateCommand { get; }
     public RelayCommand<SidebarLink> ActivateSidebarLinkCommand { get; }
     public RelayCommand<ArticleRowViewModel> SelectArticleCommand { get; }
+    public RelayCommand NavigateToSelectedArticleFeedCommand { get; }
     public RelayCommand BackToListCommand { get; }
     public RelayCommand ToggleSavedCommand { get; }
     public RelayCommand ToggleReadCommand { get; }
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand ClearCatalogFiltersCommand { get; }
+    public RelayCommand ClearArticleTopicCommand { get; }
     public AsyncCommand RetryCatalogLoadCommand { get; }
     public AsyncCommand FollowSelectedCatalogFeedsCommand { get; }
     public RelayCommand ClearSelectedCatalogFeedsCommand { get; }
@@ -243,6 +259,71 @@ public sealed class MainWindowViewModel : ObservableObject
             article.Link,
             article.Title,
             cancellationToken);
+    }
+
+    public async Task<(IReadOnlyList<string> AvailableTags, IReadOnlyList<string> AssignedTags)> GetFeedTagEditorDataAsync(
+        string feedId,
+        CancellationToken cancellationToken = default)
+    {
+        var readingService = _readingService ?? throw new InvalidOperationException("Feed tags are unavailable.");
+        var subscriptions = await readingService.GetSubscriptionsAsync(ActiveProfile.Id, cancellationToken);
+        if (subscriptions.All(subscription => subscription.FeedId != feedId))
+        {
+            throw new ArgumentException("The feed is not subscribed in this profile.", nameof(feedId));
+        }
+
+        var tags = await readingService.GetFeedTagsAsync(ActiveProfile.Id, cancellationToken);
+        var availableTags = tags
+            .Select(tag => tag.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var assignedTags = tags
+            .Where(tag => tag.FeedId == feedId)
+            .Select(tag => tag.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return (availableTags, assignedTags);
+    }
+
+    public async Task UpdateFeedTagsAsync(
+        string feedId,
+        IEnumerable<string> tagNames,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(tagNames);
+        var readingService = _readingService ?? throw new InvalidOperationException("Feed tags are unavailable.");
+        var subscriptions = await readingService.GetSubscriptionsAsync(ActiveProfile.Id, cancellationToken);
+        if (subscriptions.All(subscription => subscription.FeedId != feedId))
+        {
+            throw new ArgumentException("The feed is not subscribed in this profile.", nameof(feedId));
+        }
+
+        var assignments = await readingService.GetFeedTagsAsync(ActiveProfile.Id, cancellationToken);
+        var existingNames = assignments
+            .Where(tag => tag.FeedId == feedId)
+            .Select(tag => tag.Name)
+            .ToArray();
+        var desiredNames = tagNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var desiredNameSet = desiredNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var existingNameSet = existingNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var existingName in existingNames.Where(name => !desiredNameSet.Contains(name)))
+        {
+            await readingService.RemoveFeedTagAsync(ActiveProfile, feedId, existingName, cancellationToken);
+        }
+
+        foreach (var desiredName in desiredNames.Where(name => !existingNameSet.Contains(name)))
+        {
+            await readingService.AddFeedTagAsync(ActiveProfile, feedId, desiredName, cancellationToken);
+        }
+
+        await LoadProfileReaderDataAsync(cancellationToken);
     }
 
     public event Action? ProfileSwitchRequested;
@@ -419,7 +500,10 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task LoadCatalogAsync(CancellationToken cancellationToken)
+    private Task RefreshCatalogAfterManagementChangeAsync(CancellationToken cancellationToken) =>
+        LoadCatalogAsync(cancellationToken, initializeCatalogManagement: false);
+
+    private async Task LoadCatalogAsync(CancellationToken cancellationToken, bool initializeCatalogManagement = true)
     {
         if (_catalogService is null)
         {
@@ -508,7 +592,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
             NotifyCatalogFeedViewChanged();
 
-            if (CatalogManagement is not null)
+            if (initializeCatalogManagement && CatalogManagement is not null)
             {
                 await CatalogManagement.InitializeAsync(cancellationToken);
             }
@@ -586,6 +670,27 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
     }
+
+    public ArticleTopicOption? SelectedArticleTopic
+    {
+        get => _selectedArticleTopic;
+        set
+        {
+            if (_updatingArticleTopicOptions)
+            {
+                _selectedArticleTopic = value;
+                return;
+            }
+
+            if (SetProperty(ref _selectedArticleTopic, value))
+            {
+                OnPropertyChanged(nameof(IsArticleTopicFilterActive));
+                ApplyArticleFilters();
+            }
+        }
+    }
+
+    public bool IsArticleTopicFilterActive => SelectedArticleTopic?.Term is not null;
 
     public string QuickQuery
     {
@@ -739,6 +844,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsReadingViewVisible));
                 OnPropertyChanged(nameof(IsRawFeedButtonVisible));
+                OnPropertyChanged(nameof(HasSelectedArticleFeed));
             }
         }
     }
@@ -761,6 +867,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible && !IsGoToRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
     public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
+    public bool HasSelectedArticleFeed => SelectedArticle?.FeedId is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
     public bool IsCatalogAdminVisible => IsCatalogMaster && ActiveRoute == "Manage catalog";
     public bool IsArticleListEmpty => VisibleArticles.Count == 0;
@@ -1102,6 +1209,21 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedArticle = article;
     }
 
+    private void NavigateToSelectedArticleFeed()
+    {
+        if (SelectedArticle?.FeedId is not { } feedId)
+        {
+            return;
+        }
+
+        var feedLink = FeedLinks.FirstOrDefault(link =>
+            string.Equals(link.Route, $"feed:{feedId}", StringComparison.Ordinal));
+        if (feedLink is not null)
+        {
+            NavigateTo(feedLink);
+        }
+    }
+
     private void ToggleSaved()
     {
         if (SelectedArticle is not null)
@@ -1157,9 +1279,22 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         TagLinks.Clear();
-        foreach (var tagName in tags.Select(item => item.Name).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name))
+        foreach (var tagGroup in tags
+                     .GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
         {
-            TagLinks.Add(new SidebarLink($"tag:{tagName}", tagName, "\uE8D2"));
+            var tagName = tagGroup.First().Name;
+            var feedCount = tagGroup.Select(item => item.FeedId).Distinct(StringComparer.Ordinal).Count();
+            TagLinks.Add(new SidebarLink($"tag:{tagName}", tagName, "\uE8D2", $"({feedCount})"));
+        }
+
+        if (ActiveRoute.StartsWith("tag:", StringComparison.Ordinal) &&
+            !TagLinks.Any(link => string.Equals(
+                link.Label,
+                ActiveRoute["tag:".Length..],
+                StringComparison.OrdinalIgnoreCase)))
+        {
+            ActiveRoute = "All";
         }
 
         foreach (var feed in CatalogFeeds)
@@ -1188,7 +1323,10 @@ public sealed class MainWindowViewModel : ObservableObject
                 item.Article.Content,
                 item.Article.ImageUrl,
                 item.Article.ExternalId,
-                subscriptionsByFeed.GetValueOrDefault(item.Article.FeedId)?.FeedUrl);
+                subscriptionsByFeed.GetValueOrDefault(item.Article.FeedId)?.FeedUrl,
+                item.Article.Categories,
+                subscriptionsByFeed.GetValueOrDefault(item.Article.FeedId)?.WebsiteUrl,
+                item.Article.Author);
             row.PropertyChanged += OnArticlePropertyChanged;
             _allArticles.Add(row);
         }
@@ -1514,7 +1652,10 @@ public sealed class MainWindowViewModel : ObservableObject
                     article.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     article.Source.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     article.Summary.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    (article.Content?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false));
+                    (article.Content?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    article.Topics.Any(topic =>
+                        topic.Term.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        (topic.Label?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)));
         }
 
         if (UnreadOnly)
@@ -1525,6 +1666,16 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             articles = articles.Where(article => article.IsSaved);
         }
+
+        var topicScope = articles.ToArray();
+        UpdateArticleTopicOptions(topicScope);
+        if (SelectedArticleTopic is { Term: { } topicTerm } selectedTopic)
+        {
+            articles = topicScope.Where(article => article.Topics.Any(topic =>
+                string.Equals(topic.Term, topicTerm, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(topic.Scheme, selectedTopic.Scheme, StringComparison.OrdinalIgnoreCase)));
+        }
+
         if (IsSortByFolder && ActiveRoute.StartsWith("folder:", StringComparison.Ordinal))
         {
             articles = articles
@@ -1538,6 +1689,75 @@ public sealed class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsArticleListEmpty));
     }
+
+    private void UpdateArticleTopicOptions(IReadOnlyList<ArticleRowViewModel> articles)
+    {
+        var previousSelection = _selectedArticleTopic;
+        var topicCounts = new Dictionary<string, (string Term, string? Scheme, string Name, int Count)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var article in articles)
+        {
+            var seenOnArticle = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var topic in article.Topics)
+            {
+                var term = topic.Term.Trim();
+                if (term.Length == 0)
+                {
+                    continue;
+                }
+
+                var scheme = string.IsNullOrWhiteSpace(topic.Scheme) ? null : topic.Scheme.Trim();
+                var identity = $"{term}\0{scheme}";
+                if (!seenOnArticle.Add(identity))
+                {
+                    continue;
+                }
+
+                if (topicCounts.TryGetValue(identity, out var existing))
+                {
+                    topicCounts[identity] = (existing.Term, existing.Scheme, existing.Name, existing.Count + 1);
+                }
+                else
+                {
+                    var name = string.IsNullOrWhiteSpace(topic.Label) ? term : topic.Label.Trim();
+                    topicCounts.Add(identity, (term, scheme, name, 1));
+                }
+            }
+        }
+
+        var options = topicCounts.Values
+            .OrderBy(topic => topic.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(topic => topic.Term, StringComparer.OrdinalIgnoreCase)
+            .Select(topic => new ArticleTopicOption(topic.Term, topic.Scheme, topic.Name, topic.Count))
+            .ToList();
+        var allTopicsOption = new ArticleTopicOption(null, null, "All topics", articles.Count);
+        options.Insert(0, allTopicsOption);
+        _updatingArticleTopicOptions = true;
+        try
+        {
+            ArticleTopicOptions.Clear();
+            foreach (var option in options)
+            {
+                ArticleTopicOptions.Add(option);
+            }
+
+            var selectedOption = previousSelection?.Term is null
+                ? allTopicsOption
+                : options.FirstOrDefault(option =>
+                    string.Equals(option.Term, previousSelection.Term, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(option.Scheme, previousSelection.Scheme, StringComparison.OrdinalIgnoreCase))
+                  ?? allTopicsOption;
+            _selectedArticleTopic = selectedOption;
+            OnPropertyChanged(nameof(SelectedArticleTopic));
+            OnPropertyChanged(nameof(IsArticleTopicFilterActive));
+        }
+        finally
+        {
+            _updatingArticleTopicOptions = false;
+        }
+    }
+
+    private void ClearArticleTopicFilter() =>
+        SelectedArticleTopic = ArticleTopicOptions.FirstOrDefault(option => option.Term is null);
 
     private string GetStartPageRoute() => _profilePreferences.StartPage switch
     {

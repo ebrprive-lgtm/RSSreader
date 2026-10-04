@@ -81,6 +81,32 @@ public partial class MainWindow : Window
 
     private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
 
+    private async void ManageFeedTags_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null || sender is not FrameworkElement { DataContext: SidebarLink { IsFeedEntry: true } feedLink })
+        {
+            return;
+        }
+
+        var feedId = feedLink.Route["feed:".Length..];
+        try
+        {
+            var tagData = await _viewModel.GetFeedTagEditorDataAsync(feedId);
+            var dialog = new FeedTagEditorWindow(feedLink.Label, tagData.AvailableTags, tagData.AssignedTags)
+            {
+                Owner = this
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                await _viewModel.UpdateFeedTagsAsync(feedId, dialog.SelectedTagNames);
+            }
+        }
+        catch (Exception exception)
+        {
+            MessageDialogWindow.Show(this, exception.Message, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainWindowViewModel.SelectedArticle))
@@ -105,7 +131,6 @@ public partial class MainWindow : Window
         SelectedArticleHtmlViewer.SetArticle(
             article?.Content,
             article?.Summary,
-            article?.ImageUrl,
             article?.Link,
             article?.FeedUrl);
     }
@@ -166,7 +191,7 @@ public partial class MainWindow : Window
 
     private void SidebarLinkRoot_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is Grid { DataContext: SidebarLink { IsFolder: true } } row)
+        if (sender is Grid { DataContext: SidebarLink link } row && (link.IsFolder || link.IsFeedEntry))
         {
             row.Tag = true;
         }
@@ -174,7 +199,7 @@ public partial class MainWindow : Window
 
     private void SidebarLinkRoot_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is Grid { DataContext: SidebarLink { IsFolder: true } } row)
+        if (sender is Grid { DataContext: SidebarLink link } row && (link.IsFolder || link.IsFeedEntry))
         {
             row.Tag = false;
         }

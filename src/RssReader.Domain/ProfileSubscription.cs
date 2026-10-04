@@ -5,4 +5,5 @@ public sealed record ProfileSubscription(
     string FeedId,
     string FeedName,
     string FeedUrl,
-    string FolderName);
+    string FolderName,
+    string? WebsiteUrl = null);

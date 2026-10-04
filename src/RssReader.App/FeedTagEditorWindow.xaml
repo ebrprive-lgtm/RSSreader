@@ -1,0 +1,125 @@
+<Window x:Class="RssReader.App.FeedTagEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="420"
+        Height="420"
+        MinWidth="360"
+        MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Foreground="{StaticResource TextBrush}"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Grid Margin="8">
+        <Border Background="{StaticResource WindowBrush}"
+                BorderBrush="{StaticResource ControlBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="20">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.16" />
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <DockPanel Grid.Row="0" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Button DockPanel.Dock="Right"
+                            Content="&#xE711;"
+                            Style="{StaticResource IconActionButtonStyle}"
+                            ToolTip="Close dialog"
+                            AutomationProperties.Name="Close dialog"
+                            Click="CloseWindow_Click" />
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Feed tags" FontSize="19" FontWeight="SemiBold" />
+                        <TextBlock x:Name="FeedNameText"
+                                   Margin="0,3,8,0"
+                                   FontSize="12"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </DockPanel>
+                <Grid Grid.Row="1" Margin="0,18,0,0">
+                    <Border Background="{StaticResource ContentBrush}"
+                            BorderBrush="{StaticResource ControlBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="2">
+                            <ItemsControl x:Name="TagChoicesList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Name}"
+                                                  IsChecked="{Binding IsAssigned, Mode=TwoWay}"
+                                                  Margin="8,6"
+                                                  AutomationProperties.Name="{Binding Name, StringFormat='Feed tag {0}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                    <TextBlock x:Name="EmptyTagsMessage"
+                               Text="No tags yet"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               IsHitTestVisible="False" />
+                </Grid>
+                <Grid Grid.Row="2" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBox x:Name="NewTagTextBox"
+                             MinHeight="34"
+                             Padding="9,5"
+                             MaxLength="40"
+                             VerticalContentAlignment="Center"
+                             AutomationProperties.Name="New feed tag"
+                             KeyDown="NewTagTextBox_KeyDown" />
+                    <Button Grid.Column="1"
+                            x:Name="AddTagButton"
+                            Content="&#xE710;"
+                            Style="{StaticResource IconActionButtonStyle}"
+                            Margin="8,0,0,0"
+                            ToolTip="Add tag"
+                            AutomationProperties.Name="Add tag"
+                            Click="AddTag_Click" />
+                    <TextBlock x:Name="ErrorMessageText"
+                               Grid.Row="1"
+                               Grid.ColumnSpan="2"
+                               Margin="0,4,0,0"
+                               Foreground="{StaticResource DestructiveBrush}"
+                               TextWrapping="Wrap" />
+                </Grid>
+                <StackPanel Grid.Row="3"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,18,0,0">
+                    <Button Content="Apply"
+                            Click="Apply_Click"
+                            IsDefault="True"
+                            Style="{StaticResource PrimaryActionButtonStyle}"
+                            MinWidth="78"
+                            Padding="12,7" />
+                    <Button Content="Cancel"
+                            Click="Cancel_Click"
+                            IsCancel="True"
+                            Style="{StaticResource SecondaryActionButtonStyle}"
+                            MinWidth="78"
+                            Padding="12,7"
+                            Margin="8,0,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

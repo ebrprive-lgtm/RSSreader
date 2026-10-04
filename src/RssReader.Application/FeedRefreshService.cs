@@ -129,7 +129,11 @@ public sealed class FeedRefreshService(
             item.PublishedAt,
             item.Summary,
             item.Content,
-            item.ImageUrl);
+            item.ImageUrl)
+        {
+            Categories = item.Categories ?? [],
+            Author = item.Author
+        };
     }
 }
 

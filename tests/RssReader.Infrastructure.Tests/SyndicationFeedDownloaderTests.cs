@@ -38,6 +38,49 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("Feed summary", items[0].Summary);
     }
 
+    [TestMethod]
+    public async Task Download_RssPreservesNormalizedArticleCategories()
+    {
+        const string xml = """
+            <rss version="2.0"><channel><title>Sample feed</title><item>
+              <title>Press release</title>
+              <guid>press-release-1</guid>
+                            <link>https://example.test/press-release</link>
+              <category><![CDATA[ Press Releases ]]></category>
+              <category><![CDATA[press releases]]></category>
+              <category domain="https://example.test/topics">Public Notices</category>
+              <category><![CDATA[   ]]></category>
+            </item></channel></rss>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var categories = (await downloader.DownloadAsync(CreateFeed())).Single().Categories!;
+
+        Assert.AreEqual(2, categories.Count);
+        Assert.AreEqual("Press Releases", categories[0].Term);
+        Assert.IsNull(categories[0].Scheme);
+        Assert.AreEqual("Public Notices", categories[1].Term);
+        Assert.AreEqual("https://example.test/topics", categories[1].Scheme);
+    }
+
+    [TestMethod]
+    public async Task Download_RssReadsDublinCoreCreator()
+    {
+        const string xml = """
+            <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>Sample feed</title><item>
+              <title>Article</title>
+              <dc:creator><![CDATA[Jayme Lozano Carver, The Texas Tribune]]></dc:creator>
+            </item></channel></rss>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+        Assert.AreEqual("Jayme Lozano Carver, The Texas Tribune", item.Author);
+    }
+
         [TestMethod]
         public async Task Download_RssUsesEncodedArticleBodyWhenFeedProvidesIt()
         {

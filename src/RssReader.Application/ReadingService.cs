@@ -130,6 +130,9 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
 
         return articles
             .Where(item => filter.FeedId is null || item.Article.FeedId == filter.FeedId)
+            .Where(item => filter.Topic is null || item.Article.Categories.Any(category =>
+                string.Equals(category.Term, filter.Topic.Term, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(category.Scheme, filter.Topic.Scheme, StringComparison.OrdinalIgnoreCase)))
             .Where(item => filter.FolderName is null ||
                 (subscriptionLookup.TryGetValue(item.Article.FeedId, out var subscription) &&
                  string.Equals(subscription.FolderName, filter.FolderName, StringComparison.OrdinalIgnoreCase)))

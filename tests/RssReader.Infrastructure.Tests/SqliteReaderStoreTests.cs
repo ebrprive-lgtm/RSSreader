@@ -31,6 +31,53 @@ public sealed class SqliteReaderStoreTests
     }
 
     [TestMethod]
+    public async Task SaveArticlesReplacesArticleCategoriesOnRefresh()
+    {
+        using var database = new TemporaryDatabase();
+        var profiles = new SqliteProfileStore(database.Path);
+        var catalog = new SqliteCatalogStore(database.Path);
+        var reader = new SqliteReaderStore(database.Path);
+        await profiles.InitializeAsync();
+        await catalog.InitializeAsync();
+        await reader.InitializeAsync();
+        var profile = Profile.CreateRegular("Reader");
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        await profiles.AddAsync(profile);
+        await catalog.AddFeedAsync(feed);
+        await reader.AddFolderAsync(profile.Id, "News");
+        await reader.SubscribeAsync(profile.Id, feed.Id, "News");
+        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", null, DateTimeOffset.UtcNow, null, null)
+        {
+            Categories =
+            [
+                new ArticleCategory("Press Releases", "https://example.com/topics"),
+                new ArticleCategory("Government")
+            ]
+        };
+
+        await reader.SaveArticlesAsync(feed.Id, [article]);
+        var initialCategories = (await reader.GetArticlesAsync(profile.Id)).Single().Article.Categories;
+        Assert.AreEqual(2, initialCategories.Count);
+        Assert.AreEqual("https://example.com/topics", initialCategories[1].Scheme);
+
+        await reader.SaveArticlesAsync(feed.Id, [article with
+        {
+            Title = "Updated headline",
+            Categories = [new ArticleCategory("Announcements", Label: "Official announcements")]
+        }]);
+        var updatedArticle = (await reader.GetArticlesAsync(profile.Id)).Single().Article;
+
+        Assert.AreEqual("Updated headline", updatedArticle.Title);
+        Assert.AreEqual(1, updatedArticle.Categories.Count);
+        Assert.AreEqual("Announcements", updatedArticle.Categories[0].Term);
+        Assert.AreEqual("Official announcements", updatedArticle.Categories[0].Label);
+
+        await reader.SaveArticlesAsync(feed.Id, [article with { Categories = [] }]);
+
+        Assert.AreEqual(0, (await reader.GetArticlesAsync(profile.Id)).Single().Article.Categories.Count);
+    }
+
+    [TestMethod]
     public async Task SubscriptionsArticlesAndReadingStateAreIsolatedByProfile()
     {
         using var database = new TemporaryDatabase();
@@ -84,7 +131,13 @@ public sealed class SqliteReaderStoreTests
         var otherProfile = Profile.CreateRegular("Other Reader");
         await profiles.AddAsync(profile);
         await profiles.AddAsync(otherProfile);
-        var feed = new CatalogFeed(Guid.NewGuid().ToString("N"), "Example", "https://example.com/feed.xml", null, null);
+        var feed = new CatalogFeed(
+            Guid.NewGuid().ToString("N"),
+            "Example",
+            "https://example.com/feed.xml",
+            null,
+            null,
+            WebsiteUrl: "https://example.com");
         await catalog.AddFeedAsync(feed);
         await reader.AddFolderAsync(profile.Id, "Gaming");
         await reader.AddFolderAsync(profile.Id, "Personal");
@@ -99,6 +152,7 @@ public sealed class SqliteReaderStoreTests
         Assert.AreEqual("Reviews", firstTags.Single().Name);
         Assert.AreEqual(0, otherTags.Count);
         Assert.AreEqual("Gaming", (await reader.GetSubscriptionsAsync(profile.Id)).Single().FolderName);
+        Assert.AreEqual("https://example.com", (await reader.GetSubscriptionsAsync(profile.Id)).Single().WebsiteUrl);
 
         await reader.DeleteFolderAsync(profile.Id, "Gaming");
 
@@ -109,7 +163,7 @@ public sealed class SqliteReaderStoreTests
     }
 
     [TestMethod]
-    public async Task InitializeAddsImageUrlColumnToAnExistingArticleTable()
+    public async Task InitializeAddsImageUrlAndAuthorColumnsToAnExistingArticleTable()
     {
         using var database = new TemporaryDatabase();
         var profiles = new SqliteProfileStore(database.Path);
@@ -126,7 +180,7 @@ public sealed class SqliteReaderStoreTests
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE Articles DROP COLUMN ImageUrl;";
+            command.CommandText = "ALTER TABLE Articles DROP COLUMN ImageUrl; ALTER TABLE Articles DROP COLUMN Author;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -146,11 +200,13 @@ public sealed class SqliteReaderStoreTests
             DateTimeOffset.UtcNow,
             null,
             null,
-            "https://example.com/cover.jpg");
+            "https://example.com/cover.jpg",
+            "Example Author");
 
         await reader.SaveArticlesAsync(feed.Id, [article]);
 
         Assert.AreEqual("https://example.com/cover.jpg", (await reader.GetArticlesAsync(profile.Id)).Single().Article.ImageUrl);
+        Assert.AreEqual("Example Author", (await reader.GetArticlesAsync(profile.Id)).Single().Article.Author);
     }
 
     [TestMethod]

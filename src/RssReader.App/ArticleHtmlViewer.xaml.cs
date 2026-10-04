@@ -10,7 +10,7 @@ namespace RssReader.App;
 
 public partial class ArticleHtmlViewer : UserControl
 {
-    private string _document = ArticleHtmlDocumentBuilder.Build(null, null, null, null, null);
+    private string _document = ArticleHtmlDocumentBuilder.Build(null, null, null, null);
     private string? _fallbackText;
     private bool _isInitialized;
     private bool _isInitializing;
@@ -43,10 +43,10 @@ public partial class ArticleHtmlViewer : UserControl
     internal bool? LastNavigationSucceeded { get; private set; }
     internal CoreWebView2WebErrorStatus? LastNavigationErrorStatus { get; private set; }
 
-    public void SetArticle(string? content, string? summary, string? imageUrl, string? articleUrl, string? feedUrl)
+    public void SetArticle(string? content, string? summary, string? articleUrl, string? feedUrl)
     {
         _fallbackText = summary;
-        _document = ArticleHtmlDocumentBuilder.Build(content, summary, imageUrl, articleUrl, feedUrl);
+        _document = ArticleHtmlDocumentBuilder.Build(content, summary, articleUrl, feedUrl);
         if (_isInitialized)
         {
             NavigateArticleDocument();

@@ -9,4 +9,8 @@ public sealed record FeedArticle(
     DateTimeOffset? PublishedAt,
     string? Summary,
     string? Content,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    string? Author = null)
+{
+    public IReadOnlyList<ArticleCategory> Categories { get; init; } = [];
+}

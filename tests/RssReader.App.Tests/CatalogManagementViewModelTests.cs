@@ -95,6 +95,26 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task CatalogMasterFeedAppearsInFollowSourcesImmediatelyAfterCreation()
+    {
+        var catalogService = new CatalogService(new MemoryCatalogStore());
+        var viewModel = new MainWindowViewModel(Profile.CreateCatalogMaster(), catalogService);
+        await viewModel.InitializeAsync();
+        var catalogManagement = viewModel.CatalogManagement!;
+        catalogManagement.FeedName = "New publication";
+        catalogManagement.FeedUrl = "https://example.com/feed.xml";
+
+        await catalogManagement.AddFeedCommand.ExecuteAsync();
+
+        viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
+        viewModel.CatalogSearchQuery = "New publication";
+
+        var feed = viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Single();
+        Assert.AreEqual("New publication", feed.Name);
+        Assert.AreEqual(1, viewModel.CatalogFeeds.Count);
+    }
+
+    [TestMethod]
     public async Task CatalogMasterCanEditExistingFeedMetadata()
     {
         var store = new MemoryCatalogStore();
