@@ -13,7 +13,9 @@ public sealed class ArticleRowViewModel(
     string? feedId = null,
     string? link = null,
     string? content = null,
-    string? imageUrl = null) : ObservableObject
+    string? imageUrl = null,
+    string? externalId = null,
+    string? feedUrl = null) : ObservableObject
 {
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
@@ -29,7 +31,25 @@ public sealed class ArticleRowViewModel(
     public string? Link { get; } = link;
     public string? Content { get; } = content;
     public string? ImageUrl { get; } = imageUrl;
+    public string? ExternalId { get; } = externalId;
+    public string? FeedUrl { get; } = feedUrl;
+    public string SourceInitials
+    {
+        get
+        {
+            var initials = string.Concat(Source
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Where(word => !IgnoredSourceWords.Contains(word))
+                .Select(word => word.FirstOrDefault(char.IsLetter))
+                .Where(char.IsLetter)
+                .Take(2)
+                .Select(char.ToUpperInvariant));
+            return initials.Length == 0 ? "?" : initials;
+        }
+    }
+    public bool HasContent => !string.IsNullOrWhiteSpace(Content);
     public bool HasReadableSummary =>
+        string.IsNullOrWhiteSpace(Content) &&
         !string.IsNullOrWhiteSpace(Summary) &&
         (!string.Equals(Summary.Trim(), "Source", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(Link));
     public bool IsImageVisible => !string.IsNullOrWhiteSpace(ImageUrl);
@@ -38,6 +58,19 @@ public sealed class ArticleRowViewModel(
         (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     public string AgeLabel => FormatAge(PublishedAt, DateTimeOffset.Now);
     public string PublishedDateLabel => PublishedAt.ToLocalTime().ToString("MMM d, yyyy");
+
+    private static readonly HashSet<string> IgnoredSourceWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a",
+        "an",
+        "and",
+        "by",
+        "feed",
+        "from",
+        "of",
+        "rss",
+        "the"
+    };
 
     public bool IsRead
     {

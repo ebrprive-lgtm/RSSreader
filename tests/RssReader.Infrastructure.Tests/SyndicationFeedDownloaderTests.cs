@@ -1,5 +1,6 @@
 using System.Net;
 using System.Xml;
+using System.Xml.Linq;
 using RssReader.Domain;
 using RssReader.Infrastructure;
 
@@ -37,6 +38,52 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("Feed summary", items[0].Summary);
     }
 
+        [TestMethod]
+        public async Task Download_RssUsesEncodedArticleBodyWhenFeedProvidesIt()
+        {
+                const string xml = """
+                        <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+                            <channel><title>Sample feed</title><item>
+                                <title>Article</title>
+                                <guid>article-1</guid>
+                                <link>https://example.test/article</link>
+                                <description>A short excerpt [...]</description>
+                                <content:encoded><![CDATA[<p>First complete paragraph.</p><p>Second complete paragraph with <img src="/images/panel.jpg" alt="Panel" />.</p>]]></content:encoded>
+                            </item></channel>
+                        </rss>
+                        """;
+                using var client = CreateClient(xml);
+                var downloader = new SyndicationFeedDownloader(client);
+
+                var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+                Assert.AreEqual("A short excerpt [...]", item.Summary);
+                StringAssert.Contains(item.Content, "First complete paragraph.");
+                StringAssert.Contains(item.Content, "Second complete paragraph");
+                StringAssert.Contains(item.Content, "<img src=\"/images/panel.jpg\"");
+        }
+
+            [TestMethod]
+            public async Task Download_RssPreservesHtmlDescriptionAsReaderContentFallback()
+            {
+                const string xml = """
+                    <rss version="2.0"><channel><title>Sample feed</title><item>
+                      <title>Article</title>
+                      <guid>article-1</guid>
+                      <link>https://example.test/article</link>
+                      <description><![CDATA[<p>Story text with <img src="/images/story.jpg" alt="Story image" />.</p>]]></description>
+                    </item></channel></rss>
+                    """;
+                using var client = CreateClient(xml);
+                var downloader = new SyndicationFeedDownloader(client);
+
+                var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+                Assert.AreEqual("Story text with .", item.Summary);
+                StringAssert.Contains(item.Content, "<p>");
+                StringAssert.Contains(item.Content, "<img src=\"/images/story.jpg\"");
+            }
+
     [TestMethod]
     public async Task DownloadRawContent_ReturnsOriginalXmlText()
     {
@@ -47,6 +94,60 @@ public sealed class SyndicationFeedDownloaderTests
         var rawContent = await downloader.DownloadRawContentAsync(CreateFeed());
 
         Assert.AreEqual(xml, rawContent);
+    }
+
+    [TestMethod]
+    public async Task DownloadRawArticleContent_RssReturnsOnlyMatchingItem()
+    {
+        const string xml = """
+            <rss version="2.0"><channel><title>Sample feed</title>
+              <item><guid>rss-item-1</guid><title>First headline</title><link>https://example.test/first</link></item>
+              <item><guid>rss-item-2</guid><title>Second headline</title><link>https://example.test/second</link></item>
+            </channel></rss>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var rawContent = await downloader.DownloadRawArticleContentAsync(
+            CreateFeed(),
+            "rss-item-2",
+            "https://example.test/second",
+            "Second headline");
+
+        var item = XElement.Parse(rawContent);
+        Assert.AreEqual("item", item.Name.LocalName);
+        StringAssert.Contains(rawContent, "rss-item-2");
+        StringAssert.Contains(rawContent, "Second headline");
+        Assert.IsFalse(rawContent.Contains("rss-item-1", StringComparison.Ordinal));
+        Assert.IsFalse(rawContent.Contains("First headline", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task DownloadRawArticleContent_AtomReturnsOnlyMatchingEntry()
+    {
+        const string xml = """
+            <feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+              <title>Sample Atom</title>
+              <entry><id>atom-item-1</id><title>First headline</title><link href="https://example.test/first" /></entry>
+              <entry><id>atom-item-2</id><title>Second headline</title><link href="https://example.test/second" /><media:thumbnail url="https://example.test/image.jpg" /></entry>
+            </feed>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var rawContent = await downloader.DownloadRawArticleContentAsync(
+            CreateFeed(),
+            "atom-item-2",
+            "https://example.test/second",
+            "Second headline");
+
+        var entry = XElement.Parse(rawContent);
+        Assert.AreEqual("entry", entry.Name.LocalName);
+        StringAssert.Contains(rawContent, "atom-item-2");
+        StringAssert.Contains(rawContent, "Second headline");
+        StringAssert.Contains(rawContent, "thumbnail");
+        Assert.IsFalse(rawContent.Contains("atom-item-1", StringComparison.Ordinal));
+        Assert.IsFalse(rawContent.Contains("First headline", StringComparison.Ordinal));
     }
 
     [TestMethod]

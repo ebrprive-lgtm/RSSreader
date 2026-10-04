@@ -9,10 +9,14 @@ public interface ICatalogStore
     Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(string collectionId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetCollectionFeedIdsByCollectionAsync(
+        CancellationToken cancellationToken = default);
     Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default);
     Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default);
     Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default);
     Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default);
+    Task UpdateCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default);
+    Task MergeCategoriesAsync(string sourceCategoryId, string targetCategoryId, CancellationToken cancellationToken = default);
     Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default);
     Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default);
     Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default);

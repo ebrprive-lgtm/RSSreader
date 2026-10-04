@@ -9,11 +9,15 @@ public partial class CreateFolderWindow : Window
 {
     private readonly IReadOnlyList<string> _existingFolders;
 
-    public CreateFolderWindow(IReadOnlyList<string> existingFolders, IReadOnlyList<string> suggestions)
+    public CreateFolderWindow(
+        IReadOnlyList<string> existingFolders,
+        IReadOnlyList<string> suggestions,
+        string initialFolderName = "")
     {
         InitializeComponent();
         _existingFolders = existingFolders;
         Suggestions = new ObservableCollection<string>(suggestions);
+        FolderNameBox.Text = initialFolderName.Trim();
         DataContext = this;
     }
 

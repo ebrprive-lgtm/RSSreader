@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using HtmlAgilityPack;
 using RssReader.Application;
 using RssReader.Domain;
 
@@ -14,6 +15,12 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
     private const int MaximumFeedCharacters = 5_000_000;
     private const int MaximumItems = 500;
     private const string MediaRssNamespace = "http://search.yahoo.com/mrss/";
+    private const string RssContentNamespace = "http://purl.org/rss/1.0/modules/content/";
+    private static readonly HashSet<string> ArticleMarkupElementNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "blockquote", "br", "div", "em", "figure", "h1", "h2", "h3", "h4", "h5", "h6",
+        "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "table", "td", "th", "tr", "ul"
+    };
 
     public async Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
         CatalogFeed feed,
@@ -61,7 +68,7 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
                         ? item.LastUpdatedTime
                         : null,
                 HtmlTextParser.ToPlainText(item.Summary?.Text),
-                HtmlTextParser.ToPlainText((item.Content as TextSyndicationContent)?.Text),
+                GetArticleContent(item) ?? GetTextContent(item.Summary),
                 FindImageUrl(item, uri)))
             .ToArray();
     }
@@ -108,6 +115,81 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
 
         return content.ToString();
     }
+
+    public async Task<string> DownloadRawArticleContentAsync(
+        CatalogFeed feed,
+        string? externalId,
+        string? link,
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        var rawContent = await DownloadRawContentAsync(feed, cancellationToken).ConfigureAwait(false);
+        using var textReader = new StringReader(rawContent);
+        using var xmlReader = XmlReader.Create(textReader, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = MaximumFeedCharacters,
+            MaxCharactersFromEntities = 0
+        });
+
+        var root = XDocument.Load(xmlReader, LoadOptions.PreserveWhitespace).Root
+            ?? throw new InvalidDataException("The feed does not contain an XML root element.");
+        var articles = root.Descendants().Where(IsArticleElement).ToArray();
+        var baseUri = new Uri(feed.FeedUrl, UriKind.Absolute);
+        var selectedArticle = !string.IsNullOrWhiteSpace(externalId)
+            ? articles.FirstOrDefault(article => string.Equals(
+                GetArticleId(article),
+                externalId.Trim(),
+                StringComparison.Ordinal))
+            : null;
+
+        if (selectedArticle is null && !string.IsNullOrWhiteSpace(link))
+        {
+            var normalizedLink = NormalizeLink(link, baseUri);
+            selectedArticle = articles.FirstOrDefault(article => GetArticleLinks(article)
+                .Any(articleLink => string.Equals(NormalizeLink(articleLink, baseUri), normalizedLink, StringComparison.Ordinal)));
+        }
+
+        if (selectedArticle is null && !string.IsNullOrWhiteSpace(title))
+        {
+            selectedArticle = articles.FirstOrDefault(article => string.Equals(
+                GetChildText(article, "title"),
+                title.Trim(),
+                StringComparison.Ordinal));
+        }
+
+        return selectedArticle?.ToString(SaveOptions.None)
+            ?? throw new InvalidDataException("The selected article could not be found in the current feed.");
+    }
+
+    private static bool IsArticleElement(XElement element) =>
+        element.Name.LocalName switch
+        {
+            "item" => element.Parent?.Name.LocalName is "channel" or "RDF",
+            "entry" => element.Parent?.Name.LocalName == "feed",
+            _ => false
+        };
+
+    private static string? GetArticleId(XElement article) =>
+        GetChildText(article, "guid") ?? GetChildText(article, "id");
+
+    private static string? GetChildText(XElement element, string localName) =>
+        element.Elements()
+            .FirstOrDefault(child => string.Equals(child.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+            ?.Value.Trim();
+
+    private static IEnumerable<string> GetArticleLinks(XElement article) =>
+        article.Elements()
+            .Where(child => string.Equals(child.Name.LocalName, "link", StringComparison.OrdinalIgnoreCase))
+            .Select(link => (string?)link.Attribute("href") ?? link.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim());
+
+    private static string NormalizeLink(string link, Uri baseUri) =>
+        Uri.TryCreate(baseUri, link.Trim(), out var resolved) && IsWebUri(resolved)
+            ? resolved.AbsoluteUri
+            : link.Trim();
 
     private static string? FindImageUrl(SyndicationItem item, Uri feedUri)
     {
@@ -161,6 +243,49 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
         }
 
         return null;
+    }
+
+    private static string? GetArticleContent(SyndicationItem item)
+    {
+        if (item.Content is TextSyndicationContent textContent)
+        {
+            return GetTextContent(textContent);
+        }
+
+        if (item.Content is XmlSyndicationContent xmlContent)
+        {
+            using var reader = xmlContent.GetReaderAtContent();
+            return reader.ReadOuterXml();
+        }
+
+        var encodedContent = item.ElementExtensions.FirstOrDefault(extension =>
+            extension.OuterNamespace == RssContentNamespace && extension.OuterName == "encoded");
+        return encodedContent?.GetObject<XElement>().Value;
+    }
+
+    private static string? GetTextContent(TextSyndicationContent? content)
+    {
+        if (content is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(content.Type, "text", StringComparison.OrdinalIgnoreCase) || ContainsArticleMarkup(content.Text))
+        {
+            return content.Text;
+        }
+
+        return WebUtility.HtmlEncode(content.Text)
+            .Replace("\r\n", "<br>", StringComparison.Ordinal)
+            .Replace("\n", "<br>", StringComparison.Ordinal);
+    }
+
+    private static bool ContainsArticleMarkup(string content)
+    {
+        var document = new HtmlDocument();
+        document.LoadHtml(content);
+        return document.DocumentNode.Descendants().Any(node =>
+            node.NodeType == HtmlNodeType.Element && ArticleMarkupElementNames.Contains(node.Name));
     }
 
     private static bool TryResolveImageUrl(string? value, Uri baseUri, out string? imageUrl)

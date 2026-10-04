@@ -1,0 +1,571 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opml version="2.0">
+  <head>
+    <title>Best RSS Feeds by Category</title>
+    <dateCreated>Sat, 03 Oct 2026 15:46:21 GMT</dateCreated>
+    <ownerName>Feedspot</ownerName>
+    <ownerId>https://rss.feedspot.com/best_rss_feeds/</ownerId>
+  </head>
+  <body>
+    <outline text="Best RSS Feeds by Category" title="Best RSS Feeds by Category">
+      <outline text="News &amp; Current Affairs" title="News &amp; Current Affairs">
+        <outline text="NBC News RSS Feed" title="NBC News RSS Feed" type="rss" xmlUrl="https://feeds.nbcnews.com/nbcnews/public/news" htmlUrl="https://www.nbcnews.com/" />
+        <outline text="CBS News RSS Feed" title="CBS News RSS Feed" type="rss" xmlUrl="https://www.cbsnews.com/feeds/rss/main.rss" htmlUrl="https://www.cbsnews.com/" />
+        <outline text="PBS NewsHour RSS Feed" title="PBS NewsHour RSS Feed" type="rss" xmlUrl="https://www.pbs.org/newshour/feeds/rss/headlines" htmlUrl="https://www.pbs.org/newshour/" />
+        <outline text="UPI.com Ã‚Â» U.S. News RSS Feed" title="UPI.com Ã‚Â» U.S. News RSS Feed" type="rss" xmlUrl="https://rss.upi.com/news/tn_us.rss" htmlUrl="https://www.upi.com/Top_News/US/" />
+        <outline text="The New York Times RSS Feed" title="The New York Times RSS Feed" type="rss" xmlUrl="https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" htmlUrl="https://www.nytimes.com/" />
+        <outline text="WSJ.com Ã‚Â» U.S. News RSS Feed" title="WSJ.com Ã‚Â» U.S. News RSS Feed" type="rss" xmlUrl="https://feeds.content.dowjones.io/public/rss/RSSUSnews" htmlUrl="https://www.wsj.com/us-news/" />
+        <outline text="Los Angeles Times RSS Feed" title="Los Angeles Times RSS Feed" type="rss" xmlUrl="https://www.latimes.com/local/rss2.0.xml" htmlUrl="https://www.latimes.com/" />
+        <outline text="New York Post RSS Feed" title="New York Post RSS Feed" type="rss" xmlUrl="https://nypost.com/feed/" htmlUrl="https://nypost.com/" />
+        <outline text="The Washington Times RSS Feed" title="The Washington Times RSS Feed" type="rss" xmlUrl="https://www.washingtontimes.com/rss/headlines/news" htmlUrl="https://www.washingtontimes.com/" />
+        <outline text="Vox RSS Feed" title="Vox RSS Feed" type="rss" xmlUrl="https://www.vox.com/rss/index.xml" htmlUrl="https://www.vox.com/" />
+      </outline>
+      <outline text="Politics" title="Politics">
+        <outline text="The New York Times Ã‚Â» Politics RSS Feed" title="The New York Times Ã‚Â» Politics RSS Feed" type="rss" xmlUrl="https://www.nytimes.com/svc/collections/v1/publish/https://www.nytimes.com/section/politics/rss.xml" htmlUrl="https://www.nytimes.com/section/politics" />
+        <outline text="NPR Ã‚Â» Politics RSS Feed" title="NPR Ã‚Â» Politics RSS Feed" type="rss" xmlUrl="https://feeds.npr.org/1014/rss.xml" htmlUrl="https://www.npr.org/sections/politics/" />
+        <outline text="POLITICO RSS Feed" title="POLITICO RSS Feed" type="rss" xmlUrl="https://www.politico.com/rss/politicopicks.xml" htmlUrl="https://www.politico.com/" />
+        <outline text="ProPublica RSS Feed" title="ProPublica RSS Feed" type="rss" xmlUrl="https://www.propublica.org/feeds/propublica/main" htmlUrl="https://www.propublica.org/" />
+        <outline text="PolitiFact RSS Feed" title="PolitiFact RSS Feed" type="rss" xmlUrl="https://www.politifact.com/rss/all/" htmlUrl="https://www.politifact.com/" />
+        <outline text="RealClearPolitics RSS Feed" title="RealClearPolitics RSS Feed" type="rss" xmlUrl="https://www.realclearpolitics.com/index.xml" htmlUrl="https://www.realclearpolitics.com/" />
+      </outline>
+      <outline text="Technology" title="Technology">
+        <outline text="IEEE Spectrum RSS Feed" title="IEEE Spectrum RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/IeeeSpectrumFullText" htmlUrl="https://spectrum.ieee.org/" />
+        <outline text="WIRED RSS Feed" title="WIRED RSS Feed" type="rss" xmlUrl="https://www.wired.com/feed/rss" htmlUrl="https://www.wired.com/" />
+        <outline text="The Verge RSS Feed" title="The Verge RSS Feed" type="rss" xmlUrl="https://www.theverge.com/rss/index.xml" htmlUrl="https://www.theverge.com/" />
+        <outline text="TechCrunch Ã‚Â» Artificial Intelligence RSS Feed" title="TechCrunch Ã‚Â» Artificial Intelligence RSS Feed" type="rss" xmlUrl="https://techcrunch.com/category/artificial-intelligence/feed/" htmlUrl="https://techcrunch.com/category/artificial-intelligence/" />
+        <outline text="VentureBeat RSS Feed" title="VentureBeat RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/venturebeat/SZYF" htmlUrl="https://venturebeat.com/" />
+        <outline text="O'Reilly RSS Feed" title="O'Reilly RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/oreilly/radar/atom" htmlUrl="https://www.oreilly.com/radar/" />
+        <outline text="Hackaday Blog RSS Feed" title="Hackaday Blog RSS Feed" type="rss" xmlUrl="https://hackaday.com/blog/feed/" htmlUrl="https://hackaday.com/blog/" />
+        <outline text="BleepingComputer RSS Feed" title="BleepingComputer RSS Feed" type="rss" xmlUrl="https://www.bleepingcomputer.com/feed/" htmlUrl="https://www.bleepingcomputer.com/" />
+        <outline text="TechRepublic RSS Feed" title="TechRepublic RSS Feed" type="rss" xmlUrl="https://www.techrepublic.com/rssfeeds/articles/" htmlUrl="https://www.techrepublic.com/" />
+        <outline text="Tech.eu RSS Feed" title="Tech.eu RSS Feed" type="rss" xmlUrl="https://tech.eu/feed/" htmlUrl="https://tech.eu/" />
+      </outline>
+      <outline text="Artificial Intelligence" title="Artificial Intelligence">
+        <outline text="Google Research Blog RSS Feed" title="Google Research Blog RSS Feed" type="rss" xmlUrl="https://research.google/blog/rss/" htmlUrl="https://research.google/blog/" />
+        <outline text="OpenAI News RSS Feed" title="OpenAI News RSS Feed" type="rss" xmlUrl="https://openai.com/news/rss.xml" htmlUrl="https://openai.com/news/" />
+        <outline text="BAIR Blog RSS Feed" title="BAIR Blog RSS Feed" type="rss" xmlUrl="https://bair.berkeley.edu/blog/feed.xml" htmlUrl="https://bair.berkeley.edu/blog/" />
+        <outline text="MIT News Ã‚Â» Artificial intelligence RSS Feed" title="MIT News Ã‚Â» Artificial intelligence RSS Feed" type="rss" xmlUrl="https://news.mit.edu/rss/topic/artificial-intelligence2" htmlUrl="https://news.mit.edu/topic/artificial-intelligence2" />
+        <outline text="TechCrunch Ã‚Â» AI RSS Feed" title="TechCrunch Ã‚Â» AI RSS Feed" type="rss" xmlUrl="https://techcrunch.com/category/artificial-intelligence/feed/" htmlUrl="https://techcrunch.com/category/artificial-intelligence/" />
+        <outline text="Ars Technica Ã‚Â» AI RSS Feed" title="Ars Technica Ã‚Â» AI RSS Feed" type="rss" xmlUrl="https://arstechnica.com/ai/feed/" htmlUrl="https://arstechnica.com/ai/" />
+        <outline text="Fast Company Ã‚Â» Artificial Intelligence RSS Feed" title="Fast Company Ã‚Â» Artificial Intelligence RSS Feed" type="rss" xmlUrl="https://www.fastcompany.com/section/artificial-intelligence/rss" htmlUrl="https://www.fastcompany.com/section/artificial-intelligence/" />
+        <outline text="AI Weekly RSS Feed" title="AI Weekly RSS Feed" type="rss" xmlUrl="https://aiweekly.co/issues.rss" htmlUrl="https://aiweekly.co/" />
+      </outline>
+      <outline text="Machine Learning" title="Machine Learning">
+        <outline text="KDnuggets News RSS Feed" title="KDnuggets News RSS Feed" type="rss" xmlUrl="https://www.kdnuggets.com/feed" htmlUrl="https://www.kdnuggets.com/news/index.html/" />
+        <outline text="Google Research Blog RSS Feed" title="Google Research Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/blogspot/gJZg" htmlUrl="https://research.google/blog/" />
+        <outline text="Apple Machine Learning Research RSS Feed" title="Apple Machine Learning Research RSS Feed" type="rss" xmlUrl="https://machinelearning.apple.com/rss.xml" htmlUrl="https://machinelearning.apple.com/" />
+        <outline text="Machine Learning Mastery Blog RSS Feed" title="Machine Learning Mastery Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/MachineLearningMastery" htmlUrl="https://machinelearningmastery.com/blog/" />
+        <outline text="Towards Data Science RSS Feed" title="Towards Data Science RSS Feed" type="rss" xmlUrl="https://towardsdatascience.com/feed/" htmlUrl="https://towardsdatascience.com/" />
+        <outline text="Distill RSS Feed" title="Distill RSS Feed" type="rss" xmlUrl="https://distill.pub/rss.xml" htmlUrl="https://distill.pub/" />
+        <outline text="MIT News Ã‚Â» Machine Learning RSS Feed" title="MIT News Ã‚Â» Machine Learning RSS Feed" type="rss" xmlUrl="https://news.mit.edu/rss/topic/machine-learning" htmlUrl="https://news.mit.edu/topic/machine-learning" />
+        <outline text="Nature Machine Intelligence RSS Feed" title="Nature Machine Intelligence RSS Feed" type="rss" xmlUrl="https://www.nature.com/natmachintell.rss" htmlUrl="https://www.nature.com/natmachintell/" />
+        <outline text="Hugging Face Blog RSS Feed" title="Hugging Face Blog RSS Feed" type="rss" xmlUrl="https://huggingface.co/blog/feed.xml" htmlUrl="https://huggingface.co/blog/" />
+        <outline text="O'Reilly Media Ã‚Â» AI &amp; ML RSS Feed" title="O'Reilly Media Ã‚Â» AI &amp; ML RSS Feed" type="rss" xmlUrl="https://www.oreilly.com/radar/topics/ai-ml/feed/index.xml" htmlUrl="https://www.oreilly.com/radar/topics/ai-ml/" />
+      </outline>
+      <outline text="Cybersecurity" title="Cybersecurity">
+        <outline text="WIRED RSS Feed" title="WIRED RSS Feed" type="rss" xmlUrl="https://www.wired.com/feed/rss" htmlUrl="https://www.wired.com/" />
+        <outline text="BleepingComputer RSS Feed" title="BleepingComputer RSS Feed" type="rss" xmlUrl="https://www.bleepingcomputer.com/feed/" htmlUrl="https://www.bleepingcomputer.com/" />
+        <outline text="Krebs on Security RSS Feed" title="Krebs on Security RSS Feed" type="rss" xmlUrl="https://krebsonsecurity.com/feed/" htmlUrl="https://krebsonsecurity.com/" />
+        <outline text="The Hacker News RSS Feed" title="The Hacker News RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/TheHackersNews?format=xml" htmlUrl="https://thehackernews.com/" />
+        <outline text="The New York Times Ã‚Â» Cybersecurity RSS Feed" title="The New York Times Ã‚Â» Cybersecurity RSS Feed" type="rss" xmlUrl="https://www.nytimes.com/svc/collections/v1/publish/https://www.nytimes.com/spotlight/cybersecurity/rss.xml" htmlUrl="https://www.nytimes.com/spotlight/cybersecurity/" />
+        <outline text="The Record Media RSS Feed" title="The Record Media RSS Feed" type="rss" xmlUrl="https://therecord.media/feed" htmlUrl="https://therecord.media/" />
+        <outline text="SecurityWeek RSS Feed" title="SecurityWeek RSS Feed" type="rss" xmlUrl="https://www.securityweek.com/feed/" htmlUrl="https://www.securityweek.com/" />
+        <outline text="Dark Reading RSS Feed" title="Dark Reading RSS Feed" type="rss" xmlUrl="https://www.darkreading.com/rss.xml" htmlUrl="https://www.darkreading.com/" />
+        <outline text="CSO Online RSS Feed" title="CSO Online RSS Feed" type="rss" xmlUrl="https://www.csoonline.com/feed/" htmlUrl="https://www.csoonline.com/in/" />
+        <outline text="The National Cyber Security Centre RSS Feed" title="The National Cyber Security Centre RSS Feed" type="rss" xmlUrl="https://www.ncsc.gov.uk/api/1/services/v1/all-rss-feed.xml" htmlUrl="https://www.ncsc.gov.uk/" />
+      </outline>
+      <outline text="Privacy &amp; Data Protection" title="Privacy &amp; Data Protection">
+        <outline text="DLA Piper Ã‚Â» Privacy Matters RSS Feed" title="DLA Piper Ã‚Â» Privacy Matters RSS Feed" type="rss" xmlUrl="https://privacymatters.dlapiper.com/feed/" htmlUrl="https://privacymatters.dlapiper.com/" />
+        <outline text="Norton Rose Fulbright Data Protection Report RSS Feed" title="Norton Rose Fulbright Data Protection Report RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/DataProtectionReport" htmlUrl="https://www.dataprotectionreport.com/" />
+        <outline text="Fox Rothschild Ã‚Â» Privacy Compliance &amp; Data Security RSS Feed" title="Fox Rothschild Ã‚Â» Privacy Compliance &amp; Data Security RSS Feed" type="rss" xmlUrl="https://dataprivacy.foxrothschild.com/feed/" htmlUrl="https://dataprivacy.foxrothschild.com/" />
+        <outline text="Sidley Ã‚Â» Data Matters RSS Feed" title="Sidley Ã‚Â» Data Matters RSS Feed" type="rss" xmlUrl="https://datamatters.sidley.com/feed/" htmlUrl="https://datamatters.sidley.com/" />
+        <outline text="Inside Privacy RSS Feed" title="Inside Privacy RSS Feed" type="rss" xmlUrl="https://www.insideprivacy.com/feed/" htmlUrl="https://www.insideprivacy.com/" />
+        <outline text="TeachPrivacy Ã‚Â» Privacy+Security Blog RSS Feed" title="TeachPrivacy Ã‚Â» Privacy+Security Blog RSS Feed" type="rss" xmlUrl="https://teachprivacy.com/feed/" htmlUrl="https://teachprivacy.com/privacy-security-training-blog/" />
+        <outline text="Secuvy Blog RSS Feed" title="Secuvy Blog RSS Feed" type="rss" xmlUrl="https://secuvy.ai/feed/" htmlUrl="https://secuvy.ai/blog/" />
+        <outline text="Byte Back RSS Feed" title="Byte Back RSS Feed" type="rss" xmlUrl="https://www.bytebacklaw.com/feed/" htmlUrl="https://www.bytebacklaw.com/" />
+        <outline text="Wyrick Robbins Practical Privacy RSS Feed" title="Wyrick Robbins Practical Privacy RSS Feed" type="rss" xmlUrl="https://practicalprivacy.wyrick.com/feed" htmlUrl="https://practicalprivacy.wyrick.com/" />
+        <outline text="Greenberg Traurig's Data Privacy Dish RSS Feed" title="Greenberg Traurig's Data Privacy Dish RSS Feed" type="rss" xmlUrl="https://www.gtlaw-dataprivacydish.com/feed/" htmlUrl="https://www.gtlaw-dataprivacydish.com/" />
+      </outline>
+      <outline text="Programming &amp; Software Development" title="Programming &amp; Software Development">
+        <outline text="Scott Hanselman Blog RSS Feed" title="Scott Hanselman Blog RSS Feed" type="rss" xmlUrl="http://feeds.hanselman.com/ScottHanselman" htmlUrl="https://www.hanselman.com/blog/" />
+        <outline text="DZone RSS Feed" title="DZone RSS Feed" type="rss" xmlUrl="https://feeds.dzone.com/home" htmlUrl="https://dzone.com/" />
+        <outline text="Google Developers Blog RSS Feed" title="Google Developers Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/GDBcode" htmlUrl="https://developers.googleblog.com/" />
+        <outline text="DEV Community RSS Feed" title="DEV Community RSS Feed" type="rss" xmlUrl="https://dev.to/feed" htmlUrl="https://dev.to/" />
+        <outline text="Treehouse Blog RSS Feed" title="Treehouse Blog RSS Feed" type="rss" xmlUrl="http://blog.teamtreehouse.com/feed" htmlUrl="https://blog.teamtreehouse.com/" />
+        <outline text="The Crazy Programmer RSS Feed" title="The Crazy Programmer RSS Feed" type="rss" xmlUrl="https://www.thecrazyprogrammer.com/feed" htmlUrl="https://www.thecrazyprogrammer.com/" />
+        <outline text="CSS-Tricks RSS Feed" title="CSS-Tricks RSS Feed" type="rss" xmlUrl="https://css-tricks.com/feed/" htmlUrl="https://css-tricks.com/" />
+        <outline text="CodePen Blog RSS Feed" title="CodePen Blog RSS Feed" type="rss" xmlUrl="https://blog.codepen.io/feed/" htmlUrl="https://blog.codepen.io/" />
+        <outline text="CodeSignal Blog RSS Feed" title="CodeSignal Blog RSS Feed" type="rss" xmlUrl="https://codesignal.com/feed/" htmlUrl="https://codesignal.com/blog/" />
+        <outline text="The Stack Overflow Blog RSS Feed" title="The Stack Overflow Blog RSS Feed" type="rss" xmlUrl="https://stackoverflow.blog/feed/" htmlUrl="https://stackoverflow.blog/" />
+      </outline>
+      <outline text="Web Design &amp; UI/UX" title="Web Design &amp; UI/UX">
+        <outline text="Line25.com RSS Feed" title="Line25.com RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/Line25" htmlUrl="https://line25.com/" />
+        <outline text="Webdesigner Depot RSS Feed" title="Webdesigner Depot RSS Feed" type="rss" xmlUrl="https://feeds2.feedburner.com/webdesignerdepot" htmlUrl="https://www.webdesignerdepot.com/" />
+        <outline text="Smashing Magazine RSS Feed" title="Smashing Magazine RSS Feed" type="rss" xmlUrl="https://www.smashingmagazine.com/feed" htmlUrl="https://www.smashingmagazine.com/articles/" />
+        <outline text="Web Design Ledger RSS Feed" title="Web Design Ledger RSS Feed" type="rss" xmlUrl="https://webdesignledger.com/feed/" htmlUrl="https://webdesignledger.com/" />
+        <outline text="The UX Booth RSS Feed" title="The UX Booth RSS Feed" type="rss" xmlUrl="https://feedpress.me/uxbooth" />
+        <outline text="UX Collective RSS Feed" title="UX Collective RSS Feed" type="rss" xmlUrl="https://uxdesign.cc/feed" htmlUrl="https://uxdesign.cc/" />
+        <outline text="UX Planet RSS Feed" title="UX Planet RSS Feed" type="rss" xmlUrl="https://uxplanet.org/feed" htmlUrl="https://uxplanet.org/" />
+        <outline text="UX Movement RSS Feed" title="UX Movement RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/uxmovement" htmlUrl="https://uxmovement.com/" />
+        <outline text="UXPin Blog Ã‚Â» UX Design RSS Feed" title="UXPin Blog Ã‚Â» UX Design RSS Feed" type="rss" xmlUrl="https://www.uxpin.com/studio/blog/category/ux-design/feed/" htmlUrl="https://www.uxpin.com/studio/blog/category/ux-design/" />
+        <outline text="Envato Tuts Web Design RSS Feed" title="Envato Tuts Web Design RSS Feed" type="rss" xmlUrl="https://webdesign.tutsplus.com/posts.atom" htmlUrl="https://webdesign.tutsplus.com/" />
+      </outline>
+      <outline text="WordPress &amp; Web Development" title="WordPress &amp; Web Development">
+        <outline text="Make WordPress Core RSS Feed" title="Make WordPress Core RSS Feed" type="rss" xmlUrl="https://make.wordpress.org/core/feed/" htmlUrl="https://make.wordpress.org/core/" />
+        <outline text="WordPress Developer Blog RSS Feed" title="WordPress Developer Blog RSS Feed" type="rss" xmlUrl="https://developer.wordpress.org/news/feed/" htmlUrl="https://developer.wordpress.org/news/" />
+        <outline text="WordPress News RSS Feed" title="WordPress News RSS Feed" type="rss" xmlUrl="https://wordpress.org/news/feed/" htmlUrl="https://wordpress.org/news/" />
+        <outline text="WordPress.tv RSS Feed" title="WordPress.tv RSS Feed" type="rss" xmlUrl="https://wordpress.tv/feed/" htmlUrl="https://wordpress.tv/" />
+        <outline text="ThemeShaper Shaping WordPress Themes RSS Feed" title="ThemeShaper Shaping WordPress Themes RSS Feed" type="rss" xmlUrl="https://themeshaper.com/feed/" htmlUrl="https://themeshaper.com/" />
+        <outline text="The WordPress Blog RSS Feed" title="The WordPress Blog RSS Feed" type="rss" xmlUrl="https://wordpress.com/blog/feed/" htmlUrl="https://wordpress.com/blog/" />
+        <outline text="WordPress Development Stack Exchange RSS Feed" title="WordPress Development Stack Exchange RSS Feed" type="rss" xmlUrl="https://wordpress.stackexchange.com/feeds?format=xml" htmlUrl="https://wordpress.stackexchange.com/" />
+        <outline text="Delicious Brains Blog RSS Feed" title="Delicious Brains Blog RSS Feed" type="rss" xmlUrl="https://deliciousbrains.com/blog/feed" htmlUrl="https://deliciousbrains.com/blog/" />
+        <outline text="WPShout RSS Feed" title="WPShout RSS Feed" type="rss" xmlUrl="https://wpshout.com/feed/" htmlUrl="https://wpshout.com/" />
+        <outline text="SpinupWP Blog RSS Feed" title="SpinupWP Blog RSS Feed" type="rss" xmlUrl="https://spinupwp.com/feed/" htmlUrl="https://spinupwp.com/blog/" />
+      </outline>
+      <outline text="Robotics" title="Robotics">
+        <outline text="Robohub RSS Feed" title="Robohub RSS Feed" type="rss" xmlUrl="https://robohub.org/feed/" htmlUrl="https://robohub.org/category/news/" />
+        <outline text="The Robot Report RSS Feed" title="The Robot Report RSS Feed" type="rss" xmlUrl="https://www.therobotreport.com/feed/" htmlUrl="https://www.therobotreport.com/" />
+        <outline text="Robotiq Blog RSS Feed" title="Robotiq Blog RSS Feed" type="rss" xmlUrl="https://blog.robotiq.com/rss.xml" htmlUrl="https://blog.robotiq.com/" />
+        <outline text="New Atlas RSS Feed" title="New Atlas RSS Feed" type="rss" xmlUrl="https://newatlas.com/robotics/index.rss" htmlUrl="https://newatlas.com/robotics/" />
+        <outline text="Roboticmagazine RSS Feed" title="Roboticmagazine RSS Feed" type="rss" xmlUrl="https://www.roboticmagazine.com/feed" htmlUrl="https://www.roboticmagazine.com/" />
+        <outline text="Tech Xplore Ã‚Â» Robotics RSS Feed" title="Tech Xplore Ã‚Â» Robotics RSS Feed" type="rss" xmlUrl="https://techxplore.com/rss-feed/robotics-news/" htmlUrl="https://techxplore.com/robotics-news/" />
+        <outline text="Make RSS Feed" title="Make RSS Feed" type="rss" xmlUrl="https://makezine.com/category/technology/robotics/feed/" htmlUrl="https://makezine.com/category/technology/robotics/" />
+        <outline text="SingularityHub Ã‚Â» Robotics RSS Feed" title="SingularityHub Ã‚Â» Robotics RSS Feed" type="rss" xmlUrl="https://singularityhub.com/feed/" htmlUrl="https://singularityhub.com/category/robotics/" />
+        <outline text="The Robot Report Ã‚Â» Self-Driving Vehicles RSS Feed" title="The Robot Report Ã‚Â» Self-Driving Vehicles RSS Feed" type="rss" xmlUrl="https://www.therobotreport.com/feed/" htmlUrl="https://www.therobotreport.com/category/robots-platforms/self-driving-vehicles/" />
+        <outline text="RoboDK Blog RSS Feed" title="RoboDK Blog RSS Feed" type="rss" xmlUrl="https://robodk.com/blog/feed/" htmlUrl="https://robodk.com/blog/" />
+      </outline>
+      <outline text="Business" title="Business">
+        <outline text="VentureBeat RSS Feed" title="VentureBeat RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/venturebeat/SZYF" htmlUrl="https://venturebeat.com/" />
+        <outline text="Forbes Ã‚Â» Business RSS Feed" title="Forbes Ã‚Â» Business RSS Feed" type="rss" xmlUrl="https://www.forbes.com/business/feed/" htmlUrl="https://www.forbes.com/business/" />
+        <outline text="Business Insider RSS Feed" title="Business Insider RSS Feed" type="rss" xmlUrl="https://feeds.businessinsider.com/custom/all" htmlUrl="https://www.businessinsider.com/" />
+        <outline text="Fast Company RSS Feed" title="Fast Company RSS Feed" type="rss" xmlUrl="https://www.fastcompany.com/latest/rss?truncated=true" htmlUrl="https://www.fastcompany.com/" />
+        <outline text="Inc. RSS Feed" title="Inc. RSS Feed" type="rss" xmlUrl="https://www.inc.com/rss/" htmlUrl="https://www.inc.com/" />
+        <outline text="Foundr Blog RSS Feed" title="Foundr Blog RSS Feed" type="rss" xmlUrl="https://foundr.com/articles/feed" htmlUrl="https://foundr.com/articles" />
+      </outline>
+      <outline text="Finance" title="Finance">
+        <outline text="Good Financial Cents RSS Feed" title="Good Financial Cents RSS Feed" type="rss" xmlUrl="https://www.goodfinancialcents.com/feed/" htmlUrl="https://www.goodfinancialcents.com/all/" />
+        <outline text="The Penny Hoarder RSS Feed" title="The Penny Hoarder RSS Feed" type="rss" xmlUrl="https://www.thepennyhoarder.com/rss/" htmlUrl="https://www.thepennyhoarder.com/" />
+        <outline text="Get Rich Slowly RSS Feed" title="Get Rich Slowly RSS Feed" type="rss" xmlUrl="https://www.getrichslowly.org/feed/" htmlUrl="https://www.getrichslowly.org/" />
+        <outline text="Making Sense Of Cents Blog RSS Feed" title="Making Sense Of Cents Blog RSS Feed" type="rss" xmlUrl="https://www.makingsenseofcents.com/feed" htmlUrl="https://www.makingsenseofcents.com/" />
+        <outline text="Financial Samurai RSS Feed" title="Financial Samurai RSS Feed" type="rss" xmlUrl="https://www.financialsamurai.com/feed/" htmlUrl="https://www.financialsamurai.com/" />
+        <outline text="Thomas Guenter RSS Feed" title="Thomas Guenter RSS Feed" type="rss" xmlUrl="https://medium.com/feed/@thomasguenter" htmlUrl="https://thomasguenter.medium.com/" />
+        <outline text="The College Investor RSS Feed" title="The College Investor RSS Feed" type="rss" xmlUrl="https://thecollegeinvestor.com/feed/" htmlUrl="https://thecollegeinvestor.com/" />
+        <outline text="Clever Girl Finance Blog RSS Feed" title="Clever Girl Finance Blog RSS Feed" type="rss" xmlUrl="https://www.clevergirlfinance.com/feed/" htmlUrl="https://www.clevergirlfinance.com/blog/" />
+        <outline text="Side Hustle Nation Blog RSS Feed" title="Side Hustle Nation Blog RSS Feed" type="rss" xmlUrl="https://www.sidehustlenation.com/feed/" htmlUrl="https://www.sidehustlenation.com/blog/" />
+        <outline text="Millennial Money Ã‚Â» Investing RSS Feed" title="Millennial Money Ã‚Â» Investing RSS Feed" type="rss" xmlUrl="https://millennialmoney.com/category/investing/feed/" htmlUrl="https://millennialmoney.com/category/investing/" />
+      </outline>
+      <outline text="FinTech" title="FinTech">
+        <outline text="Finextra Blog RSS Feed" title="Finextra Blog RSS Feed" type="rss" xmlUrl="https://www.finextra.com/rss/headlines.aspx" htmlUrl="https://www.finextra.com/latest-blogs" />
+        <outline text="The Fintech Times RSS Feed" title="The Fintech Times RSS Feed" type="rss" xmlUrl="https://thefintechtimes.com/feed/" htmlUrl="https://thefintechtimes.com/category/exclusive-content/fintech-ecosystems/" />
+        <outline text="Finance Magnates RSS Feed" title="Finance Magnates RSS Feed" type="rss" xmlUrl="https://www.financemagnates.com/fintech/feed/" htmlUrl="https://www.financemagnates.com/fintech/" />
+        <outline text="TechCrunch Ã‚Â» Fintech RSS Feed" title="TechCrunch Ã‚Â» Fintech RSS Feed" type="rss" xmlUrl="https://techcrunch.com/tag/fintech/feed/" htmlUrl="https://techcrunch.com/tag/fintech/" />
+        <outline text="Finovate Blog RSS Feed" title="Finovate Blog RSS Feed" type="rss" xmlUrl="https://finovate.com/feed/" htmlUrl="https://finovate.com/blog/" />
+        <outline text="Wharton FinTech RSS Feed" title="Wharton FinTech RSS Feed" type="rss" xmlUrl="https://medium.com/feed/wharton-fintech" htmlUrl="https://medium.com/wharton-fintech" />
+        <outline text="Payments Dive RSS Feed" title="Payments Dive RSS Feed" type="rss" xmlUrl="https://www.paymentsdive.com/feeds/news/" htmlUrl="https://www.paymentsdive.com/" />
+        <outline text="ATM Marketplace Blog RSS Feed" title="ATM Marketplace Blog RSS Feed" type="rss" xmlUrl="https://www.atmmarketplace.com/rss/" htmlUrl="https://www.atmmarketplace.com/blogs/" />
+        <outline text="Bobsguide News RSS Feed" title="Bobsguide News RSS Feed" type="rss" xmlUrl="https://www.bobsguide.com/category/bankingtech/fintech/feed/" htmlUrl="https://www.bobsguide.com/category/bankingtech/fintech/" />
+        <outline text="Net Interest RSS Feed" title="Net Interest RSS Feed" type="rss" xmlUrl="https://www.netinterest.co/feed" htmlUrl="https://www.netinterest.co/" />
+      </outline>
+      <outline text="Cryptocurrency" title="Cryptocurrency">
+        <outline text="Cointelegraph RSS Feed" title="Cointelegraph RSS Feed" type="rss" xmlUrl="https://cointelegraph.com/rss" htmlUrl="https://cointelegraph.com/" />
+        <outline text="The Defiant RSS Feed" title="The Defiant RSS Feed" type="rss" xmlUrl="https://thedefiant.io/api/feed" htmlUrl="https://thedefiant.io/" />
+        <outline text="Bitcoin.com RSS Feed" title="Bitcoin.com RSS Feed" type="rss" xmlUrl="https://news.bitcoin.com/feed/" htmlUrl="https://news.bitcoin.com/" />
+        <outline text="Crypto Briefing RSS Feed" title="Crypto Briefing RSS Feed" type="rss" xmlUrl="https://cryptobriefing.com/feed/" htmlUrl="https://cryptobriefing.com/" />
+        <outline text="NewsBTC RSS Feed" title="NewsBTC RSS Feed" type="rss" xmlUrl="https://www.newsbtc.com/feed/" htmlUrl="https://www.newsbtc.com/" />
+        <outline text="CryptoPotato RSS Feed" title="CryptoPotato RSS Feed" type="rss" xmlUrl="https://cryptopotato.com/feed/" htmlUrl="https://cryptopotato.com/" />
+        <outline text="Cryptonews RSS Feed" title="Cryptonews RSS Feed" type="rss" xmlUrl="https://cryptonews.com/news/feed/" htmlUrl="https://cryptonews.com/news/" />
+      </outline>
+      <outline text="Blockchain" title="Blockchain">
+        <outline text="Blockchain.News RSS Feed" title="Blockchain.News RSS Feed" type="rss" xmlUrl="https://blockchain.news/rss" htmlUrl="https://blockchain.news/" />
+        <outline text="Inside Bitcoins RSS Feed" title="Inside Bitcoins RSS Feed" type="rss" xmlUrl="https://insidebitcoins.com/feed" htmlUrl="https://insidebitcoins.com/news" />
+        <outline text="BitDegree Ã‚Â» Crypto News RSS Feed" title="BitDegree Ã‚Â» Crypto News RSS Feed" type="rss" xmlUrl="https://www.bitdegree.org/crypto/news/rss" htmlUrl="https://www.bitdegree.org/crypto/news" />
+        <outline text="The Crypto Update: Blockchain RSS Feed" title="The Crypto Update: Blockchain RSS Feed" type="rss" xmlUrl="https://www.thecryptoupdates.com/feed/" htmlUrl="https://www.thecryptoupdates.com/category/blockchain-news/" />
+        <outline text="MultiChain Blog RSS Feed" title="MultiChain Blog RSS Feed" type="rss" xmlUrl="https://www.multichain.com/feed/" htmlUrl="https://www.multichain.com/blog/" />
+        <outline text="101 Blockchains Blog RSS Feed" title="101 Blockchains Blog RSS Feed" type="rss" xmlUrl="https://101blockchains.com/feed/" htmlUrl="https://101blockchains.com/blog/" />
+        <outline text="Master The Crypto RSS Feed" title="Master The Crypto RSS Feed" type="rss" xmlUrl="https://masterthecrypto.com/feed/" htmlUrl="https://masterthecrypto.com/" />
+        <outline text="Blockchain Education RSS Feed" title="Blockchain Education RSS Feed" type="rss" xmlUrl="https://blockchaineducation.com.au/feed/" htmlUrl="https://blockchaineducation.com.au/" />
+        <outline text="Blockchain Research Lab Blog RSS Feed" title="Blockchain Research Lab Blog RSS Feed" type="rss" xmlUrl="https://www.blockchainresearchlab.org/feed/" htmlUrl="https://www.blockchainresearchlab.org/blog/" />
+        <outline text="AE Ventures RSS Feed" title="AE Ventures RSS Feed" type="rss" xmlUrl="https://medium.com/feed/ae-ventures" htmlUrl="https://medium.com/ae-ventures" />
+      </outline>
+      <outline text="Startups" title="Startups">
+        <outline text="TechCrunch Ã‚Â» Startups RSS Feed" title="TechCrunch Ã‚Â» Startups RSS Feed" type="rss" xmlUrl="https://techcrunch.com/category/startups/feed/" htmlUrl="https://techcrunch.com/category/startups/" />
+        <outline text="The Startup Magazine RSS Feed" title="The Startup Magazine RSS Feed" type="rss" xmlUrl="https://thestartupmag.com/feed/" htmlUrl="https://thestartupmag.com/" />
+        <outline text="Startup Daily RSS Feed" title="Startup Daily RSS Feed" type="rss" xmlUrl="https://www.startupdaily.net/feed/" htmlUrl="https://www.startupdaily.net/" />
+        <outline text="Startups RSS Feed" title="Startups RSS Feed" type="rss" xmlUrl="https://startups.co.uk/feed/" htmlUrl="https://startups.co.uk/" />
+        <outline text="EU-Startups RSS Feed" title="EU-Startups RSS Feed" type="rss" xmlUrl="https://www.eu-startups.com/feed/" htmlUrl="https://www.eu-startups.com/" />
+        <outline text="StartUs Magazine RSS Feed" title="StartUs Magazine RSS Feed" type="rss" xmlUrl="https://magazine.startus.cc/feed/" htmlUrl="https://magazine.startus.cc/" />
+        <outline text="StartupNation.com RSS Feed" title="StartupNation.com RSS Feed" type="rss" xmlUrl="https://startupnation.com/feed/" htmlUrl="https://startupnation.com/" />
+        <outline text="Steve Blank RSS Feed" title="Steve Blank RSS Feed" type="rss" xmlUrl="https://steveblank.com/feed/" htmlUrl="https://steveblank.com/" />
+        <outline text="Andrew Chen RSS Feed" title="Andrew Chen RSS Feed" type="rss" xmlUrl="https://andrewchen.com/feed/" htmlUrl="https://andrewchen.com/recent/" />
+        <outline text="This is going to be BIG Blog RSS Feed" title="This is going to be BIG Blog RSS Feed" type="rss" xmlUrl="https://www.thisisgoingtobebig.com/blog?format=rss" htmlUrl="https://www.thisisgoingtobebig.com/blog" />
+      </outline>
+      <outline text="Entrepreneur" title="Entrepreneur">
+        <outline text="Foundr RSS Feed" title="Foundr RSS Feed" type="rss" xmlUrl="https://foundr.com/feed" htmlUrl="https://foundr.com/articles" />
+        <outline text="Under30CEO Blog RSS Feed" title="Under30CEO Blog RSS Feed" type="rss" xmlUrl="https://www.under30ceo.com/category/blog/feed/" htmlUrl="https://www.under30ceo.com/category/blog/" />
+        <outline text="Young Upstarts RSS Feed" title="Young Upstarts RSS Feed" type="rss" xmlUrl="https://www.youngupstarts.com/feed/" htmlUrl="https://www.youngupstarts.com/" />
+        <outline text="Entrepreneur's Handbook RSS Feed" title="Entrepreneur's Handbook RSS Feed" type="rss" xmlUrl="https://entrepreneurshandbook.co/feed" htmlUrl="https://ehandbook.com/" />
+        <outline text="Seth's Blog RSS Feed" title="Seth's Blog RSS Feed" type="rss" xmlUrl="https://seths.blog/feed/" htmlUrl="https://seths.blog/" />
+        <outline text="Gary Vaynerchuk Blog RSS Feed" title="Gary Vaynerchuk Blog RSS Feed" type="rss" xmlUrl="https://garyvaynerchuk.com/feed/" htmlUrl="https://garyvaynerchuk.com/blog/" />
+        <outline text="Brian Solis RSS Feed" title="Brian Solis RSS Feed" type="rss" xmlUrl="https://briansolis.com/feed/" htmlUrl="https://briansolis.com/category/articles/" />
+        <outline text="Mike Michalowicz Blog RSS Feed" title="Mike Michalowicz Blog RSS Feed" type="rss" xmlUrl="https://mikemichalowicz.com/feed/" htmlUrl="https://mikemichalowicz.com/blog/" />
+        <outline text="Penelope Trunk Blog RSS Feed" title="Penelope Trunk Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/BrazenCareerist" htmlUrl="https://blog.penelopetrunk.com/" />
+        <outline text="Chris Ducker Blog RSS Feed" title="Chris Ducker Blog RSS Feed" type="rss" xmlUrl="https://chrisducker.com/feed/" htmlUrl="https://chrisducker.com/blog" />
+      </outline>
+      <outline text="Digital Marketing" title="Digital Marketing">
+        <outline text="Moz Blog RSS Feed" title="Moz Blog RSS Feed" type="rss" xmlUrl="https://moz.com/feeds/blog.rss" htmlUrl="https://moz.com/blog" />
+        <outline text="The HubSpot Marketing Blog RSS Feed" title="The HubSpot Marketing Blog RSS Feed" type="rss" xmlUrl="https://blog.hubspot.com/marketing/rss.xml" htmlUrl="https://blog.hubspot.com/" />
+        <outline text="Neil Patel's Blog RSS Feed" title="Neil Patel's Blog RSS Feed" type="rss" xmlUrl="https://neilpatel.com/feed/" htmlUrl="https://neilpatel.com/blog/" />
+        <outline text="MarTech RSS Feed" title="MarTech RSS Feed" type="rss" xmlUrl="https://martech.org/feed/" htmlUrl="https://martech.org/" />
+        <outline text="Social Media Examiner RSS Feed" title="Social Media Examiner RSS Feed" type="rss" xmlUrl="https://www.socialmediaexaminer.com/feed/" htmlUrl="https://www.socialmediaexaminer.com/" />
+        <outline text="Search Engine Journal RSS Feed" title="Search Engine Journal RSS Feed" type="rss" xmlUrl="https://www.searchenginejournal.com/feed/atom/" htmlUrl="https://www.searchenginejournal.com/" />
+        <outline text="Convince &amp; Convert Blog RSS Feed" title="Convince &amp; Convert Blog RSS Feed" type="rss" xmlUrl="https://www.convinceandconvert.com/blog/feed/" htmlUrl="https://www.convinceandconvert.com/blog/" />
+        <outline text="Targeted Visitors Blog RSS Feed" title="Targeted Visitors Blog RSS Feed" type="rss" xmlUrl="https://targeted-visitors.com/feed/" htmlUrl="https://targeted-visitors.com/blog/" />
+        <outline text="Profit Copilot RSS Feed" title="Profit Copilot RSS Feed" type="rss" xmlUrl="https://profitcopilot.com/feed" htmlUrl="https://profitcopilot.com/" />
+        <outline text="Semrush Blog RSS Feed" title="Semrush Blog RSS Feed" type="rss" xmlUrl="https://www.semrush.com/blog/feed/" htmlUrl="https://www.semrush.com/blog/" />
+      </outline>
+      <outline text="Advertising" title="Advertising">
+        <outline text="Adweek RSS Feed" title="Adweek RSS Feed" type="rss" xmlUrl="https://www.adweek.com/feed/" htmlUrl="https://www.adweek.com/" />
+        <outline text="SmartBrief Ã‚Â» Marketing &amp; Advertising RSS Feed" title="SmartBrief Ã‚Â» Marketing &amp; Advertising RSS Feed" type="rss" xmlUrl="https://www.smartbrief.com/industry/marketing-advertising/feed" htmlUrl="https://www.smartbrief.com/industry/marketing-advertising" />
+        <outline text="The Guardian Ã‚Â» Advertising RSS Feed" title="The Guardian Ã‚Â» Advertising RSS Feed" type="rss" xmlUrl="https://www.theguardian.com/media/advertising/rss" htmlUrl="https://www.theguardian.com/media/advertising" />
+        <outline text="Mashable Ã‚Â» Advertising RSS Feed" title="Mashable Ã‚Â» Advertising RSS Feed" type="rss" xmlUrl="https://in.mashable.com/advertising.xml" htmlUrl="https://in.mashable.com/advertising" />
+        <outline text="More About Advertising RSS Feed" title="More About Advertising RSS Feed" type="rss" xmlUrl="https://www.moreaboutadvertising.com/feed/" htmlUrl="https://www.moreaboutadvertising.com/" />
+        <outline text="AdPulp RSS Feed" title="AdPulp RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/Adpulp" htmlUrl="https://www.adpulp.com/" />
+        <outline text="Adrants RSS Feed" title="Adrants RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/adrants" htmlUrl="https://adrants.com/" />
+        <outline text="The Ad Contrarian RSS Feed" title="The Ad Contrarian RSS Feed" type="rss" xmlUrl="http://feeds.feedburner.com/blogspot/aDYs" htmlUrl="http://adcontrarian.blogspot.com/" />
+        <outline text="Gods of Advertising RSS Feed" title="Gods of Advertising RSS Feed" type="rss" xmlUrl="https://godsofadvertising.wordpress.com/feed/" htmlUrl="https://godsofadvertising.wordpress.com/" />
+        <outline text="AdExchanger RSS Feed" title="AdExchanger RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/ad-exchange-news" htmlUrl="https://www.adexchanger.com/" />
+      </outline>
+      <outline text="Real Estate" title="Real Estate">
+        <outline text="Inman RSS Feed" title="Inman RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/inmannews" htmlUrl="https://www.inman.com/" />
+        <outline text="HousingWire RSS Feed" title="HousingWire RSS Feed" type="rss" xmlUrl="https://www.housingwire.com/feed/" htmlUrl="https://www.housingwire.com/" />
+        <outline text="The Real Deal NY RSS Feed" title="The Real Deal NY RSS Feed" type="rss" xmlUrl="https://therealdeal.com/new-york/feed/" htmlUrl="https://therealdeal.com/" />
+        <outline text="RISMedia's Housecall Blog RSS Feed" title="RISMedia's Housecall Blog RSS Feed" type="rss" xmlUrl="http://blog.rismedia.com/feed/" htmlUrl="http://blog.rismedia.com/" />
+        <outline text="Brick Underground RSS Feed" title="Brick Underground RSS Feed" type="rss" xmlUrl="https://www.brickunderground.com/rss.xml" htmlUrl="https://www.brickunderground.com/" />
+        <outline text="Property Industry Eye RSS Feed" title="Property Industry Eye RSS Feed" type="rss" xmlUrl="https://propertyindustryeye.com/feed/" htmlUrl="https://propertyindustryeye.com/news/" />
+        <outline text="Redfin Blog RSS Feed" title="Redfin Blog RSS Feed" type="rss" xmlUrl="https://www.redfin.com/blog/feed/" htmlUrl="https://www.redfin.com/blog/" />
+        <outline text="Keeping Current Matters Blog RSS Feed" title="Keeping Current Matters Blog RSS Feed" type="rss" xmlUrl="https://www.keepingcurrentmatters.com/feed/" htmlUrl="https://www.keepingcurrentmatters.com/blog/" />
+        <outline text="Eye On Housing RSS Feed" title="Eye On Housing RSS Feed" type="rss" xmlUrl="https://eyeonhousing.org/feed/" htmlUrl="https://eyeonhousing.org/" />
+        <outline text="Miller Samuel Blog RSS Feed" title="Miller Samuel Blog RSS Feed" type="rss" xmlUrl="https://millersamuel.com/blog/feed/" htmlUrl="https://millersamuel.com/blog/" />
+      </outline>
+      <outline text="Science" title="Science">
+        <outline text="Scientific American RSS Feed" title="Scientific American RSS Feed" type="rss" xmlUrl="https://www.scientificamerican.com/platform/syndication/rss/" htmlUrl="https://www.scientificamerican.com/" />
+        <outline text="Science News Magazine RSS Feed" title="Science News Magazine RSS Feed" type="rss" xmlUrl="https://www.sciencenews.org/feed" htmlUrl="https://www.sciencenews.org/" />
+        <outline text="Knowable Magazine RSS Feed" title="Knowable Magazine RSS Feed" type="rss" xmlUrl="https://knowablemagazine.org/rss" htmlUrl="https://knowablemagazine.org/" />
+        <outline text="New Scientist Magazine RSS Feed" title="New Scientist Magazine RSS Feed" type="rss" xmlUrl="https://www.newscientist.com/feed/home/?cmpid=RSS|NSNS-Home" htmlUrl="https://www.newscientist.com/" />
+        <outline text="Phys.org RSS Feed" title="Phys.org RSS Feed" type="rss" xmlUrl="https://phys.org/rss-feed/" htmlUrl="https://phys.org/" />
+        <outline text="U.S. National Science Foundation News RSS Feed" title="U.S. National Science Foundation News RSS Feed" type="rss" xmlUrl="https://www.nsf.gov/rss/rss_www_news.xml" htmlUrl="https://www.nsf.gov/news" />
+      </outline>
+      <outline text="Astronomy" title="Astronomy">
+        <outline text="Space.com RSS Feed" title="Space.com RSS Feed" type="rss" xmlUrl="https://www.space.com/feeds.xml" htmlUrl="https://www.space.com/" />
+        <outline text="Physics World Ã‚Â» Astronomy and Space RSS Feed" title="Physics World Ã‚Â» Astronomy and Space RSS Feed" type="rss" xmlUrl="https://physicsworld.com/c/astronomy-space/feed/" htmlUrl="https://physicsworld.com/c/astronomy-space/" />
+        <outline text="Armagh Planetarium's Stellar Blog RSS Feed" title="Armagh Planetarium's Stellar Blog RSS Feed" type="rss" xmlUrl="https://armaghplanet.com/feed" htmlUrl="https://armaghplanet.com/" />
+        <outline text="Astroblog RSS Feed" title="Astroblog RSS Feed" type="rss" xmlUrl="http://astroblogger.blogspot.com/feeds/posts/default?alt=rss" htmlUrl="http://astroblogger.blogspot.com/" />
+        <outline text="Women In Astronomy RSS Feed" title="Women In Astronomy RSS Feed" type="rss" xmlUrl="https://womeninastronomy.blogspot.com/feeds/posts/default?alt=rss" htmlUrl="https://womeninastronomy.blogspot.com/" />
+        <outline text="National Radio Astronomy Observatory RSS Feed" title="National Radio Astronomy Observatory RSS Feed" type="rss" xmlUrl="https://public.nrao.edu/feed/" htmlUrl="https://public.nrao.edu/blogs/" />
+        <outline text="Clear Skies Blog RSS Feed" title="Clear Skies Blog RSS Feed" type="rss" xmlUrl="https://clearskies.eu/feed/" htmlUrl="https://clearskies.eu/blog/" />
+        <outline text="Astronomy Magazine RSS Feed" title="Astronomy Magazine RSS Feed" type="rss" xmlUrl="https://www.astronomy.com/feed/" htmlUrl="https://www.astronomy.com/" />
+        <outline text="Forsyth Astronomical Society Blog RSS Feed" title="Forsyth Astronomical Society Blog RSS Feed" type="rss" xmlUrl="https://www.fas37.org/wp/feed/" htmlUrl="https://www.fas37.org/wp/fas-astronomers-blog/" />
+        <outline text="Name A Star Blog RSS Feed" title="Name A Star Blog RSS Feed" type="rss" xmlUrl="https://www.nameastar.com/feed/" htmlUrl="https://www.nameastar.com/blog/" />
+      </outline>
+      <outline text="Environment" title="Environment">
+        <outline text="Grist RSS Feed" title="Grist RSS Feed" type="rss" xmlUrl="https://grist.org/feed/" htmlUrl="https://grist.org/" />
+        <outline text="Earth911 RSS Feed" title="Earth911 RSS Feed" type="rss" xmlUrl="http://earth911.com/feed/" htmlUrl="https://earth911.com/" />
+        <outline text="Earth University RSS Feed" title="Earth University RSS Feed" type="rss" xmlUrl="https://news.climate.columbia.edu/feed/" htmlUrl="https://news.climate.columbia.edu/" />
+        <outline text="The Ecologist RSS Feed" title="The Ecologist RSS Feed" type="rss" xmlUrl="https://theecologist.org/whats_new/feed" htmlUrl="https://theecologist.org/" />
+        <outline text="Eco News RSS Feed" title="Eco News RSS Feed" type="rss" xmlUrl="https://econews.com.au/feed/" htmlUrl="https://econews.com.au/" />
+        <outline text="The Independent Ã‚Â» Climate Change RSS Feed" title="The Independent Ã‚Â» Climate Change RSS Feed" type="rss" xmlUrl="https://www.independent.co.uk/climate-change/news/rss" htmlUrl="https://www.independent.co.uk/climate-change/news" />
+        <outline text="Yale E360 RSS Feed" title="Yale E360 RSS Feed" type="rss" xmlUrl="https://e360.yale.edu/feed.xml" htmlUrl="https://e360.yale.edu/" />
+        <outline text="Greenpeace Canada RSS Feed" title="Greenpeace Canada RSS Feed" type="rss" xmlUrl="https://www.greenpeace.org/canada/en/feed/" htmlUrl="https://www.greenpeace.org/canada/en/news-stories/" />
+        <outline text="Audubon RSS Feed" title="Audubon RSS Feed" type="rss" xmlUrl="https://www.audubon.org/rss.xml" htmlUrl="https://www.audubon.org/news" />
+        <outline text="Envirotec Magazine RSS Feed" title="Envirotec Magazine RSS Feed" type="rss" xmlUrl="https://envirotecmagazine.com/feed/" htmlUrl="https://envirotecmagazine.com/" />
+      </outline>
+      <outline text="Sustainability" title="Sustainability">
+        <outline text="Going Zero Waste Blog RSS Feed" title="Going Zero Waste Blog RSS Feed" type="rss" xmlUrl="https://www.goingzerowaste.com/feed/" htmlUrl="https://www.goingzerowaste.com/" />
+        <outline text="Mindful Momma RSS Feed" title="Mindful Momma RSS Feed" type="rss" xmlUrl="https://mindfulmomma.com/feed/" htmlUrl="https://mindfulmomma.com/" />
+        <outline text="Sustainable Jungle RSS Feed" title="Sustainable Jungle RSS Feed" type="rss" xmlUrl="https://www.sustainablejungle.com/feed/" htmlUrl="https://www.sustainablejungle.com/" />
+        <outline text="Gypsy Soul Blog RSS Feed" title="Gypsy Soul Blog RSS Feed" type="rss" xmlUrl="https://www.gypsysoul.co.uk/feed/" htmlUrl="https://www.gypsysoul.co.uk/blog/" />
+        <outline text="Click A Tree Blog RSS Feed" title="Click A Tree Blog RSS Feed" type="rss" xmlUrl="https://clickatree.com/feed/" htmlUrl="https://clickatree.com/esg-blog/" />
+        <outline text="Hope College Sustainability Institute RSS Feed" title="Hope College Sustainability Institute RSS Feed" type="rss" xmlUrl="https://blogs.hope.edu/sustainability-institute/feed/" htmlUrl="https://blogs.hope.edu/sustainability-institute/" />
+        <outline text="Sustainability Math RSS Feed" title="Sustainability Math RSS Feed" type="rss" xmlUrl="http://sustainabilitymath.org/feed/" htmlUrl="http://sustainabilitymath.org/" />
+        <outline text="SimplyKalaa RSS Feed" title="SimplyKalaa RSS Feed" type="rss" xmlUrl="https://simplykalaa.com/feed/" htmlUrl="https://simplykalaa.com/post/" />
+        <outline text="Earth 911 RSS Feed" title="Earth 911 RSS Feed" type="rss" xmlUrl="https://earth911.com/feed/" htmlUrl="https://earth911.com/" />
+        <outline text="Curiously Conscious RSS Feed" title="Curiously Conscious RSS Feed" type="rss" xmlUrl="https://www.curiouslyconscious.com/feed/" htmlUrl="https://www.curiouslyconscious.com/" />
+      </outline>
+      <outline text="Green Technology" title="Green Technology">
+        <outline text="Envirotec Magazine RSS Feed" title="Envirotec Magazine RSS Feed" type="rss" xmlUrl="https://envirotecmagazine.com/feed/" htmlUrl="https://envirotecmagazine.com/" />
+        <outline text="CleanTechnica RSS Feed" title="CleanTechnica RSS Feed" type="rss" xmlUrl="https://cleantechnica.com/feed/" htmlUrl="https://cleantechnica.com/tag/fossil-fuel/" />
+        <outline text="Trellis Group RSS Feed" title="Trellis Group RSS Feed" type="rss" xmlUrl="https://trellis.net/feed/" htmlUrl="https://trellis.net/" />
+        <outline text="Clean Energy Canada RSS Feed" title="Clean Energy Canada RSS Feed" type="rss" xmlUrl="https://cleanenergycanada.org/feed/" htmlUrl="https://cleanenergycanada.org/news/" />
+        <outline text="The Environmental Blog Ã‚Â» Green Technology RSS Feed" title="The Environmental Blog Ã‚Â» Green Technology RSS Feed" type="rss" xmlUrl="https://www.theenvironmentalblog.org/category/green-technology/feed/" htmlUrl="https://www.theenvironmentalblog.org/category/green-technology/" />
+        <outline text="Women in Cleantech &amp; Sustainability Blog RSS Feed" title="Women in Cleantech &amp; Sustainability Blog RSS Feed" type="rss" xmlUrl="https://www.womenincleantechsustainability.org/feed/" htmlUrl="https://www.womenincleantechsustainability.org/category/wcs-blog/" />
+        <outline text="Clean Technica RSS Feed" title="Clean Technica RSS Feed" type="rss" xmlUrl="https://cleantechnica.com/feed/" htmlUrl="https://cleantechnica.com/" />
+        <outline text="Greener Ideal Ã‚Â» Technology RSS Feed" title="Greener Ideal Ã‚Â» Technology RSS Feed" type="rss" xmlUrl="https://greenerideal.com/news/technology/feed/" htmlUrl="https://greenerideal.com/news/technology/" />
+        <outline text="Tech Xplore Ã‚Â» Energy &amp; Green Tech RSS Feed" title="Tech Xplore Ã‚Â» Energy &amp; Green Tech RSS Feed" type="rss" xmlUrl="https://techxplore.com/rss-feed/energy-green-tech-news/" htmlUrl="https://techxplore.com/energy-green-tech-news/" />
+        <outline text="TechCrunch Ã‚Â» Climate RSS Feed" title="TechCrunch Ã‚Â» Climate RSS Feed" type="rss" xmlUrl="https://techcrunch.com/category/climate/feed/" htmlUrl="https://techcrunch.com/category/climate/" />
+      </outline>
+      <outline text="Health &amp; Wellness" title="Health &amp; Wellness">
+        <outline text="The Art of Healthy Living RSS Feed" title="The Art of Healthy Living RSS Feed" type="rss" xmlUrl="https://artofhealthyliving.com/category/wellbeing/feed/" htmlUrl="https://artofhealthyliving.com/category/wellbeing/" />
+        <outline text="Bites of Wellness RSS Feed" title="Bites of Wellness RSS Feed" type="rss" xmlUrl="https://bitesofwellness.com/feed/" htmlUrl="https://bitesofwellness.com/" />
+        <outline text="MyFitnessPal Blog RSS Feed" title="MyFitnessPal Blog RSS Feed" type="rss" xmlUrl="https://blog.myfitnesspal.com/feed/" htmlUrl="https://blog.myfitnesspal.com/" />
+        <outline text="Fit Foodie Finds RSS Feed" title="Fit Foodie Finds RSS Feed" type="rss" xmlUrl="https://fitfoodiefinds.com/feed/" htmlUrl="https://fitfoodiefinds.com/recipes/" />
+        <outline text="Tiny Buddha Blog RSS Feed" title="Tiny Buddha Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/tinybuddha" htmlUrl="https://tinybuddha.com/blog-posts/" />
+        <outline text="The Fitnessista RSS Feed" title="The Fitnessista RSS Feed" type="rss" xmlUrl="https://fitnessista.com/feed/" htmlUrl="https://fitnessista.com/" />
+        <outline text="Civilized Caveman Ã‚Â» Wellness RSS Feed" title="Civilized Caveman Ã‚Â» Wellness RSS Feed" type="rss" xmlUrl="https://civilizedcaveman.com/category/wellness/feed/" htmlUrl="https://civilizedcaveman.com/category/wellness/" />
+        <outline text="Food &amp; Fitness Always RSS Feed" title="Food &amp; Fitness Always RSS Feed" type="rss" xmlUrl="https://foodandfitnessalways.com/feed/" htmlUrl="https://foodandfitnessalways.com/" />
+        <outline text="Laura London Fitness Blog RSS Feed" title="Laura London Fitness Blog RSS Feed" type="rss" xmlUrl="https://lauralondonfitness.com/feed/" htmlUrl="https://lauralondonfitness.com/blog/" />
+        <outline text="The Real Food Dietitians Blog RSS Feed" title="The Real Food Dietitians Blog RSS Feed" type="rss" xmlUrl="https://therealfooddietitians.com/blog/feed/" htmlUrl="https://therealfooddietitians.com/blog/" />
+      </outline>
+      <outline text="Mental Health" title="Mental Health">
+        <outline text="The Mental Elf Ã‚Â» Mental Health RSS Feed" title="The Mental Elf Ã‚Â» Mental Health RSS Feed" type="rss" xmlUrl="https://www.nationalelfservice.net/mental-health/feed/" htmlUrl="https://www.nationalelfservice.net/mental-health/" />
+        <outline text="Behavioral Health News RSS Feed" title="Behavioral Health News RSS Feed" type="rss" xmlUrl="https://behavioralhealthnews.org/feed/" htmlUrl="https://behavioralhealthnews.org/" />
+        <outline text="The Guardian Ã‚Â» Depression RSS Feed" title="The Guardian Ã‚Â» Depression RSS Feed" type="rss" xmlUrl="https://www.theguardian.com/society/depression/rss" htmlUrl="https://www.theguardian.com/society/depression" />
+        <outline text="Mental Health America Blog RSS Feed" title="Mental Health America Blog RSS Feed" type="rss" xmlUrl="https://mhanational.org/blog/feed/" htmlUrl="https://mhanational.org/blog/" />
+        <outline text="MGH Center for Women's Mental Health Blog RSS Feed" title="MGH Center for Women's Mental Health Blog RSS Feed" type="rss" xmlUrl="https://womensmentalhealth.org/feed/" htmlUrl="https://womensmentalhealth.org/blog/" />
+        <outline text="CMHACY RSS Feed" title="CMHACY RSS Feed" type="rss" xmlUrl="https://cmhacy.org/feed/" htmlUrl="https://cmhacy.org/news/" />
+        <outline text="Mental Health Association of Minnesota RSS Feed" title="Mental Health Association of Minnesota RSS Feed" type="rss" xmlUrl="https://mentalhealthmn.org/feed/" htmlUrl="https://mentalhealthmn.org/news-events/recent-news/" />
+        <outline text="GoodTherapy Blog RSS Feed" title="GoodTherapy Blog RSS Feed" type="rss" xmlUrl="https://www.goodtherapy.org/blog/feed/" htmlUrl="https://www.goodtherapy.org/blog/" />
+        <outline text="Theravive RSS Feed" title="Theravive RSS Feed" type="rss" xmlUrl="https://www.theravive.com/today/syndication.axd" htmlUrl="https://www.theravive.com/today/" />
+        <outline text="Hilary Jacobs Hendel's The Change Triangle Blog RSS Feed" title="Hilary Jacobs Hendel's The Change Triangle Blog RSS Feed" type="rss" xmlUrl="https://www.hilaryjacobshendel.com/blog-feed.xml" htmlUrl="https://www.hilaryjacobshendel.com/hilarys-blog" />
+      </outline>
+      <outline text="Self-Improvement &amp; Personal Development" title="Self-Improvement &amp; Personal Development">
+        <outline text="Tiny Buddha Blog RSS Feed" title="Tiny Buddha Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/tinybuddha" htmlUrl="https://tinybuddha.com/blog-posts/" />
+        <outline text="Mark Manson RSS Feed" title="Mark Manson RSS Feed" type="rss" xmlUrl="https://markmanson.net/feed" htmlUrl="https://markmanson.net/articles" />
+        <outline text="Positivity Blog RSS Feed" title="Positivity Blog RSS Feed" type="rss" xmlUrl="https://www.positivityblog.com/feed/" htmlUrl="https://www.positivityblog.com/" />
+        <outline text="Live Bold and Bloom RSS Feed" title="Live Bold and Bloom RSS Feed" type="rss" xmlUrl="https://liveboldandbloom.com/category/self-improvement/feed" htmlUrl="https://liveboldandbloom.com/category/self-improvement" />
+        <outline text="Tim Blog RSS Feed" title="Tim Blog RSS Feed" type="rss" xmlUrl="https://tim.blog/feed/" htmlUrl="https://tim.blog/" />
+        <outline text="Becoming Minimalist RSS Feed" title="Becoming Minimalist RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/becomingminimalistcom" htmlUrl="https://www.becomingminimalist.com/" />
+        <outline text="Gretchen Rubin RSS Feed" title="Gretchen Rubin RSS Feed" type="rss" xmlUrl="https://gretchenrubin.com/feed/" htmlUrl="https://gretchenrubin.com/articles/" />
+        <outline text="Marc and Angel Blog RSS Feed" title="Marc and Angel Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/MarcAndAngel" htmlUrl="https://www.marcandangel.com/" />
+        <outline text="Seth's Blog RSS Feed" title="Seth's Blog RSS Feed" type="rss" xmlUrl="https://seths.blog/feed/atom/" htmlUrl="https://seths.blog/" />
+        <outline text="The Marginalian RSS Feed" title="The Marginalian RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/brainpickings/rss" htmlUrl="https://www.themarginalian.org/" />
+      </outline>
+      <outline text="Education" title="Education">
+        <outline text="KQED RSS Feed" title="KQED RSS Feed" type="rss" xmlUrl="https://ww2.kqed.org/mindshift/feed/" htmlUrl="https://www.kqed.org/mindshift/" />
+        <outline text="The Hechinger Report RSS Feed" title="The Hechinger Report RSS Feed" type="rss" xmlUrl="https://hechingerreport.org/feed/" htmlUrl="https://hechingerreport.org/" />
+        <outline text="eSchool News RSS Feed" title="eSchool News RSS Feed" type="rss" xmlUrl="http://www.eschoolnews.com/feed/" htmlUrl="https://www.eschoolnews.com/" />
+        <outline text="The New York Times RSS Feed" title="The New York Times RSS Feed" type="rss" xmlUrl="https://www.nytimes.com/svc/collections/v1/publish/https://www.nytimes.com/section/learning/rss.xml" htmlUrl="https://www.nytimes.com/section/learning" />
+        <outline text="Teacher Network | Guardian Education Blog RSS Feed" title="Teacher Network | Guardian Education Blog RSS Feed" type="rss" xmlUrl="https://www.theguardian.com/teacher-network/rss" htmlUrl="https://www.theguardian.com/teacher-network" />
+        <outline text="Education Beat RSS Feed" title="Education Beat RSS Feed" type="rss" xmlUrl="https://edsource.org/feed/atom" htmlUrl="https://edsource.org/" />
+        <outline text="TeachThought RSS Feed" title="TeachThought RSS Feed" type="rss" xmlUrl="https://www.teachthought.com/feed/" htmlUrl="https://www.teachthought.com/" />
+        <outline text="WeAreTeachers RSS Feed" title="WeAreTeachers RSS Feed" type="rss" xmlUrl="https://www.weareteachers.com/feed/" htmlUrl="https://www.weareteachers.com/?s=&amp;wat-subject%5B%5D=3692" />
+        <outline text="Cult of Pedagogy By Jennifer Gonzalez Blog RSS Feed" title="Cult of Pedagogy By Jennifer Gonzalez Blog RSS Feed" type="rss" xmlUrl="http://www.cultofpedagogy.com/feed/" htmlUrl="https://www.cultofpedagogy.com/blog/" />
+        <outline text="BusyTeacher | Free Printable Worksheets RSS Feed" title="BusyTeacher | Free Printable Worksheets RSS Feed" type="rss" xmlUrl="https://busyteacher.org/rss.xml" htmlUrl="https://busyteacher.org/" />
+      </outline>
+      <outline text="E-Learning" title="E-Learning">
+        <outline text="eLearning Industry RSS Feed" title="eLearning Industry RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/elearningindustry" htmlUrl="https://elearningindustry.com/articles" />
+        <outline text="Open Culture RSS Feed" title="Open Culture RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/OpenCulture" htmlUrl="https://www.openculture.com/" />
+        <outline text="Khan Academy RSS Feed" title="Khan Academy RSS Feed" type="rss" xmlUrl="https://blog.khanacademy.org/news/feed/" htmlUrl="https://blog.khanacademy.org/news/" />
+        <outline text="eLearning RSS Feed" title="eLearning RSS Feed" type="rss" xmlUrl="https://elearning.adobe.com/feed/" htmlUrl="https://elearning.adobe.com/blogs/" />
+        <outline text="Talent LMS Blog RSS Feed" title="Talent LMS Blog RSS Feed" type="rss" xmlUrl="https://www.talentlms.com/blog/feed/" htmlUrl="https://www.talentlms.com/blog/" />
+        <outline text="Docebo Blog RSS Feed" title="Docebo Blog RSS Feed" type="rss" xmlUrl="https://www.docebo.com/feed/" htmlUrl="https://www.docebo.com/learning-network/blog/" />
+        <outline text="Articulate Blog RSS Feed" title="Articulate Blog RSS Feed" type="rss" xmlUrl="https://blogs.articulate.com/rapid-elearning/feed/" htmlUrl="https://blogs.articulate.com/rapid-elearning/" />
+        <outline text="SoftChalk Blog RSS Feed" title="SoftChalk Blog RSS Feed" type="rss" xmlUrl="https://blog.softchalk.com/rss.xml" htmlUrl="https://blog.softchalk.com/" />
+        <outline text="e-learning WMB bespoke development blogs RSS Feed" title="e-learning WMB bespoke development blogs RSS Feed" type="rss" xmlUrl="https://openelms.com/feed/" htmlUrl="https://openelms.com/" />
+        <outline text="JoomLMS Blog RSS Feed" title="JoomLMS Blog RSS Feed" type="rss" xmlUrl="https://www.joomlms.com/blog.feed?type=rss" htmlUrl="https://www.joomlms.com/blog.html" />
+      </outline>
+      <outline text="Human Rights" title="Human Rights">
+        <outline text="Human Rights Watch RSS Feed" title="Human Rights Watch RSS Feed" type="rss" xmlUrl="https://www.hrw.org/rss/news" htmlUrl="https://www.hrw.org/" />
+        <outline text="Human Rights Program at Harvard Law School RSS Feed" title="Human Rights Program at Harvard Law School RSS Feed" type="rss" xmlUrl="https://hrp.law.harvard.edu/feed/" htmlUrl="https://hrp.law.harvard.edu/" />
+        <outline text="OHRH RSS Feed" title="OHRH RSS Feed" type="rss" xmlUrl="https://ohrh.law.ox.ac.uk/category/blog/feed/" htmlUrl="https://ohrh.law.ox.ac.uk/" />
+        <outline text="UAB Institute For Human Rights Blog RSS Feed" title="UAB Institute For Human Rights Blog RSS Feed" type="rss" xmlUrl="https://sites.uab.edu/humanrights/feed/" htmlUrl="https://sites.uab.edu/humanrights/" />
+        <outline text="Global Voices RSS Feed" title="Global Voices RSS Feed" type="rss" xmlUrl="https://globalvoices.org/feed/" htmlUrl="https://globalvoices.org/" />
+        <outline text="Human Rights Careers RSS Feed" title="Human Rights Careers RSS Feed" type="rss" xmlUrl="https://www.humanrightscareers.com/feed/" htmlUrl="https://www.humanrightscareers.com/" />
+        <outline text="United Nations Foundation Blog RSS Feed" title="United Nations Foundation Blog RSS Feed" type="rss" xmlUrl="https://unfoundation.org/blog/feed/" htmlUrl="https://unfoundation.org/blog/" />
+        <outline text="Journalists for Human Rights RSS Feed" title="Journalists for Human Rights RSS Feed" type="rss" xmlUrl="https://jhr.ca/feed/" htmlUrl="https://jhr.ca/" />
+        <outline text="Health and Human Rights Journal Blog RSS Feed" title="Health and Human Rights Journal Blog RSS Feed" type="rss" xmlUrl="https://www.hhrjournal.org/category/blog/feed/" htmlUrl="https://www.hhrjournal.org/category/blog/" />
+        <outline text="UK Human Rights Blog RSS Feed" title="UK Human Rights Blog RSS Feed" type="rss" xmlUrl="https://ukhumanrightsblog.com/?feed=rss2" htmlUrl="https://ukhumanrightsblog.com/" />
+      </outline>
+      <outline text="Entertainment" title="Entertainment">
+        <outline text="Collider RSS Feed" title="Collider RSS Feed" type="rss" xmlUrl="https://collider.com/feed/" />
+        <outline text="TMZ RSS Feed" title="TMZ RSS Feed" type="rss" xmlUrl="https://www.tmz.com/rss.xml" htmlUrl="https://www.tmz.com/" />
+        <outline text="Us Weekly RSS Feed" title="Us Weekly RSS Feed" type="rss" xmlUrl="https://www.usmagazine.com/feed/" htmlUrl="https://www.usmagazine.com/" />
+        <outline text="IndieWire RSS Feed" title="IndieWire RSS Feed" type="rss" xmlUrl="https://www.indiewire.com/feed/" htmlUrl="https://www.indiewire.com/" />
+        <outline text="TheWrap RSS Feed" title="TheWrap RSS Feed" type="rss" xmlUrl="https://www.thewrap.com/feed/" htmlUrl="https://www.thewrap.com/industry-news/awards/" />
+        <outline text="Entertainment Tonight News RSS Feed" title="Entertainment Tonight News RSS Feed" type="rss" xmlUrl="https://www.etonline.com/news/rss" htmlUrl="https://www.etonline.com/news" />
+      </outline>
+      <outline text="Pop Culture" title="Pop Culture">
+        <outline text="PopMatters RSS Feed" title="PopMatters RSS Feed" type="rss" xmlUrl="https://www.popmatters.com/feed" htmlUrl="https://www.popmatters.com/" />
+        <outline text="The Mary Sue RSS Feed" title="The Mary Sue RSS Feed" type="rss" xmlUrl="https://www.themarysue.com/feed/" htmlUrl="https://www.themarysue.com/" />
+        <outline text="The Grand Narrative RSS Feed" title="The Grand Narrative RSS Feed" type="rss" xmlUrl="https://thegrandnarrative.com/feed/" htmlUrl="https://thegrandnarrative.com/" />
+        <outline text="Popdust RSS Feed" title="Popdust RSS Feed" type="rss" xmlUrl="https://www.popdust.com/feed" htmlUrl="https://www.popdust.com/" />
+        <outline text="But Why Tho? RSS Feed" title="But Why Tho? RSS Feed" type="rss" xmlUrl="https://butwhytho.net/feed/" htmlUrl="https://butwhytho.net/" />
+        <outline text="NPR Ã‚Â» Culture RSS Feed" title="NPR Ã‚Â» Culture RSS Feed" type="rss" xmlUrl="https://feeds.npr.org/1008/rss.xml" htmlUrl="https://www.npr.org/sections/culture/" />
+        <outline text="Pop Culture Beast RSS Feed" title="Pop Culture Beast RSS Feed" type="rss" xmlUrl="http://www.popculturebeast.com/feed/" htmlUrl="http://www.popculturebeast.com/" />
+        <outline text="The Honey POP RSS Feed" title="The Honey POP RSS Feed" type="rss" xmlUrl="https://thehoneypop.com/feed/" htmlUrl="https://thehoneypop.com/" />
+        <outline text="PopCultHQ.com RSS Feed" title="PopCultHQ.com RSS Feed" type="rss" xmlUrl="https://popculthq.com/feed/" htmlUrl="https://popculthq.com/" />
+        <outline text="The Pop Blog RSS Feed" title="The Pop Blog RSS Feed" type="rss" xmlUrl="https://thepopblogph.com/feed/" htmlUrl="https://thepopblogph.com/category/pop-culture-news/" />
+      </outline>
+      <outline text="Music" title="Music">
+        <outline text="NME Magazine RSS Feed" title="NME Magazine RSS Feed" type="rss" xmlUrl="https://www.nme.com/feed" htmlUrl="https://www.nme.com/" />
+        <outline text="The FADER RSS Feed" title="The FADER RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/TheFaderMagazine" htmlUrl="http://www.thefader.com/music" />
+        <outline text="FACT Magazine RSS Feed" title="FACT Magazine RSS Feed" type="rss" xmlUrl="https://www.factmag.com/feed/" htmlUrl="https://www.factmag.com/" />
+        <outline text="The Guardian » Music Blog RSS Feed" title="The Guardian » Music Blog RSS Feed" type="rss" xmlUrl="https://www.theguardian.com/music/musicblog/rss" htmlUrl="https://www.theguardian.com/music/musicblog" />
+        <outline text="Alternative Press RSS Feed" title="Alternative Press RSS Feed" type="rss" xmlUrl="https://www.altpress.com/feed/" htmlUrl="https://www.altpress.com/" />
+        <outline text="uDiscover Music RSS Feed" title="uDiscover Music RSS Feed" type="rss" xmlUrl="https://www.udiscovermusic.com/feed/" htmlUrl="https://www.udiscovermusic.com/music/news/" />
+        <outline text="BrooklynVegan RSS Feed" title="BrooklynVegan RSS Feed" type="rss" xmlUrl="https://www.brooklynvegan.com/feed/" htmlUrl="https://www.brooklynvegan.com/category/music/" />
+        <outline text="The Line of Best Fit RSS Feed" title="The Line of Best Fit RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/thelineofbestfit" htmlUrl="https://www.thelineofbestfit.com/news" />
+        <outline text="Indie Shuffle Music Blog RSS Feed" title="Indie Shuffle Music Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/indieshuffle" htmlUrl="https://www.indieshuffle.com/" />
+        <outline text="Nialler9 RSS Feed" title="Nialler9 RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/nialler9/rss" htmlUrl="https://nialler9.com/" />
+      </outline>
+      <outline text="Sports" title="Sports">
+        <outline text="BBC Sport RSS Feed" title="BBC Sport RSS Feed" type="rss" xmlUrl="https://feeds.bbci.co.uk/sport/rss.xml" htmlUrl="https://www.bbc.com/sport" />
+        <outline text="The Athletic RSS Feed" title="The Athletic RSS Feed" type="rss" xmlUrl="https://www.nytimes.com/athletic/rss/news/" htmlUrl="https://www.nytimes.com/athletic/" />
+        <outline text="Sky Sports RSS Feed" title="Sky Sports RSS Feed" type="rss" xmlUrl="https://www.skysports.com/rss/12040" htmlUrl="https://www.skysports.com/" />
+        <outline text="NBC Sports RSS Feed" title="NBC Sports RSS Feed" type="rss" xmlUrl="https://www.nbcsports.com/index.atom" htmlUrl="https://www.nbcsports.com/" />
+        <outline text="Sportsnet RSS Feed" title="Sportsnet RSS Feed" type="rss" xmlUrl="https://www.sportsnet.ca/feed/" htmlUrl="https://www.sportsnet.ca/" />
+        <outline text="FOX Sports RSS Feed" title="FOX Sports RSS Feed" type="rss" xmlUrl="https://api.foxsports.com/v2/content/optimized-rss?partnerKey=MB0Wehpmuj2lUhuRhQaafhBjAJqaPU244mlTDK1i&amp;size=30" htmlUrl="https://www.foxsports.com/" />
+        <outline text="La Gazzetta dello Sport RSS Feed" title="La Gazzetta dello Sport RSS Feed" type="rss" xmlUrl="https://www.gazzetta.it/dynamic-feed/rss/section/last.xml" htmlUrl="https://www.gazzetta.it/" />
+        <outline text="Sport-Express.ru RSS Feed" title="Sport-Express.ru RSS Feed" type="rss" xmlUrl="https://www.sport-express.ru/services/materials/news/se" htmlUrl="https://www.sport-express.ru/" />
+      </outline>
+      <outline text="Video Game" title="Video Game">
+        <outline text="Eurogamer RSS Feed" title="Eurogamer RSS Feed" type="rss" xmlUrl="https://www.eurogamer.net/feed" htmlUrl="https://www.eurogamer.net/" />
+        <outline text="The Verge Ã‚Â» Games RSS Feed" title="The Verge Ã‚Â» Games RSS Feed" type="rss" xmlUrl="https://www.theverge.com/rss/games/index.xml" htmlUrl="https://www.theverge.com/games" />
+        <outline text="The Guardian Ã‚Â» Games RSS Feed" title="The Guardian Ã‚Â» Games RSS Feed" type="rss" xmlUrl="https://www.theguardian.com/games/rss" htmlUrl="https://www.theguardian.com/games" />
+        <outline text="GamesIndustry.Biz RSS Feed" title="GamesIndustry.Biz RSS Feed" type="rss" xmlUrl="https://www.gamesindustry.biz/feed" htmlUrl="https://www.gamesindustry.biz/" />
+        <outline text="Shacknews RSS Feed" title="Shacknews RSS Feed" type="rss" xmlUrl="https://www.shacknews.com/feed/rss" htmlUrl="https://www.shacknews.com/" />
+        <outline text="VGC News RSS Feed" title="VGC News RSS Feed" type="rss" xmlUrl="https://www.videogameschronicle.com/category/news/feed/" htmlUrl="https://www.videogameschronicle.com/category/news/" />
+        <outline text="Game Informer RSS Feed" title="Game Informer RSS Feed" type="rss" xmlUrl="https://gameinformer.com/rss.xml" htmlUrl="https://gameinformer.com/" />
+        <outline text="Game Rant RSS Feed" title="Game Rant RSS Feed" type="rss" xmlUrl="https://gamerant.com/feed/" htmlUrl="https://gamerant.com/" />
+        <outline text="GamesRadar+ RSS Feed" title="GamesRadar+ RSS Feed" type="rss" xmlUrl="https://www.gamesradar.com/feeds.xml" htmlUrl="https://www.gamesradar.com/" />
+        <outline text="The Escapist Magazine RSS Feed" title="The Escapist Magazine RSS Feed" type="rss" xmlUrl="https://www.escapistmagazine.com/feed/" htmlUrl="https://www.escapistmagazine.com/" />
+      </outline>
+      <outline text="eSports" title="eSports">
+        <outline text="ESTNN RSS Feed" title="ESTNN RSS Feed" type="rss" xmlUrl="https://estnn.com/feed/" htmlUrl="https://estnn.com/" />
+        <outline text="Esports.net RSS Feed" title="Esports.net RSS Feed" type="rss" xmlUrl="https://www.esports.net/feed/" htmlUrl="https://www.esports.net/" />
+        <outline text="Esports Insider RSS Feed" title="Esports Insider RSS Feed" type="rss" xmlUrl="https://esportsinsider.com/feed" htmlUrl="https://esportsinsider.com/" />
+        <outline text="The Esports Advocate RSS Feed" title="The Esports Advocate RSS Feed" type="rss" xmlUrl="https://esportsadvocate.net/feed/" htmlUrl="https://esportsadvocate.net/" />
+        <outline text="Esports Marketing Blog RSS Feed" title="Esports Marketing Blog RSS Feed" type="rss" xmlUrl="https://esports-marketing-blog.com/feed/" htmlUrl="https://esports-marketing-blog.com/" />
+        <outline text="eSports Group Blog RSS Feed" title="eSports Group Blog RSS Feed" type="rss" xmlUrl="https://www.esportsgroup.net/feed/" htmlUrl="https://www.esportsgroup.net/blog/" />
+        <outline text="GRID Esports RSS Feed" title="GRID Esports RSS Feed" type="rss" xmlUrl="https://blog.grid.gg/feed" htmlUrl="https://blog.grid.gg/" />
+        <outline text="European Gaming Media RSS Feed" title="European Gaming Media RSS Feed" type="rss" xmlUrl="https://europeangaming.eu/portal/feed/" htmlUrl="https://europeangaming.eu/" />
+        <outline text="The Dotabuff Blog RSS Feed" title="The Dotabuff Blog RSS Feed" type="rss" xmlUrl="https://www.dotabuff.com/blog.rss" htmlUrl="https://www.dotabuff.com/blog" />
+        <outline text="Traxion RSS Feed" title="Traxion RSS Feed" type="rss" xmlUrl="https://traxion.gg/feed/" htmlUrl="https://traxion.gg/" />
+      </outline>
+      <outline text="Arts &amp; Culture" title="Arts &amp; Culture">
+        <outline text="Artforum RSS Feed" title="Artforum RSS Feed" type="rss" xmlUrl="https://www.artforum.com/feed/" htmlUrl="https://www.artforum.com/" />
+        <outline text="ARTnews RSS Feed" title="ARTnews RSS Feed" type="rss" xmlUrl="https://www.artnews.com/feed/" htmlUrl="https://www.artnews.com/" />
+        <outline text="Juxtapoz RSS Feed" title="Juxtapoz RSS Feed" type="rss" xmlUrl="https://www.juxtapoz.com/news/?format=feed&amp;type=rss" htmlUrl="https://www.juxtapoz.com/news/" />
+        <outline text="Hi-Fructose RSS Feed" title="Hi-Fructose RSS Feed" type="rss" xmlUrl="https://hifructose.com/feed/" htmlUrl="https://hifructose.com/articles/" />
+        <outline text="Mousse RSS Feed" title="Mousse RSS Feed" type="rss" xmlUrl="https://www.moussemagazine.it/feed/" htmlUrl="https://www.moussemagazine.it/" />
+        <outline text="Communication Arts RSS Feed" title="Communication Arts RSS Feed" type="rss" xmlUrl="https://www.commarts.com/feed" htmlUrl="https://www.commarts.com/" />
+        <outline text="KALTBLUT Magazine RSS Feed" title="KALTBLUT Magazine RSS Feed" type="rss" xmlUrl="https://www.kaltblut-magazine.com/feed/" htmlUrl="https://www.kaltblut-magazine.com/" />
+        <outline text="This Is Colossal RSS Feed" title="This Is Colossal RSS Feed" type="rss" xmlUrl="https://www.thisiscolossal.com/feed/" htmlUrl="https://www.thisiscolossal.com/" />
+        <outline text="Booooooom RSS Feed" title="Booooooom RSS Feed" type="rss" xmlUrl="https://www.booooooom.com/feed/" htmlUrl="https://www.booooooom.com/" />
+        <outline text="Creative Boom RSS Feed" title="Creative Boom RSS Feed" type="rss" xmlUrl="https://www.creativeboom.com/feed/" htmlUrl="https://www.creativeboom.com/" />
+      </outline>
+      <outline text="Books &amp; Literature" title="Books &amp; Literature">
+        <outline text="McSweeney's RSS Feed" title="McSweeney's RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/mcsweeneys" htmlUrl="https://www.mcsweeneys.net/" />
+        <outline text="WLT (World Literature Today) RSS Feed" title="WLT (World Literature Today) RSS Feed" type="rss" xmlUrl="https://worldliteraturetoday.org/feeds/blog" htmlUrl="https://worldliteraturetoday.org/" />
+        <outline text="The New Yorker Ã‚Â» Page-Turner RSS Feed" title="The New Yorker Ã‚Â» Page-Turner RSS Feed" type="rss" xmlUrl="https://www.newyorker.com/feed/books/page-turner" htmlUrl="https://www.newyorker.com/books/page-turner" />
+        <outline text="Jane Friedman Blog RSS Feed" title="Jane Friedman Blog RSS Feed" type="rss" xmlUrl="https://janefriedman.com/blog/feed/" htmlUrl="https://janefriedman.com/blog/" />
+        <outline text="The Paris Review RSS Feed" title="The Paris Review RSS Feed" type="rss" xmlUrl="https://www.theparisreview.org/blog/feed/" htmlUrl="https://www.theparisreview.org/" />
+        <outline text="The Creative Penn RSS Feed" title="The Creative Penn RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/TheCreativePenn" htmlUrl="https://www.thecreativepenn.com/tag/writing-tips/" />
+        <outline text="Jeff Goins Blog RSS Feed" title="Jeff Goins Blog RSS Feed" type="rss" xmlUrl="https://jeffgoins.substack.com/feed" htmlUrl="https://goinswriter.com/blog/" />
+        <outline text="Daily Writing Tips RSS Feed" title="Daily Writing Tips RSS Feed" type="rss" xmlUrl="https://www.DailyWritingTips.com/feed/" htmlUrl="https://www.dailywritingtips.com/" />
+        <outline text="Terrible Minds RSS Feed" title="Terrible Minds RSS Feed" type="rss" xmlUrl="http://terribleminds.com/ramble/feed/" htmlUrl="https://terribleminds.com/" />
+        <outline text="Helping Writers Become Authors RSS Feed" title="Helping Writers Become Authors RSS Feed" type="rss" xmlUrl="https://www.helpingwritersbecomeauthors.com/feed/" htmlUrl="https://www.helpingwritersbecomeauthors.com/" />
+      </outline>
+      <outline text="Photography" title="Photography">
+        <outline text="Digital Photography Review RSS Feed" title="Digital Photography Review RSS Feed" type="rss" xmlUrl="https://www.dpreview.com/feeds/news.xml" htmlUrl="https://www.dpreview.com/" />
+        <outline text="PetaPixel RSS Feed" title="PetaPixel RSS Feed" type="rss" xmlUrl="https://petapixel.com/feed/" htmlUrl="https://petapixel.com/" />
+        <outline text="Fstoppers RSS Feed" title="Fstoppers RSS Feed" type="rss" xmlUrl="https://fstoppers.com/feed" htmlUrl="https://fstoppers.com/news" />
+        <outline text="The Phoblographer Blog RSS Feed" title="The Phoblographer Blog RSS Feed" type="rss" xmlUrl="https://www.thephoblographer.com/feed/" htmlUrl="https://www.thephoblographer.com/" />
+        <outline text="Digital Photography School Blog RSS Feed" title="Digital Photography School Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/DigitalPhotographySchool" htmlUrl="https://digital-photography-school.com/" />
+        <outline text="Photography Blog RSS Feed" title="Photography Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/photographyblog" htmlUrl="https://www.photographyblog.com/" />
+        <outline text="Photofocus RSS Feed" title="Photofocus RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/PhotofocusBlog" htmlUrl="https://photofocus.com/" />
+        <outline text="Photography Life RSS Feed" title="Photography Life RSS Feed" type="rss" xmlUrl="https://photographylife.com/feed" htmlUrl="https://photographylife.com/" />
+        <outline text="DIY Photography RSS Feed" title="DIY Photography RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/Diyphotographynet" htmlUrl="https://www.diyphotography.net/" />
+        <outline text="Feature Shoot RSS Feed" title="Feature Shoot RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/FeatureShoot" htmlUrl="https://www.featureshoot.com/" />
+      </outline>
+      <outline text="Lifestyle" title="Lifestyle">
+        <outline text="Cup of Jo RSS Feed" title="Cup of Jo RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/blogspot/bboSV" htmlUrl="https://cupofjo.com/" />
+        <outline text="Camille Styles RSS Feed" title="Camille Styles RSS Feed" type="rss" xmlUrl="https://camillestyles.com/feed/" htmlUrl="https://camillestyles.com/" />
+        <outline text="The Martha Stewart Blog RSS Feed" title="The Martha Stewart Blog RSS Feed" type="rss" xmlUrl="https://www.themarthablog.com/feed" htmlUrl="https://www.themarthablog.com/" />
+        <outline text="The Pioneer Woman RSS Feed" title="The Pioneer Woman RSS Feed" type="rss" xmlUrl="https://www.thepioneerwoman.com/rss/default.xml" htmlUrl="https://www.thepioneerwoman.com/" />
+        <outline text="Wit And Delight Blog RSS Feed" title="Wit And Delight Blog RSS Feed" type="rss" xmlUrl="https://witanddelight.com/feed/" htmlUrl="https://witanddelight.com/" />
+        <outline text="Better Living RSS Feed" title="Better Living RSS Feed" type="rss" xmlUrl="https://onbetterliving.com/feed/" htmlUrl="https://onbetterliving.com/" />
+        <outline text="The Blonde Abroad Blog RSS Feed" title="The Blonde Abroad Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/Theblondeabroad/ScWo" htmlUrl="https://www.theblondeabroad.com/travel-blog/" />
+        <outline text="mindbodygreen RSS Feed" title="mindbodygreen RSS Feed" type="rss" xmlUrl="https://www.mindbodygreen.com/rss/featured.xml" htmlUrl="https://www.mindbodygreen.com/articles/" />
+        <outline text="A Beautiful Mess RSS Feed" title="A Beautiful Mess RSS Feed" type="rss" xmlUrl="https://abeautifulmess.com/category/diy/home-decor/feed/" htmlUrl="https://abeautifulmess.com/" />
+        <outline text="Sincerely Jules RSS Feed" title="Sincerely Jules RSS Feed" type="rss" xmlUrl="https://sincerelyjules.com/feed/" htmlUrl="https://sincerelyjules.com/" />
+      </outline>
+      <outline text="Food &amp; Drink" title="Food &amp; Drink">
+        <outline text="Food Business News RSS Feed" title="Food Business News RSS Feed" type="rss" xmlUrl="https://www.foodbusinessnews.net/rss/articles" htmlUrl="https://www.foodbusinessnews.net/" />
+        <outline text="Food Dive RSS Feed" title="Food Dive RSS Feed" type="rss" xmlUrl="https://www.fooddive.com/feeds/news/" htmlUrl="https://www.fooddive.com/" />
+        <outline text="F&amp;B News RSS Feed" title="F&amp;B News RSS Feed" type="rss" xmlUrl="http://www.fnbnews.com/xml/Top-NewsRSS.XML" htmlUrl="http://www.fnbnews.com/" />
+        <outline text="Food &amp; Beverage Magazine RSS Feed" title="Food &amp; Beverage Magazine RSS Feed" type="rss" xmlUrl="https://www.fb101.com/feed/" htmlUrl="https://www.fb101.com/" />
+        <outline text="Food Magazine RSS Feed" title="Food Magazine RSS Feed" type="rss" xmlUrl="https://www.foodmag.com.au/feed/" htmlUrl="https://www.foodmag.com.au/" />
+        <outline text="Food &amp; Beverage Reporter RSS Feed" title="Food &amp; Beverage Reporter RSS Feed" type="rss" xmlUrl="https://fbreporter.co.za/feed/" htmlUrl="https://fbreporter.co.za/latest-news/" />
+      </outline>
+      <outline text="Travel" title="Travel">
+        <outline text="Rick Steves' Travel Blog RSS Feed" title="Rick Steves' Travel Blog RSS Feed" type="rss" xmlUrl="https://blog.ricksteves.com/feed/" htmlUrl="https://blog.ricksteves.com/" />
+        <outline text="A Luxury Travel Blog RSS Feed" title="A Luxury Travel Blog RSS Feed" type="rss" xmlUrl="https://www.aluxurytravelblog.com/feed/" htmlUrl="https://www.aluxurytravelblog.com/" />
+        <outline text="The Taucker Blog RSS Feed" title="The Taucker Blog RSS Feed" type="rss" xmlUrl="https://blog.tauck.com/feed/" htmlUrl="https://blog.tauck.com/" />
+        <outline text="The Road Les Traveled Blog RSS Feed" title="The Road Les Traveled Blog RSS Feed" type="rss" xmlUrl="https://theroadlestraveled.com/blog/feed/" htmlUrl="https://theroadlestraveled.com/blog/" />
+        <outline text="Nomadic Matt Blog RSS Feed" title="Nomadic Matt Blog RSS Feed" type="rss" xmlUrl="https://www.nomadicmatt.com/feed/" htmlUrl="https://www.nomadicmatt.com/travel-blog/" />
+        <outline text="The Planet D Blog RSS Feed" title="The Planet D Blog RSS Feed" type="rss" xmlUrl="https://theplanetd.com/feed/" htmlUrl="https://theplanetd.com/travel-blog/" />
+        <outline text="The Blonde Abroad Blog RSS Feed" title="The Blonde Abroad Blog RSS Feed" type="rss" xmlUrl="https://www.theblondeabroad.com/feed/" htmlUrl="https://www.theblondeabroad.com/travel-blog/" />
+        <outline text="Goats On The Road Blog RSS Feed" title="Goats On The Road Blog RSS Feed" type="rss" xmlUrl="https://www.goatsontheroad.com/feed/" htmlUrl="https://www.goatsontheroad.com/blog/" />
+        <outline text="Never Ending Footsteps Blog RSS Feed" title="Never Ending Footsteps Blog RSS Feed" type="rss" xmlUrl="https://feeds.feedblitz.com/neverendingfootsteps" htmlUrl="https://www.neverendingfootsteps.com/blog/" />
+        <outline text="Legal Nomads Blog RSS Feed" title="Legal Nomads Blog RSS Feed" type="rss" xmlUrl="https://www.legalnomads.com/feed/" htmlUrl="https://www.legalnomads.com/blog/" />
+      </outline>
+      <outline text="Outdoor &amp; Hiking" title="Outdoor &amp; Hiking">
+        <outline text="GearJunkie RSS Feed" title="GearJunkie RSS Feed" type="rss" xmlUrl="https://gearjunkie.com/feed" htmlUrl="https://gearjunkie.com/" />
+        <outline text="OutdoorLife RSS Feed" title="OutdoorLife RSS Feed" type="rss" xmlUrl="https://www.outdoorlife.com/feed/" htmlUrl="https://www.outdoorlife.com/" />
+        <outline text="OutdoorHub RSS Feed" title="OutdoorHub RSS Feed" type="rss" xmlUrl="https://www.outdoorhub.com/feed/" htmlUrl="https://www.outdoorhub.com/" />
+        <outline text="AllOutdoor RSS Feed" title="AllOutdoor RSS Feed" type="rss" xmlUrl="https://www.alloutdoor.com/feed/" htmlUrl="https://www.alloutdoor.com/" />
+        <outline text="The Outdoor Journal RSS Feed" title="The Outdoor Journal RSS Feed" type="rss" xmlUrl="https://www.outdoorjournal.com/rss/" htmlUrl="https://www.outdoorjournal.com/" />
+        <outline text="REI Blog Ã‚Â» Hike RSS Feed" title="REI Blog Ã‚Â» Hike RSS Feed" type="rss" xmlUrl="https://www.rei.com/blog/hike/feed" htmlUrl="https://www.rei.com/blog/hike" />
+        <outline text="The Hiking Life Ã‚Â» Colorado Trail RSS Feed" title="The Hiking Life Ã‚Â» Colorado Trail RSS Feed" type="rss" xmlUrl="https://www.thehikinglife.com/feed/" htmlUrl="https://www.thehikinglife.com/tag/colorado-trail/" />
+        <outline text="Exploring Slovenia RSS Feed" title="Exploring Slovenia RSS Feed" type="rss" xmlUrl="https://www.exploringslovenia.com/blog/feed/" htmlUrl="https://www.exploringslovenia.com/blog/" />
+        <outline text="Vancouver Trails Blog RSS Feed" title="Vancouver Trails Blog RSS Feed" type="rss" xmlUrl="https://www.vancouvertrails.com/blog/feed/" htmlUrl="https://www.vancouvertrails.com/blog/" />
+        <outline text="Lotsafreshair Blog RSS Feed" title="Lotsafreshair Blog RSS Feed" type="rss" xmlUrl="https://lotsafreshair.com/feed/" htmlUrl="https://lotsafreshair.com/blog/" />
+      </outline>
+      <outline text="Parenting &amp; Family" title="Parenting &amp; Family">
+        <outline text="Daly Focus Blog RSS Feed" title="Daly Focus Blog RSS Feed" type="rss" xmlUrl="https://jimdaly.focusonthefamily.com/feed/" htmlUrl="https://jimdaly.focusonthefamily.com/" />
+        <outline text="Grown &amp; Flown RSS Feed" title="Grown &amp; Flown RSS Feed" type="rss" xmlUrl="https://grownandflown.com/feed/" htmlUrl="https://grownandflown.com/" />
+        <outline text="FamilyLife RSS Feed" title="FamilyLife RSS Feed" type="rss" xmlUrl="https://www.familylife.com/feed/" htmlUrl="https://www.familylife.com/" />
+        <outline text="Parents RSS Feed" title="Parents RSS Feed" type="rss" xmlUrl="https://feeds-api.dotdashmeredith.com/v1/rss/google/8d9b4b6c-d432-43df-9a55-755f3735dd48" htmlUrl="https://www.parents.com/" />
+        <outline text="Good Life Family Magazine RSS Feed" title="Good Life Family Magazine RSS Feed" type="rss" xmlUrl="https://goodlifefamilymag.com/feed/" htmlUrl="https://goodlifefamilymag.com/" />
+        <outline text="Hand in Hand Parenting RSS Feed" title="Hand in Hand Parenting RSS Feed" type="rss" xmlUrl="https://www.handinhandparenting.org/feed/" htmlUrl="https://www.handinhandparenting.org/articles/" />
+        <outline text="Vancouver Family Magazine RSS Feed" title="Vancouver Family Magazine RSS Feed" type="rss" xmlUrl="https://vancouverfamilymagazine.com/feed/" htmlUrl="https://vancouverfamilymagazine.com/" />
+        <outline text="Sarah Ockwell-Smith RSS Feed" title="Sarah Ockwell-Smith RSS Feed" type="rss" xmlUrl="https://sarahockwell-smith.com/feed/" htmlUrl="https://sarahockwell-smith.com/sarahs-blog-posts/" />
+        <outline text="LA Family Travel RSS Feed" title="LA Family Travel RSS Feed" type="rss" xmlUrl="https://lafamilytravel.com/feed/" htmlUrl="https://lafamilytravel.com/" />
+        <outline text="Responsive Parenting RSS Feed" title="Responsive Parenting RSS Feed" type="rss" xmlUrl="https://responsiveparentingblog.com/feed/" htmlUrl="https://responsiveparentingblog.com/" />
+      </outline>
+      <outline text="Interior Design &amp; Home Decor" title="Interior Design &amp; Home Decor">
+        <outline text="Architectural Digest RSS Feed" title="Architectural Digest RSS Feed" type="rss" xmlUrl="https://www.architecturaldigest.com/feed/rss" htmlUrl="https://www.architecturaldigest.com/" />
+        <outline text="ELLE Decor RSS Feed" title="ELLE Decor RSS Feed" type="rss" xmlUrl="https://www.elledecor.com/rss/default.xml" htmlUrl="https://www.elledecor.com/" />
+        <outline text="House Beautiful RSS Feed" title="House Beautiful RSS Feed" type="rss" xmlUrl="https://www.housebeautiful.com/rss/default.xml" htmlUrl="https://www.housebeautiful.com/" />
+        <outline text="Livingetc Magazine RSS Feed" title="Livingetc Magazine RSS Feed" type="rss" xmlUrl="https://www.livingetc.com/feeds.xml" htmlUrl="https://www.livingetc.com/" />
+        <outline text="Domino RSS Feed" title="Domino RSS Feed" type="rss" xmlUrl="https://www.domino.com/feed/" htmlUrl="https://www.domino.com/" />
+        <outline text="The Makerista RSS Feed" title="The Makerista RSS Feed" type="rss" xmlUrl="https://www.themakerista.com/feed/" htmlUrl="https://www.themakerista.com/" />
+        <outline text="Chris Loves Julia RSS Feed" title="Chris Loves Julia RSS Feed" type="rss" xmlUrl="https://chrislovesjulia.com/feed/" htmlUrl="https://chrislovesjulia.com/" />
+        <outline text="Apartment Therapy RSS Feed" title="Apartment Therapy RSS Feed" type="rss" xmlUrl="https://www.apartmenttherapy.com/main.rss" htmlUrl="https://www.apartmenttherapy.com/" />
+        <outline text="Lark &amp; Linen Interior Design Blog RSS Feed" title="Lark &amp; Linen Interior Design Blog RSS Feed" type="rss" xmlUrl="https://jacquelynclark.com/feed/" htmlUrl="https://jacquelynclark.com/blog/" />
+        <outline text="Liz Marie Blog RSS Feed" title="Liz Marie Blog RSS Feed" type="rss" xmlUrl="https://www.lizmarieblog.com/feed/" htmlUrl="https://www.lizmarieblog.com/" />
+      </outline>
+      <outline text="Gardening" title="Gardening">
+        <outline text="Fine Gardening RSS Feed" title="Fine Gardening RSS Feed" type="rss" xmlUrl="https://www.finegardening.com/feed" htmlUrl="https://www.finegardening.com/" />
+        <outline text="Digging RSS Feed" title="Digging RSS Feed" type="rss" xmlUrl="https://www.penick.net/digging/?feed=rss2" htmlUrl="https://www.penick.net/digging/" />
+        <outline text="Plant Care Today Blog RSS Feed" title="Plant Care Today Blog RSS Feed" type="rss" xmlUrl="https://plantcaretoday.com/feed" htmlUrl="https://plantcaretoday.com/" />
+        <outline text="The Middle-Sized Garden RSS Feed" title="The Middle-Sized Garden RSS Feed" type="rss" xmlUrl="https://www.themiddlesizedgarden.co.uk/feed/" htmlUrl="https://www.themiddlesizedgarden.co.uk/" />
+        <outline text="Garden Therapy RSS Feed" title="Garden Therapy RSS Feed" type="rss" xmlUrl="https://feeds.feedburner.com/GardenTherapy" htmlUrl="https://gardentherapy.ca/category/gardening/" />
+        <outline text="Epic Gardening Blog RSS Feed" title="Epic Gardening Blog RSS Feed" type="rss" xmlUrl="https://www.epicgardening.com/feed/" htmlUrl="https://www.epicgardening.com/" />
+        <outline text="Gardener's Path RSS Feed" title="Gardener's Path RSS Feed" type="rss" xmlUrl="https://gardenerspath.com/feed/" htmlUrl="https://gardenerspath.com/" />
+        <outline text="Chelsea Green Publishing Blog RSS Feed" title="Chelsea Green Publishing Blog RSS Feed" type="rss" xmlUrl="https://www.chelseagreen.com/feed/" htmlUrl="https://www.chelseagreen.com/blog/" />
+        <outline text="Homestead Gardener RSS Feed" title="Homestead Gardener RSS Feed" type="rss" xmlUrl="https://homesteadgardener.com/feed/" htmlUrl="https://homesteadgardener.com/" />
+        <outline text="Thompson &amp; Morgan Blog RSS Feed" title="Thompson &amp; Morgan Blog RSS Feed" type="rss" xmlUrl="https://blog.thompson-morgan.com/feed/" htmlUrl="https://blog.thompson-morgan.com/" />
+      </outline>
+      <outline text="Astrology" title="Astrology">
+        <outline text="Astrology News Service RSS Feed" title="Astrology News Service RSS Feed" type="rss" xmlUrl="https://astrologynewsservice.com/feed/" htmlUrl="https://astrologynewsservice.com/" />
+        <outline text="Astrostyle RSS Feed" title="Astrostyle RSS Feed" type="rss" xmlUrl="https://astrostyle.com/feed/" htmlUrl="https://astrostyle.com/" />
+        <outline text="Girl and Her Moon Ã‚Â» Astrology RSS Feed" title="Girl and Her Moon Ã‚Â» Astrology RSS Feed" type="rss" xmlUrl="https://girlandhermoon.com/category/astrology/feed/" htmlUrl="https://girlandhermoon.com/category/astrology/" />
+        <outline text="Astrology Look Up the Stars Astrology Blog RSS Feed" title="Astrology Look Up the Stars Astrology Blog RSS Feed" type="rss" xmlUrl="https://www.lookupthestars.com/blog-feed.xml" htmlUrl="https://www.lookupthestars.com/blog" />
+        <outline text="Jessica Shepherd Blog RSS Feed" title="Jessica Shepherd Blog RSS Feed" type="rss" xmlUrl="https://www.moonkissd.com/feed/" htmlUrl="https://www.moonkissd.com/blog/" />
+        <outline text="Pandora Astrology Blog by Jamie Kahl RSS Feed" title="Pandora Astrology Blog by Jamie Kahl RSS Feed" type="rss" xmlUrl="https://pandoraastrology.com/feed/?x=1" htmlUrl="https://pandoraastrology.com/blog/" />
+        <outline text="Saptarishis Astrology Blog RSS Feed" title="Saptarishis Astrology Blog RSS Feed" type="rss" xmlUrl="https://saptarishisshop.com/feed/" htmlUrl="https://saptarishisshop.com/articles/" />
+      </outline>
+    </outline>
+  </body>
+</opml>

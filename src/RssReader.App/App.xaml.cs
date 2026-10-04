@@ -120,6 +120,8 @@ public partial class App : System.Windows.Application
 
 	private async void OpenReader(Profile profile)
 	{
+		RssReader.App.MainWindow? readerWindow = null;
+		var chooser = _profileChooserWindow;
 		try
 		{
 			var catalogService = _host!.Services.GetRequiredService<CatalogService>();
@@ -135,20 +137,27 @@ public partial class App : System.Windows.Application
 				feedRefreshService,
 				preferences,
 				catalogFeedPreviewService);
-			await viewModel.InitializeAsync();
-			var window = new MainWindow(viewModel);
-			window.LogoutRequested += LogOut;
-			window.PreferencesRequested += () => ShowPreferences(window, viewModel);
+			readerWindow = new MainWindow(viewModel);
+			readerWindow.LogoutRequested += LogOut;
+			readerWindow.PreferencesRequested += () => ShowPreferences(readerWindow, viewModel);
 
-			var chooser = _profileChooserWindow;
-			_readerWindow = window;
-			MainWindow = window;
-			window.Show();
+			_readerWindow = readerWindow;
+			MainWindow = readerWindow;
+			readerWindow.Show();
+			await viewModel.InitializeAsync();
 			chooser?.Close();
 			_profileChooserWindow = null;
 		}
 		catch (Exception exception)
 		{
+			readerWindow?.Close();
+			_readerWindow = null;
+			if (chooser is not null)
+			{
+				MainWindow = chooser;
+				chooser.Activate();
+			}
+
 			System.Diagnostics.Debug.WriteLine(exception.ToString());
 			System.Windows.MessageBox.Show(
 				$"The selected profile could not be opened.{Environment.NewLine}{Environment.NewLine}{exception.Message}",

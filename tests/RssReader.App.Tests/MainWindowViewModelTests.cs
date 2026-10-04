@@ -7,6 +7,7 @@ using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using RssReader.App.ViewModels;
 using RssReader.Application;
 using RssReader.Domain;
@@ -22,6 +23,59 @@ public sealed class MainWindowViewModelTests
     public TestContext TestContext { get; set; } = null!;
 
     [TestMethod]
+    public void ManagedFeedPreviewCheckButtonClosesAndChecksFeed()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new RssReader.App.App();
+                app.InitializeComponent();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                CatalogFeedPreviewWindow? preview = null;
+                var checkFeedRequested = false;
+                var previewWasClosedBeforeCheck = false;
+                preview = new CatalogFeedPreviewWindow(
+                    new CatalogFeedListItem("managed-check-preview", "Managed check preview", "https://example.com/check.xml", null, "Comics"),
+                    _ => Task.FromResult(new CatalogFeedPreview("Managed check preview", "Comics", null, [])),
+                    checkFeed: () =>
+                    {
+                        checkFeedRequested = true;
+                        previewWasClosedBeforeCheck = !preview!.IsVisible;
+                        return Task.CompletedTask;
+                    });
+                preview.Show();
+                preview.UpdateLayout();
+
+                var checkFeedButton = (Button)preview.FindName("CheckFeedButton");
+                var closeButton = (Button)preview.FindName("ClosePreviewButton");
+                Assert.AreEqual(Visibility.Visible, checkFeedButton.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, closeButton.Visibility);
+                Assert.AreEqual("Check Feed", checkFeedButton.Content);
+                Assert.AreEqual("Check feed", AutomationProperties.GetName(checkFeedButton));
+                Assert.AreEqual("#FF218739", checkFeedButton.Foreground.ToString());
+
+                checkFeedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, checkFeedButton));
+
+                Assert.IsTrue(checkFeedRequested);
+                Assert.IsTrue(previewWasClosedBeforeCheck);
+                Assert.IsFalse(preview.IsVisible);
+                app.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
     public void MainWindowCanBeConstructedForARegularProfile()
     {
         Exception? failure = null;
@@ -31,6 +85,7 @@ public sealed class MainWindowViewModelTests
             {
                 var app = new RssReader.App.App();
                 app.InitializeComponent();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
                 var accessibilityFeed = new CatalogFeedListItem(
                     "feed-accessibility",
@@ -39,16 +94,154 @@ public sealed class MainWindowViewModelTests
                     "A sample comic feed",
                     "Comics",
                     "category-comics");
+                var feedWithoutDescription = new CatalogFeedListItem(
+                    "feed-no-description",
+                    "Example feed without description",
+                    "https://example.com/short.xml",
+                    null,
+                    "Comics",
+                    "category-comics");
                 viewModel.CatalogFeeds.Add(accessibilityFeed);
-                var window = new RssReader.App.MainWindow(
-                    viewModel);
+                viewModel.CatalogFeeds.Add(feedWithoutDescription);
+                var window = new RssReader.App.MainWindow(viewModel);
                 var preferencesRequested = false;
                 var logoutRequested = false;
                 window.PreferencesRequested += () => preferencesRequested = true;
                 window.LogoutRequested += () => logoutRequested = true;
                 window.Show();
                 window.UpdateLayout();
-                Assert.AreEqual(Visibility.Collapsed, ((Border)window.FindName("CatalogFeedPreviewPanel")).Visibility);
+                var folderDeleteButtons = FindVisualChildren<Button>(window)
+                    .Where(button => AutomationProperties.GetName(button) == "Delete folder")
+                    .ToArray();
+                var visibleFolderDeleteButtons = folderDeleteButtons
+                    .Where(button => button.Visibility == Visibility.Visible)
+                    .ToArray();
+                Assert.AreEqual(
+                    folderDeleteButtons.Count(button => button.DataContext is SidebarLink { IsFolder: true }),
+                    visibleFolderDeleteButtons.Length);
+                Assert.IsTrue(visibleFolderDeleteButtons.Length >= viewModel.FeedLinks.Count(link => link.IsFolder));
+                Assert.IsTrue(visibleFolderDeleteButtons.All(button => button.Opacity == 0));
+                var articleCardsList = (ListBox)window.FindName("ArticleCardsList");
+                var folderArticleCardsList = (ListBox)window.FindName("ArticleFolderCardsList");
+                viewModel.IsCardsView = true;
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Visible, folderArticleCardsList.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, articleCardsList.Visibility);
+                viewModel.IsSortByDate = true;
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Visible, articleCardsList.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, folderArticleCardsList.Visibility);
+                for (var articleIndex = 0; articleIndex < 500; articleIndex++)
+                {
+                    viewModel.VisibleArticles.Add(new ArticleRowViewModel(
+                        $"Virtualized article {articleIndex}",
+                        "Test source",
+                        DateTimeOffset.Now.AddMinutes(-articleIndex),
+                        "Inbox",
+                        [],
+                        "Article summary"));
+                }
+                window.UpdateLayout();
+                Assert.IsTrue(VirtualizingPanel.GetIsVirtualizing(articleCardsList));
+                Assert.AreEqual(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(articleCardsList));
+                Assert.AreEqual(ScrollUnit.Pixel, VirtualizingPanel.GetScrollUnit(articleCardsList));
+                var firstCard = (FrameworkElement?)articleCardsList.ItemContainerGenerator.ContainerFromIndex(0);
+                var secondCard = (FrameworkElement?)articleCardsList.ItemContainerGenerator.ContainerFromIndex(1);
+                Assert.IsNotNull(firstCard);
+                Assert.IsNotNull(secondCard);
+                var firstCardPosition = firstCard.TransformToAncestor(articleCardsList).Transform(new Point(0, 0));
+                var secondCardPosition = secondCard.TransformToAncestor(articleCardsList).Transform(new Point(0, 0));
+                Assert.AreEqual(firstCardPosition.Y, secondCardPosition.Y, 1);
+                Assert.IsTrue(secondCardPosition.X > firstCardPosition.X);
+                var realizedArticleCount = Enumerable.Range(0, articleCardsList.Items.Count)
+                    .Count(index => articleCardsList.ItemContainerGenerator.ContainerFromIndex(index) is not null);
+                Assert.IsTrue(realizedArticleCount < articleCardsList.Items.Count);
+                viewModel.IsSortByFolder = true;
+                viewModel.IsCardsView = false;
+                window.UpdateLayout();
+                var previewWindow = new RssReader.App.CatalogFeedPreviewWindow(
+                    new CatalogFeedListItem("preview", "Preview title", "https://example.com/feed.xml", null, "Comics"),
+                    _ => Task.FromResult(new CatalogFeedPreview("Preview title", "Comics", null, [])));
+                previewWindow.UpdateLayout();
+                Assert.AreEqual(WindowStyle.None, previewWindow.WindowStyle);
+                Assert.AreEqual("Preview title", ((TextBlock)previewWindow.FindName("FeedNameText")).Text);
+                var closePreviewButton = (Button)previewWindow.FindName("ClosePreviewButton");
+                var followPreviewDeleteButton = (Button)previewWindow.FindName("DeleteCatalogFeedButton");
+                Assert.IsTrue(closePreviewButton.IsCancel);
+                Assert.AreEqual(Visibility.Collapsed, followPreviewDeleteButton.Visibility);
+                Assert.AreEqual(0, Grid.GetRow(closePreviewButton));
+                Assert.AreEqual(
+                    HorizontalAlignment.Right,
+                    ((StackPanel)VisualTreeHelper.GetParent(closePreviewButton)).HorizontalAlignment);
+                Assert.AreEqual("Close feed preview", AutomationProperties.GetName(closePreviewButton));
+                Assert.AreEqual("\uE711", closePreviewButton.Content);
+                previewWindow.Close();
+                var managedPreviewDeleteRequested = false;
+                var managedPreviewWindow = new RssReader.App.CatalogFeedPreviewWindow(
+                    new CatalogFeedListItem("managed-preview", "Managed preview", "https://example.com/managed.xml", null, "Comics"),
+                    _ => Task.FromResult(new CatalogFeedPreview("Managed preview", "Comics", null, [])),
+                    () =>
+                    {
+                        managedPreviewDeleteRequested = true;
+                        return Task.CompletedTask;
+                    },
+                    checkFeed: () => Task.CompletedTask)
+                {
+                    Owner = window
+                };
+                managedPreviewWindow.Show();
+                managedPreviewWindow.UpdateLayout();
+                var managedPreviewDeleteButton = (Button)managedPreviewWindow.FindName("DeleteCatalogFeedButton");
+                var managedPreviewCloseButton = (Button)managedPreviewWindow.FindName("ClosePreviewButton");
+                var managedPreviewCheckFeedButton = (Button)managedPreviewWindow.FindName("CheckFeedButton");
+                Assert.AreEqual(Visibility.Visible, managedPreviewDeleteButton.Visibility);
+                Assert.AreEqual(Visibility.Visible, managedPreviewCheckFeedButton.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, managedPreviewCloseButton.Visibility);
+                var previewActions = (StackPanel)VisualTreeHelper.GetParent(managedPreviewDeleteButton);
+                Assert.AreSame(managedPreviewDeleteButton, previewActions.Children[0]);
+                Assert.AreSame(managedPreviewCheckFeedButton, previewActions.Children[1]);
+                managedPreviewDeleteButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, managedPreviewDeleteButton));
+                Assert.IsTrue(managedPreviewDeleteRequested);
+                Assert.IsFalse(managedPreviewWindow.IsVisible);
+                var managedPreviewCheckRequested = false;
+                var managedCheckPreviewWindow = new RssReader.App.CatalogFeedPreviewWindow(
+                    new CatalogFeedListItem("managed-check-preview", "Managed check preview", "https://example.com/check.xml", null, "Comics"),
+                    _ => Task.FromResult(new CatalogFeedPreview("Managed check preview", "Comics", null, [])),
+                    checkFeed: () =>
+                    {
+                        managedPreviewCheckRequested = true;
+                        return Task.CompletedTask;
+                    })
+                {
+                    Owner = window
+                };
+                managedCheckPreviewWindow.Show();
+                managedCheckPreviewWindow.UpdateLayout();
+                var checkFeedButton = (Button)managedCheckPreviewWindow.FindName("CheckFeedButton");
+                var managedCheckCloseButton = (Button)managedCheckPreviewWindow.FindName("ClosePreviewButton");
+                Assert.AreEqual(Visibility.Visible, checkFeedButton.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, managedCheckCloseButton.Visibility);
+                Assert.AreEqual("Check Feed", checkFeedButton.Content);
+                Assert.AreEqual("Check feed", AutomationProperties.GetName(checkFeedButton));
+                Assert.AreEqual("#FF218739", checkFeedButton.Foreground.ToString());
+                checkFeedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, checkFeedButton));
+                Assert.IsTrue(managedPreviewCheckRequested);
+                Assert.IsFalse(managedCheckPreviewWindow.IsVisible);
+                var catalogManagementList = (ListBox)window.FindName("CatalogManagementFeedList");
+                Assert.AreEqual("Catalog feed management results", AutomationProperties.GetName(catalogManagementList));
+                Assert.IsTrue(VirtualizingPanel.GetIsVirtualizing(catalogManagementList));
+                Assert.AreEqual(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(catalogManagementList));
+                var catalogActionsButton = (Button)window.FindName("CatalogActionsButton");
+                Assert.AreEqual("Catalog actions", AutomationProperties.GetName(catalogActionsButton));
+                CollectionAssert.AreEqual(
+                    new[] { "Import OPML...", "Load starter pack" },
+                    catalogActionsButton.ContextMenu!.Items.OfType<MenuItem>().Select(item => item.Header.ToString()).ToArray());
+                catalogActionsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, catalogActionsButton));
+                Assert.IsTrue(catalogActionsButton.ContextMenu.IsOpen);
+                catalogActionsButton.ContextMenu.IsOpen = false;
+                Assert.AreEqual(2, ((TabControl)window.FindName("CatalogManagementTabs")).Items.Count);
+                Assert.AreEqual(Visibility.Collapsed, ((ProgressBar)window.FindName("CatalogManagementLoadProgressBar")).Visibility);
+                Assert.IsNull(window.FindName("CatalogFeedPreviewPanel"));
                 viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
                 window.UpdateLayout();
                 var catalogSearchBox = (TextBox)window.FindName("CatalogFeedSearchBox");
@@ -68,21 +261,51 @@ public sealed class MainWindowViewModelTests
                 catalogResults.UpdateLayout();
                 var feedContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(accessibilityFeed);
                 Assert.IsNotNull(feedContainer);
+                var descriptionText = FindVisualChildren<TextBlock>(feedContainer!)
+                    .Single(text => AutomationProperties.GetName(text) == "Catalog feed description");
+                Assert.AreEqual(Visibility.Visible, descriptionText.Visibility);
+                var feedWithoutDescriptionContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(feedWithoutDescription);
+                Assert.IsNotNull(feedWithoutDescriptionContainer);
+                var hiddenDescriptionText = FindVisualChildren<TextBlock>(feedWithoutDescriptionContainer!)
+                    .Single(text => AutomationProperties.GetName(text) == "Catalog feed description");
+                Assert.AreEqual(Visibility.Collapsed, hiddenDescriptionText.Visibility);
                 var feedCheckBox = FindVisualChild<CheckBox>(feedContainer!)
                     ?? throw new AssertFailedException("The catalog feed selection control was not created.");
+                var selectableFeedCheckBox = FindVisualChild<CheckBox>(feedWithoutDescriptionContainer!)
+                    ?? throw new AssertFailedException("The unfollowed feed selection control was not created.");
                 var feedButtons = FindVisualChildren<Button>(feedContainer!).ToArray();
-                var previewButton = feedButtons.Single(button => Equals(button.Content, "Preview"));
-                var subscriptionButton = feedButtons.Single(button => Equals(button.Content, "Follow"));
+                var previewButton = feedButtons.Single(button =>
+                    AutomationProperties.GetName(button) == "Preview Example comic feed");
+                var subscriptionButton = feedButtons.Single(button =>
+                    AutomationProperties.GetName(button) == "Follow Example comic feed");
                 Assert.AreEqual("Select Example comic feed for follow", AutomationProperties.GetName(feedCheckBox));
                 Assert.IsTrue(feedCheckBox.IsTabStop);
+                Assert.AreEqual(Visibility.Visible, feedCheckBox.Visibility);
+                Assert.AreEqual(Visibility.Visible, selectableFeedCheckBox.Visibility);
                 Assert.AreEqual("Preview Example comic feed", AutomationProperties.GetName(previewButton));
+                Assert.AreEqual("\uE890", ((TextBlock)previewButton.Content).Text);
                 Assert.IsTrue(previewButton.IsTabStop);
                 Assert.AreEqual("Follow Example comic feed", AutomationProperties.GetName(subscriptionButton));
+                Assert.AreEqual("\uE710", ((TextBlock)subscriptionButton.Content).Text);
                 accessibilityFeed.IsSubscribed = true;
                 window.UpdateLayout();
+                Assert.AreEqual(Visibility.Collapsed, feedCheckBox.Visibility);
+                var followedFeedText = FindVisualChildren<StackPanel>(feedContainer!)
+                    .Single(panel => Grid.GetColumn(panel) == 1);
+                var unfollowedFeedText = FindVisualChildren<StackPanel>(feedWithoutDescriptionContainer!)
+                    .Single(panel => Grid.GetColumn(panel) == 1);
+                var followedFeedTextLeft = followedFeedText.TranslatePoint(new Point(0, 0), catalogResults).X;
+                var unfollowedFeedTextLeft = unfollowedFeedText.TranslatePoint(new Point(0, 0), catalogResults).X;
+                Assert.AreEqual(followedFeedTextLeft, unfollowedFeedTextLeft, 0.1);
                 Assert.AreEqual("Unfollow Example comic feed", AutomationProperties.GetName(subscriptionButton));
+                Assert.AreEqual("\uE738", ((TextBlock)subscriptionButton.Content).Text);
+                var selectAllCatalogFeedsCheckBox = (CheckBox)window.FindName("SelectAllCatalogFeedsCheckBox");
+                Assert.IsTrue(selectAllCatalogFeedsCheckBox.IsThreeState);
+                Assert.AreEqual(0, Grid.GetColumn(selectAllCatalogFeedsCheckBox));
                 var batchFollowButton = (Button)window.FindName("BatchFollowSelectedButton");
-                Assert.AreEqual("Follow selected (0)", batchFollowButton.Content);
+                Assert.AreEqual("\uE710", batchFollowButton.Content);
+                Assert.AreEqual("Follow selected feeds", AutomationProperties.GetName(batchFollowButton));
+                Assert.AreEqual("Follow selected (0)", AutomationProperties.GetHelpText(batchFollowButton));
                 Assert.IsFalse(batchFollowButton.IsEnabled);
                 Assert.IsFalse(((Button)window.FindName("ClearSelectedCatalogFeedsButton")).IsEnabled);
                 viewModel.ClearCatalogFiltersCommand.Execute(null);
@@ -161,15 +384,63 @@ public sealed class MainWindowViewModelTests
                     "Source",
                     feedId: "comic-feed",
                     link: "https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031",
+                    content: "<p>Comic panel <img src=\"https://example.com/inline-panel.png\" alt=\"Inline panel\" /> follows.</p>",
                     imageUrl: "https://resources.arcamax.com/newspics/396/39604/3960483.gif");
                 viewModel.SelectArticleCommand.Execute(comicArticle);
                 window.UpdateLayout();
-                Assert.AreEqual(Visibility.Visible, ((Image)window.FindName("SelectedArticleImage")).Visibility);
-                Assert.AreEqual(Visibility.Collapsed, ((TextBlock)window.FindName("SelectedArticleSummary")).Visibility);
-                Assert.AreEqual(Visibility.Visible, ((TextBlock)window.FindName("ArticleSourceHyperlink")).Visibility);
+                Assert.AreEqual(Visibility.Collapsed, ((DockPanel)window.FindName("WorkspaceHeader")).Visibility);
+                var articleViewer = (RssReader.App.ArticleHtmlViewer)window.FindName("SelectedArticleHtmlViewer");
+                Assert.AreEqual(Visibility.Visible, articleViewer.Visibility);
+                var initialViewerWidth = articleViewer.ActualWidth;
+                var initialViewerHeight = articleViewer.ActualHeight;
+                StringAssert.Contains(articleViewer.CurrentDocument, "https://example.com/inline-panel.png");
+                var browser = (Microsoft.Web.WebView2.Wpf.WebView2?)articleViewer.FindName("Browser");
+                Assert.IsNotNull(browser);
+                Assert.AreEqual(
+                    Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "RssReader",
+                        "WebView2"),
+                    browser.CreationProperties.UserDataFolder);
+                Assert.IsTrue(Directory.Exists(browser.CreationProperties.UserDataFolder));
+                PumpDispatcherUntil(articleViewer.InitializationTask);
+                Assert.IsFalse(articleViewer.InitializationError is UnauthorizedAccessException,
+                    articleViewer.InitializationError?.ToString());
+                if (articleViewer.InitializationError is System.Runtime.InteropServices.COMException comException)
+                {
+                    Assert.AreNotEqual(unchecked((int)0x80070005), comException.HResult, comException.ToString());
+                }
+                PumpDispatcherUntil(articleViewer.NavigationCompletion);
+                Assert.IsTrue(
+                    articleViewer.LastNavigationSucceeded,
+                    $"Navigation to {articleViewer.LastNavigationUriScheme} failed with {articleViewer.LastNavigationErrorStatus}.");
+                var articleStatusPanel = (FrameworkElement)articleViewer.FindName("StatusPanel");
+                articleViewer.HandleNavigationResult(
+                    false,
+                    Microsoft.Web.WebView2.Core.CoreWebView2WebErrorStatus.OperationCanceled);
+                Assert.AreEqual(Visibility.Visible, browser.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, articleStatusPanel.Visibility);
+                articleViewer.HandleNavigationResult(
+                    false,
+                    Microsoft.Web.WebView2.Core.CoreWebView2WebErrorStatus.HostNameNotResolved);
+                Assert.AreEqual(Visibility.Collapsed, browser.Visibility);
+                Assert.AreEqual(Visibility.Visible, articleStatusPanel.Visibility);
+                articleViewer.HandleNavigationResult(
+                    true,
+                    Microsoft.Web.WebView2.Core.CoreWebView2WebErrorStatus.Unknown);
+                Assert.AreEqual(Visibility.Visible, browser.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, articleStatusPanel.Visibility);
+                window.Width += 180;
+                window.Height += 120;
+                window.UpdateLayout();
+                Assert.IsTrue(articleViewer.ActualWidth > initialViewerWidth);
+                Assert.IsTrue(articleViewer.ActualHeight > initialViewerHeight);
+                Assert.AreEqual(articleViewer.ActualWidth, browser.ActualWidth, 1);
+                Assert.AreEqual(articleViewer.ActualHeight, browser.ActualHeight, 1);
+                var articleTitle = (TextBlock)window.FindName("SelectedArticleTitle");
                 Assert.AreEqual(
                     new Uri("https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031"),
-                    ((Hyperlink)((TextBlock)window.FindName("ArticleSourceHyperlink")).Inlines.Single()).NavigateUri);
+                    ((Hyperlink)articleTitle.Inlines.Single()).NavigateUri);
                 viewModel.BackToListCommand.Execute(null);
                 window.UpdateLayout();
 
@@ -179,6 +450,149 @@ public sealed class MainWindowViewModelTests
                 window.UpdateLayout();
                 viewModel.IsCardsView = true;
                 window.UpdateLayout();
+                window.Close();
+
+                var catalogMasterViewModel = new MainWindowViewModel(
+                    Profile.CreateCatalogMaster(),
+                    new CatalogService(new SqliteCatalogStore("unused-catalog.db")));
+                var catalogManagement = catalogMasterViewModel.CatalogManagement!;
+                var checkedAt = new DateTimeOffset(2026, 10, 3, 16, 14, 0, TimeSpan.Zero);
+                var managedFeed = new CatalogFeedListItem(
+                    "comic-feed",
+                    "(th)ink by Keith Knight",
+                    "https://www.comicrss.com/rss/think.rss",
+                    null,
+                    "Comics RSS",
+                    "comics",
+                    null,
+                    lastHealthCheckedAt: checkedAt,
+                    lastHealthCheckSucceeded: false);
+                catalogManagement.Feeds.Add(managedFeed);
+                catalogManagement.Categories.Add(new CatalogCategory("comics", "Comics RSS"));
+                catalogManagement.Collections.Add(new CatalogCollection("editor-picks", "Editor's picks"));
+
+                var catalogMasterWindow = new RssReader.App.MainWindow(catalogMasterViewModel);
+                catalogMasterWindow.Show();
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(1, catalogManagement.VisibleFeedCount);
+                ((TabControl)catalogMasterWindow.FindName("CatalogManagementTabs")).SelectedIndex = 0;
+                catalogMasterWindow.UpdateLayout();
+                var managementList = (ListBox)catalogMasterWindow.FindName("CatalogManagementFeedList");
+                Assert.AreSame(
+                    catalogMasterViewModel,
+                    managementList.DataContext,
+                    $"Unexpected feed list context: {managementList.DataContext?.GetType().FullName ?? "null"}");
+                Assert.AreEqual(1, managementList.Items.Count);
+                Assert.IsTrue(catalogMasterViewModel.IsCatalogAdminVisible);
+                Assert.IsTrue(managementList.IsLoaded, $"Feed list loaded: {managementList.IsLoaded}; height: {managementList.ActualHeight}");
+                Assert.IsTrue(managementList.ActualHeight > 0, $"Feed list height: {managementList.ActualHeight}");
+                managementList.ScrollIntoView(managedFeed);
+                catalogMasterWindow.UpdateLayout();
+                managementList.UpdateLayout();
+                var managedFeedContainer = managementList.ItemContainerGenerator.ContainerFromItem(managedFeed)
+                    ?? throw new AssertFailedException("The Catalog Master feed row was not created.");
+                var managementActions = FindVisualChildren<Button>(managedFeedContainer).ToArray();
+                CollectionAssert.AreEquivalent(
+                    new[] { "Preview feed", "Edit feed", "Check feed", "Remove feed" },
+                    managementActions.Select(button => AutomationProperties.GetName(button)).ToArray());
+                var managedTitle = FindVisualChildren<TextBlock>(managedFeedContainer).Single(text => text.Text == managedFeed.Name);
+                Assert.AreEqual(14, managedTitle.FontSize);
+                var managedDescription = FindVisualChildren<TextBlock>(managedFeedContainer)
+                    .Single(text => AutomationProperties.GetName(text) == "Catalog feed description");
+                Assert.AreEqual(Visibility.Collapsed, managedDescription.Visibility);
+                var metadataIcon = FindVisualChildren<TextBlock>(managedFeedContainer)
+                    .Single(text => AutomationProperties.GetName(text).StartsWith("Metadata gaps:", StringComparison.Ordinal));
+                Assert.AreEqual(managedFeed.MetadataReviewDisplay, metadataIcon.ToolTip);
+                var healthIcon = FindVisualChildren<TextBlock>(managedFeedContainer)
+                    .Single(text => AutomationProperties.GetName(text).StartsWith("Check failed - checked", StringComparison.Ordinal));
+                Assert.AreEqual(managedFeed.HealthCheckDisplay, healthIcon.ToolTip);
+                Assert.AreEqual("\uE711", healthIcon.Text);
+
+                var managementTabs = (TabControl)catalogMasterWindow.FindName("CatalogManagementTabs");
+                managementTabs.SelectedIndex = 1;
+                catalogMasterWindow.UpdateLayout();
+                var renameButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .Single(button => AutomationProperties.GetName(button) == "Rename category");
+                var removeCategoryButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .Single(button => AutomationProperties.GetName(button) == "Remove category");
+                Assert.AreEqual(0, renameButton.Opacity);
+                Assert.AreEqual(0, removeCategoryButton.Opacity);
+                renameButton.Focus();
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(1, renameButton.Opacity);
+                catalogMasterWindow.Close();
+                app.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
+    public void FeedTreeFolderCanExpandAndCollapseWithoutWpfAnimationErrors()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new RssReader.App.App();
+                app.InitializeComponent();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+                var folder = new SidebarLink("folder:Comics", "Comics", string.Empty, "(1)", indentLevel: 1);
+                var feed = new SidebarLink("feed:comics", "Example comic", "\uE774", indentLevel: 2, parentFolder: folder);
+                viewModel.FeedLinks.Add(folder);
+                viewModel.FeedLinks.Add(feed);
+                var window = new RssReader.App.MainWindow(viewModel);
+                window.Show();
+                window.UpdateLayout();
+                var refreshButton = (Button)window.FindName("RefreshButton");
+                Assert.AreEqual(38, refreshButton.Height);
+                Assert.AreEqual(112, refreshButton.MinWidth);
+                Assert.AreEqual("#FF476F63", refreshButton.Background.ToString());
+                Assert.AreEqual("#FFFFFFFF", refreshButton.Foreground.ToString());
+                Assert.AreEqual("Refresh followed feeds", AutomationProperties.GetName(refreshButton));
+                var folderRow = FindVisualChildren<Grid>(window)
+                    .Single(grid => ReferenceEquals(grid.DataContext, folder) && grid.Name == "SidebarLinkRoot");
+                var folderButton = folderRow.Children.OfType<Button>().First();
+                var deleteFolderButton = folderRow.Children.OfType<Button>()
+                    .Single(button => AutomationProperties.GetName(button) == "Delete folder");
+                Assert.AreEqual(0, deleteFolderButton.Opacity);
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(1, deleteFolderButton.Opacity);
+                viewModel.ActivateSidebarLinkCommand.Execute(folder);
+                window.UpdateLayout();
+                Assert.IsTrue(folder.IsExpanded);
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(0, deleteFolderButton.Opacity);
+
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(1, deleteFolderButton.Opacity);
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(0, deleteFolderButton.Opacity);
+
+                Assert.IsTrue(folderButton.Focus());
+                window.UpdateLayout();
+                Assert.IsTrue(folderRow.IsKeyboardFocusWithin);
+                Assert.AreEqual(1, deleteFolderButton.Opacity);
+                Assert.AreEqual(40, folderButton.Padding.Right);
+
+                viewModel.ActivateSidebarLinkCommand.Execute(folder);
+                window.UpdateLayout();
+                Assert.IsFalse(folder.IsExpanded);
+
                 window.Close();
                 app.Shutdown();
             }
@@ -261,6 +675,14 @@ public sealed class MainWindowViewModelTests
             var feedLink = viewModel.FeedLinks.Single(link => link.Route == "feed:feed-1");
             Assert.IsTrue(allLink.IndentMargin.Left < folderLink.IndentMargin.Left);
             Assert.IsTrue(folderLink.IndentMargin.Left < feedLink.IndentMargin.Left);
+            Assert.AreEqual("(1)", folderLink.Count);
+            Assert.IsFalse(folderLink.IsExpanded);
+            Assert.AreSame(folderLink, feedLink.ParentFolder);
+            viewModel.ActivateSidebarLinkCommand.Execute(folderLink);
+            Assert.IsTrue(folderLink.IsExpanded);
+            Assert.AreEqual("folder:Gaming", viewModel.ActiveRoute);
+            viewModel.ActivateSidebarLinkCommand.Execute(folderLink);
+            Assert.IsFalse(folderLink.IsExpanded);
             Assert.IsTrue(viewModel.TagLinks.Any(link => link.Route == "tag:Reviews"));
         }
         finally
@@ -330,8 +752,11 @@ public sealed class MainWindowViewModelTests
                 new CatalogService(catalogStore),
                 new ReadingService(readerStore, catalogStore),
                 null);
+            var catalogFeedChangeCount = 0;
+            viewModel.CatalogFeeds.CollectionChanged += (_, _) => catalogFeedChangeCount++;
             await viewModel.InitializeAsync();
 
+            Assert.AreEqual(1, catalogFeedChangeCount);
             CollectionAssert.AreEqual(
                 new[] { chickweed.Name, dilbert.Name, spaceNews.Name },
                 viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Select(feed => feed.Name).ToArray());
@@ -423,42 +848,38 @@ public sealed class MainWindowViewModelTests
             "category-tech");
         viewModel.CatalogFeeds.Add(feed);
 
-        await viewModel.PreviewCatalogFeedAsync(feed);
+        var preview = await viewModel.LoadCatalogFeedPreviewAsync(feed);
 
-        Assert.IsTrue(viewModel.IsCatalogFeedPreviewVisible);
-        Assert.IsFalse(viewModel.IsCatalogFeedPreviewLoading);
-        Assert.AreEqual(5, viewModel.ActiveCatalogFeedPreview!.Items.Count);
-        Assert.AreEqual("Preview headline 1", viewModel.ActiveCatalogFeedPreview.Items[0].Title);
-        Assert.IsTrue(viewModel.ActiveCatalogFeedPreview.Items.All(item => item.Content is null && item.ImageUrl is null));
+        Assert.AreEqual(5, preview.Items.Count);
+        Assert.AreEqual("Preview headline 1", preview.Items[0].Title);
+        Assert.IsTrue(preview.Items.All(item => item.Content is null && item.ImageUrl is null));
         Assert.IsFalse(feed.IsSubscribed);
         Assert.AreEqual(1, downloader.RequestedFeedIds.Count);
 
-        await viewModel.PreviewCatalogFeedAsync(feed);
+        var cachedPreview = await viewModel.LoadCatalogFeedPreviewAsync(feed);
+        Assert.AreSame(preview, cachedPreview);
         Assert.AreEqual(1, downloader.RequestedFeedIds.Count);
 
-        await viewModel.PreviewCatalogFeedAsync(feed, forceRefresh: true);
+        var refreshedPreview = await viewModel.LoadCatalogFeedPreviewAsync(feed, forceRefresh: true);
         Assert.AreEqual(2, downloader.RequestedFeedIds.Count);
+        Assert.AreNotSame(preview, refreshedPreview);
 
-        viewModel.CloseCatalogFeedPreviewCommand.Execute(null);
-        await viewModel.PreviewCatalogFeedAsync(feed);
+        await viewModel.LoadCatalogFeedPreviewAsync(feed);
         Assert.AreEqual(2, downloader.RequestedFeedIds.Count);
-        Assert.IsTrue(viewModel.IsCatalogFeedPreviewVisible);
 
         downloader.DownloadHandler = _ => Task.FromException<IReadOnlyList<DownloadedFeedItem>>(
             new System.Net.Http.HttpRequestException("The feed is offline."));
-        await viewModel.PreviewCatalogFeedAsync(feed, forceRefresh: true);
-        Assert.IsTrue(viewModel.HasCatalogFeedPreviewError);
-        StringAssert.Contains(viewModel.CatalogFeedPreviewErrorMessage, "The feed is offline.");
-        Assert.IsFalse(viewModel.IsCatalogFeedPreviewEmpty);
+        var failure = await Assert.ThrowsExceptionAsync<System.Net.Http.HttpRequestException>(
+            () => viewModel.LoadCatalogFeedPreviewAsync(feed, forceRefresh: true));
+        StringAssert.Contains(failure.Message, "The feed is offline.");
 
         downloader.DownloadHandler = null;
-        await viewModel.PreviewCatalogFeedAsync(feed, forceRefresh: true);
-        Assert.IsFalse(viewModel.HasCatalogFeedPreviewError);
-        Assert.IsNotNull(viewModel.ActiveCatalogFeedPreview);
+        var recoveredPreview = await viewModel.LoadCatalogFeedPreviewAsync(feed, forceRefresh: true);
+        Assert.IsNotNull(recoveredPreview);
     }
 
     [TestMethod]
-    public async Task CatalogPreviewCancelsRequestWhenNavigatingAway()
+    public async Task CatalogPreviewCancelsWithDialogToken()
     {
         var downloadStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var observedToken = CancellationToken.None;
@@ -486,17 +907,13 @@ public sealed class MainWindowViewModelTests
             null);
         viewModel.CatalogFeeds.Add(feed);
 
-        var previewTask = viewModel.PreviewCatalogFeedAsync(feed);
+        using var cancellation = new CancellationTokenSource();
+        var previewTask = viewModel.LoadCatalogFeedPreviewAsync(feed, cancellation.Token);
         await downloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.IsTrue(viewModel.IsCatalogFeedPreviewLoading);
-
-        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
-        await previewTask;
+        cancellation.Cancel();
+        await Assert.ThrowsExceptionAsync<TaskCanceledException>(() => previewTask);
 
         Assert.IsTrue(observedToken.IsCancellationRequested);
-        Assert.IsFalse(viewModel.IsCatalogFeedPreviewVisible);
-        Assert.IsFalse(viewModel.IsCatalogFeedPreviewLoading);
-        Assert.AreEqual("All", viewModel.ActiveRoute);
     }
 
     [TestMethod]
@@ -539,8 +956,8 @@ public sealed class MainWindowViewModelTests
             viewModel.CatalogSearchQuery = "indie comics";
 
             var catalogItem = viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Single();
-            await viewModel.PreviewCatalogFeedAsync(catalogItem);
-            Assert.AreEqual("New headline", viewModel.ActiveCatalogFeedPreview?.Items.Single().Title);
+            var preview = await viewModel.LoadCatalogFeedPreviewAsync(catalogItem);
+            Assert.AreEqual("New headline", preview.Items.Single().Title);
             Assert.AreEqual(1, downloader.RequestedFeedIds.Count);
 
             viewModel.FolderSelectionRequested = (_, _, _) => Task.FromResult<string?>("Comics");
@@ -552,7 +969,6 @@ public sealed class MainWindowViewModelTests
             viewModel.HideFollowedCatalogFeeds = true;
             Assert.IsTrue(viewModel.CatalogFeedListView.IsEmpty);
             viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
-            Assert.IsFalse(viewModel.IsCatalogFeedPreviewVisible);
             viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
             viewModel.HideFollowedCatalogFeeds = false;
 
@@ -699,6 +1115,19 @@ public sealed class MainWindowViewModelTests
                 null);
             await viewModel.InitializeAsync();
             var selectedFeeds = viewModel.CatalogFeeds.ToArray();
+
+            viewModel.CatalogSearchQuery = "First comic";
+            Assert.AreEqual(false, viewModel.VisibleCatalogFeedSelectionState);
+            selectedFeeds.Single(feed => feed.Name == "First comic").IsSelectedForFollow = true;
+            Assert.AreEqual(true, viewModel.VisibleCatalogFeedSelectionState);
+            viewModel.CatalogSearchQuery = string.Empty;
+            Assert.IsNull(viewModel.VisibleCatalogFeedSelectionState);
+            viewModel.ToggleVisibleCatalogFeedSelectionCommand.Execute(null);
+            Assert.AreEqual(true, viewModel.VisibleCatalogFeedSelectionState);
+            viewModel.ToggleVisibleCatalogFeedSelectionCommand.Execute(null);
+            Assert.AreEqual(false, viewModel.VisibleCatalogFeedSelectionState);
+            Assert.AreEqual(0, viewModel.SelectedCatalogFeedCount);
+
             selectedFeeds[0].IsSelectedForFollow = true;
             selectedFeeds[1].IsSelectedForFollow = true;
             Assert.AreEqual(2, viewModel.SelectedCatalogFeedCount);
@@ -729,6 +1158,180 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(subscriptions.All(subscription => subscription.FolderName == "Comics"));
             Assert.AreEqual(0, viewModel.SelectedCatalogFeedCount);
             Assert.AreEqual("Following 2 feeds in Comics.", viewModel.StatusMessage);
+            Assert.IsTrue(viewModel.CanUnfollowAllCatalogFeeds);
+
+            viewModel.CatalogSearchQuery = "First comic";
+            Assert.AreEqual(1, viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Count(feed => feed.IsSubscribed));
+            var confirmedFeedCount = 0;
+            viewModel.ConfirmUnfollowAllRequested = feedCount =>
+            {
+                confirmedFeedCount = feedCount;
+                return Task.FromResult(false);
+            };
+            await viewModel.UnfollowAllCatalogFeedsCommand.ExecuteAsync();
+            Assert.AreEqual(1, confirmedFeedCount);
+            Assert.AreEqual(2, (await readerStore.GetSubscriptionsAsync(profile.Id)).Count);
+
+            viewModel.ConfirmUnfollowAllRequested = feedCount =>
+            {
+                confirmedFeedCount = feedCount;
+                return Task.FromResult(true);
+            };
+            await viewModel.UnfollowAllCatalogFeedsCommand.ExecuteAsync();
+            Assert.AreEqual(1, confirmedFeedCount);
+            var remainingSubscriptions = await readerStore.GetSubscriptionsAsync(profile.Id);
+            Assert.AreEqual(secondFeed.Id, remainingSubscriptions.Single().FeedId);
+            Assert.IsFalse(viewModel.CanUnfollowAllCatalogFeeds);
+            Assert.AreEqual("Unfollowed 1 feed.", viewModel.StatusMessage);
+            viewModel.CatalogSearchQuery = string.Empty;
+            Assert.IsTrue(viewModel.CanUnfollowAllCatalogFeeds);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task FolderPickerCreationReusesExistingFolderAndRefreshesFolderNames()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-folder-picker-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+
+            var profile = Profile.CreateRegular("Folder Picker Reader");
+            await profileStore.AddAsync(profile);
+            var feed = new CatalogFeed("feed-advertising", "Advertising feed", "https://example.com/ads.xml", null, null);
+            var newFeed = new CatalogFeed("feed-new", "New feed", "https://example.com/new.xml", null, null);
+            await catalogStore.AddFeedAsync(feed);
+            await catalogStore.AddFeedAsync(newFeed);
+
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                null);
+            await viewModel.InitializeAsync();
+
+            await readerStore.AddFolderAsync(profile.Id, "Advertising");
+            viewModel.FolderSelectionRequested = async (_, _, createFolderAsync) =>
+            {
+                await createFolderAsync("Advertising");
+                Assert.IsTrue(viewModel.FeedLinks.Any(link => link.Route == "folder:Advertising"));
+                return "Advertising";
+            };
+
+            await viewModel.ToggleSubscriptionCommand.ExecuteAsync(
+                viewModel.CatalogFeeds.Single(item => item.Id == feed.Id));
+
+            Assert.AreEqual("Advertising", viewModel.FolderNames.Single());
+            var subscription = (await readerStore.GetSubscriptionsAsync(profile.Id)).Single();
+            Assert.AreEqual("Advertising", subscription.FolderName);
+            Assert.AreEqual("Following Advertising feed.", viewModel.StatusMessage);
+
+            viewModel.FolderSelectionRequested = async (_, _, createFolderAsync) =>
+            {
+                await createFolderAsync("Comics");
+                Assert.IsTrue(viewModel.FeedLinks.Any(link => link.Route == "folder:Comics"));
+                return "Comics";
+            };
+            await viewModel.ToggleSubscriptionCommand.ExecuteAsync(
+                viewModel.CatalogFeeds.Single(item => item.Id == newFeed.Id));
+
+            CollectionAssert.AreEquivalent(new[] { "Advertising", "Comics" }, viewModel.FolderNames.ToArray());
+            var subscriptions = await readerStore.GetSubscriptionsAsync(profile.Id);
+            Assert.AreEqual(2, subscriptions.Count);
+            Assert.IsTrue(subscriptions.Any(item => item.FeedId == newFeed.Id && item.FolderName == "Comics"));
+            Assert.AreEqual("Following New feed.", viewModel.StatusMessage);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task DeletingFolderUnfollowsOnlyItsFeedsAndReturnsToAllView()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-delete-folder-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+
+            var profile = Profile.CreateRegular("Folder Delete Reader");
+            await profileStore.AddAsync(profile);
+            var comicsFeed = new CatalogFeed("feed-comics", "Comics feed", "https://example.com/comics.xml", null, null);
+            var newsFeed = new CatalogFeed("feed-news", "News feed", "https://example.com/news.xml", null, null);
+            await catalogStore.AddFeedAsync(comicsFeed);
+            await catalogStore.AddFeedAsync(newsFeed);
+            await readerStore.AddFolderAsync(profile.Id, "Comics");
+            await readerStore.AddFolderAsync(profile.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, comicsFeed.Id, "Comics");
+            await readerStore.SubscribeAsync(profile.Id, newsFeed.Id, "News");
+
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                null);
+            await viewModel.InitializeAsync();
+            var comicsFolder = viewModel.FeedLinks.Single(link => link.Route == "folder:Comics");
+            viewModel.NavigateCommand.Execute(comicsFolder);
+
+            string? confirmedFolder = null;
+            var confirmedFeedCount = 0;
+            viewModel.ConfirmDeleteFolderRequested = (folderName, feedCount) =>
+            {
+                confirmedFolder = folderName;
+                confirmedFeedCount = feedCount;
+                return Task.FromResult(false);
+            };
+            await viewModel.DeleteFolderCommand.ExecuteAsync(comicsFolder);
+            Assert.AreEqual(2, (await readerStore.GetSubscriptionsAsync(profile.Id)).Count);
+            Assert.IsTrue(viewModel.FolderNames.Contains("Comics", StringComparer.OrdinalIgnoreCase));
+
+            viewModel.ConfirmDeleteFolderRequested = (folderName, feedCount) =>
+            {
+                confirmedFolder = folderName;
+                confirmedFeedCount = feedCount;
+                return Task.FromResult(true);
+            };
+            await viewModel.DeleteFolderCommand.ExecuteAsync(comicsFolder);
+
+            Assert.AreEqual("Comics", confirmedFolder);
+            Assert.AreEqual(1, confirmedFeedCount);
+            var remainingSubscriptions = await readerStore.GetSubscriptionsAsync(profile.Id);
+            Assert.AreEqual(newsFeed.Id, remainingSubscriptions.Single().FeedId);
+            CollectionAssert.AreEqual(new[] { "News" }, viewModel.FolderNames.ToArray());
+            Assert.IsFalse(viewModel.FeedLinks.Any(link => link.Route == "folder:Comics"));
+            Assert.IsFalse(viewModel.FeedLinks.Any(link => link.Route == $"feed:{comicsFeed.Id}"));
+            Assert.AreEqual("All", viewModel.ActiveRoute);
+            Assert.AreEqual("Deleted folder Comics and unfollowed 1 feed.", viewModel.StatusMessage);
         }
         finally
         {
@@ -861,7 +1464,63 @@ public sealed class MainWindowViewModelTests
             var newFeedArticle = viewModel.VisibleArticles.Single(article => article.FeedId == newFeed.Id);
             viewModel.SelectArticleCommand.Execute(newFeedArticle);
             Assert.IsTrue(viewModel.IsRawFeedButtonVisible);
-            Assert.AreEqual("<rss><channel><title>New</title></channel></rss>", await viewModel.GetRawFeedContentAsync(newFeed.Id));
+            Assert.AreEqual(
+                $"<item><guid>{newFeed.Id}-item</guid><title>New headline</title></item>",
+                await viewModel.GetRawArticleContentAsync(newFeedArticle));
+
+            var visibleArticleChanges = 0;
+            viewModel.VisibleArticles.CollectionChanged += (_, _) => visibleArticleChanges++;
+            downloader.ItemsByFeed = new Dictionary<string, IReadOnlyList<DownloadedFeedItem>>
+            {
+                [existingFeed.Id] =
+                [new DownloadedFeedItem($"{existingFeed.Id}-item", "Existing headline", null, null, "Summary", "Content")],
+                [newFeed.Id] =
+                [new DownloadedFeedItem(
+                    $"{newFeed.Id}-item",
+                    "Updated headline",
+                    null,
+                    null,
+                    "Updated summary",
+                    "<p>Updated article body <img src=\"https://example.com/updated.jpg\" /></p>")]
+            };
+            await viewModel.RefreshNowAsync();
+
+            Assert.AreSame(newFeedArticle, viewModel.SelectedArticle);
+            Assert.AreEqual("New headline", viewModel.SelectedArticle?.Title);
+            Assert.AreEqual(0, visibleArticleChanges);
+            Assert.AreEqual("Checked 2 feeds; fetched 2 articles; New 0.", viewModel.StatusMessage);
+
+            downloader.ItemsByFeed = new Dictionary<string, IReadOnlyList<DownloadedFeedItem>>
+            {
+                [existingFeed.Id] =
+                [new DownloadedFeedItem($"{existingFeed.Id}-item", "Existing headline", null, null, "Summary", "Content")],
+                [newFeed.Id] =
+                [
+                    new DownloadedFeedItem(
+                        $"{newFeed.Id}-item",
+                        "Updated headline",
+                        null,
+                        null,
+                        "Updated summary",
+                        "<p>Updated article body <img src=\"https://example.com/updated.jpg\" /></p>"),
+                    new DownloadedFeedItem(
+                        $"{newFeed.Id}-new-item",
+                        "New article",
+                        null,
+                        DateTimeOffset.UtcNow,
+                        "New summary",
+                        "New content")
+                ]
+            };
+            await viewModel.RefreshNowAsync();
+
+            Assert.AreNotSame(newFeedArticle, viewModel.SelectedArticle);
+            Assert.AreEqual("Updated headline", viewModel.SelectedArticle?.Title);
+            Assert.IsTrue(visibleArticleChanges > 0);
+            Assert.AreEqual("Checked 2 feeds; fetched 3 articles; New 1.", viewModel.StatusMessage);
+            Assert.AreEqual(
+                "<p>Updated article body <img src=\"https://example.com/updated.jpg\" /></p>",
+                viewModel.SelectedArticle?.Content);
         }
         finally
         {
@@ -1232,6 +1891,41 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void SmoothScrollOffsetUsesEaseOutInterpolation()
+    {
+        Assert.AreEqual(20, RssReader.App.SmoothScrollBehavior.InterpolateOffset(20, 100, 0));
+        var middleOffset = RssReader.App.SmoothScrollBehavior.InterpolateOffset(20, 100, 0.5);
+        Assert.IsTrue(middleOffset > 60);
+        Assert.IsTrue(middleOffset < 100);
+        Assert.AreEqual(100, RssReader.App.SmoothScrollBehavior.InterpolateOffset(20, 100, 1));
+    }
+
+    [TestMethod]
+    public void SmoothScrollAccelerationOnlyAppliesToFastSameDirectionInput()
+    {
+        Assert.AreEqual(1, RssReader.App.SmoothScrollBehavior.GetWheelAcceleration(200, 1, 1));
+        Assert.AreEqual(1, RssReader.App.SmoothScrollBehavior.GetWheelAcceleration(20, 1, -1));
+
+        var fastAcceleration = RssReader.App.SmoothScrollBehavior.GetWheelAcceleration(40, 1, 1);
+
+        Assert.IsTrue(fastAcceleration > 1);
+        Assert.IsTrue(fastAcceleration <= 2);
+    }
+
+    [TestMethod]
+    public void OptionalUriConverterIgnoresMissingLinksAndConvertsWebLinks()
+    {
+        var converter = new RssReader.App.OptionalUriConverter();
+
+        Assert.AreSame(
+            DependencyProperty.UnsetValue,
+            converter.Convert(null!, typeof(Uri), null!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.AreEqual(
+            new Uri("https://example.com"),
+            converter.Convert("https://example.com", typeof(Uri), null!, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [TestMethod]
     public void ArticleRowMakesSourceSummaryClickableAndExposesEmbeddedImage()
     {
         var article = new ArticleRowViewModel(
@@ -1251,6 +1945,101 @@ public sealed class MainWindowViewModelTests
         Assert.IsTrue(article.IsImageVisible);
     }
 
+    [TestMethod]
+    public void ArticleRowBuildsSourceInitialsForImageFallback()
+    {
+        var article = new ArticleRowViewModel(
+            "Esports headline",
+            "Esports Insider RSS Feed",
+            DateTimeOffset.UtcNow,
+            "Esports",
+            [],
+            "Article summary");
+
+        Assert.AreEqual("EI", article.SourceInitials);
+    }
+
+    [TestMethod]
+    public void ArticleRowHidesExcerptWhenFullArticleContentIsAvailable()
+    {
+        var article = new ArticleRowViewModel(
+            "Article",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "Short excerpt [...]",
+            content: "Complete article body.");
+
+        Assert.IsFalse(article.HasReadableSummary);
+    }
+
+    [TestMethod]
+    public void ArticleHtmlSanitizerKeepsCommonTagsAndRemovesActiveContent()
+    {
+        var sanitized = RssReader.App.ArticleHtmlSanitizer.SanitizeFragment(
+            "<p>Read <strong>this</strong><img src='/images/panel.jpg' onerror='alert(1)' /></p>" +
+            "<script>alert(2)</script><a href='javascript:alert(3)'>unsafe link</a>",
+            "https://example.test/story");
+
+        StringAssert.Contains(sanitized, "<p>");
+        StringAssert.Contains(sanitized, "<strong>");
+        StringAssert.Contains(sanitized, "<img");
+        StringAssert.Contains(sanitized, "https://example.test/images/panel.jpg");
+        Assert.IsFalse(sanitized.Contains("script", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(sanitized.Contains("onerror", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(sanitized.Contains("javascript:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderRetainsAllImagesFromArmaghEquinoxArticle()
+    {
+        const string sunImage = "https://armaghplanet.com/wp-content/uploads/2011/03/Image-of-the-Sun.jpg";
+        const string earthImage = "https://science.nasa.gov/wp-content/uploads/2023/05/goes16-vernalequinox-flickr50209599563-99acbeb180-b.jpg?w=1920";
+        const string sunriseImage = "https://www.nasa.gov/wp-content/uploads/2023/03/582752main_sunrise_from_iss-full_full.jpg";
+        var content = $"<img src=\"{sunImage}\" srcset=\"{sunImage} 580w\" />" +
+            $"<div><img src=\"{earthImage}\" /></div><img src=\"{sunriseImage}\" />";
+
+        var document = ArticleHtmlDocumentBuilder.Build(
+            content,
+            "Article summary",
+            null,
+            "https://armaghplanet.com/the-equinox-is-coming-what-on-earth-is-going-on.html",
+            null);
+
+        StringAssert.Contains(document, sunImage);
+        StringAssert.Contains(document, earthImage);
+        StringAssert.Contains(document, sunriseImage);
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderUsesSummaryAndLeadImageWhenBodyIsMissing()
+    {
+        var document = ArticleHtmlDocumentBuilder.Build(
+            null,
+            "A useful summary & detail.",
+            "https://example.test/images/lead.jpg",
+            null,
+            null);
+
+        StringAssert.Contains(document, "A useful summary &amp; detail.");
+        StringAssert.Contains(document, "<img");
+        StringAssert.Contains(document, "https://example.test/images/lead.jpg");
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderResolvesRelativeImagesAgainstFeedUrlWhenArticleLinkIsMissing()
+    {
+        var document = ArticleHtmlDocumentBuilder.Build(
+            "<p><img src=\"/images/panel.jpg\" alt=\"Panel\"></p>",
+            null,
+            null,
+            null,
+            "https://example.test/rss/feed.xml");
+
+        StringAssert.Contains(document, "https://example.test/images/panel.jpg");
+    }
+
     private static async Task WaitForRefreshCompletionAsync(MainWindowViewModel viewModel)
     {
         var timeout = DateTimeOffset.UtcNow.AddSeconds(5);
@@ -1262,11 +2051,35 @@ public sealed class MainWindowViewModelTests
         Assert.IsFalse(viewModel.IsRefreshing, "Feed refresh did not complete in time.");
     }
 
+    private static void PumpDispatcherUntil(Task task)
+    {
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var frame = new DispatcherFrame();
+        var timeout = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(15)
+        };
+        timeout.Tick += (_, _) =>
+        {
+            timeout.Stop();
+            frame.Continue = false;
+        };
+        timeout.Start();
+        _ = task.ContinueWith(
+            _ => dispatcher.BeginInvoke(new Action(() => frame.Continue = false)),
+            TaskScheduler.Default);
+        Dispatcher.PushFrame(frame);
+        timeout.Stop();
+        Assert.IsTrue(task.IsCompleted, "WebView2 initialization did not finish within 15 seconds.");
+    }
+
     private sealed class RecordingFeedDownloader : IFeedDownloader, IRawFeedContentDownloader
     {
         public System.Collections.Concurrent.ConcurrentQueue<string> RequestedFeedIds { get; } = new();
 
         public IReadOnlyList<DownloadedFeedItem>? ItemsToReturn { get; set; }
+
+        public IReadOnlyDictionary<string, IReadOnlyList<DownloadedFeedItem>>? ItemsByFeed { get; set; }
 
         public Func<CancellationToken, Task<IReadOnlyList<DownloadedFeedItem>>>? DownloadHandler { get; set; }
 
@@ -1280,14 +2093,24 @@ public sealed class MainWindowViewModelTests
                 return await DownloadHandler(cancellationToken);
             }
 
+            if (ItemsByFeed?.TryGetValue(feed.Id, out var feedItems) == true)
+            {
+                return feedItems;
+            }
+
             return ItemsToReturn ??
             [
                 new DownloadedFeedItem($"{feed.Id}-item", "New headline", null, null, "Summary", "Content")
             ];
         }
 
-        public Task<string> DownloadRawContentAsync(CatalogFeed feed, CancellationToken cancellationToken = default) =>
-            Task.FromResult($"<rss><channel><title>{feed.Name}</title></channel></rss>");
+        public Task<string> DownloadRawArticleContentAsync(
+            CatalogFeed feed,
+            string? externalId,
+            string? link,
+            string title,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult($"<item><guid>{externalId}</guid><title>{title}</title></item>");
     }
 }
 

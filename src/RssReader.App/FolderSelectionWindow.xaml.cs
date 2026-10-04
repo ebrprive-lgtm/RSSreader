@@ -67,7 +67,7 @@ public partial class FolderSelectionWindow : Window
 
     private async void NewFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new CreateFolderWindow(_allFolders, _suggestions)
+        var dialog = new CreateFolderWindow(_allFolders, _suggestions, FolderSearchBox.Text)
         {
             Owner = this
         };
@@ -80,20 +80,30 @@ public partial class FolderSelectionWindow : Window
         {
             await _createFolderAsync(dialog.FolderName);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             MessageBox.Show(
                 this,
-                "The folder could not be created.",
+            $"The folder could not be created.\n\n{exception.Message}",
                 "RSS Reader",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return;
         }
 
-        _allFolders.Add(dialog.FolderName);
-        FolderSearchBox.Text = dialog.FolderName;
-        FoldersListBox.SelectedItem = dialog.FolderName;
+        var folderName = _allFolders.FirstOrDefault(name =>
+            string.Equals(name, dialog.FolderName, StringComparison.OrdinalIgnoreCase));
+        if (folderName is null)
+        {
+            folderName = dialog.FolderName;
+            _allFolders.Add(folderName);
+        }
+
+        FolderSearchBox.Text = folderName;
+        UpdateVisibleFolders();
+        UpdateEmptyMessage();
+        FoldersListBox.SelectedItem = VisibleFolders.FirstOrDefault(name =>
+            string.Equals(name, folderName, StringComparison.OrdinalIgnoreCase));
         AcceptSelectedFolder();
     }
 

@@ -164,16 +164,13 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = connection.BeginTransaction();
-        await using (var check = connection.CreateCommand())
+        await using (var unsubscribe = connection.CreateCommand())
         {
-            check.Transaction = transaction;
-            check.CommandText = "SELECT EXISTS(SELECT 1 FROM ProfileSubscriptions WHERE ProfileId = $profileId AND FolderName = $name COLLATE NOCASE);";
-            check.Parameters.AddWithValue("$profileId", profileId);
-            check.Parameters.AddWithValue("$name", name);
-            if (Convert.ToInt64(await check.ExecuteScalarAsync(cancellationToken)) != 0)
-            {
-                throw new InvalidOperationException("Move or unfollow the sources in this folder before deleting it.");
-            }
+            unsubscribe.Transaction = transaction;
+            unsubscribe.CommandText = "DELETE FROM ProfileSubscriptions WHERE ProfileId = $profileId AND FolderName = $name COLLATE NOCASE;";
+            unsubscribe.Parameters.AddWithValue("$profileId", profileId);
+            unsubscribe.Parameters.AddWithValue("$name", name);
+            await unsubscribe.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await using (var delete = connection.CreateCommand())
@@ -273,7 +270,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 publishedAt,
                 reader.IsDBNull(6) ? null : HtmlTextParser.ToPlainText(reader.GetString(6)),
-                reader.IsDBNull(7) ? null : HtmlTextParser.ToPlainText(reader.GetString(7)),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
                 reader.IsDBNull(8) ? null : reader.GetString(8));
             articles.Add(new ArticleForProfile(
                 article,
@@ -286,7 +283,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         return articles;
     }
 
-    public async Task SaveArticlesAsync(
+    public async Task<int> SaveArticlesAsync(
         string feedId,
         IReadOnlyList<FeedArticle> articles,
         CancellationToken cancellationToken = default)
@@ -298,6 +295,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
 
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = connection.BeginTransaction();
+        var addedCount = 0;
         foreach (var article in articles)
         {
             await using var command = connection.CreateCommand();
@@ -305,13 +303,7 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             command.CommandText = """
                 INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content, ImageUrl)
                 VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content, $imageUrl)
-                ON CONFLICT(Id) DO UPDATE SET
-                    Title = excluded.Title,
-                    Link = excluded.Link,
-                    PublishedAt = excluded.PublishedAt,
-                    Summary = excluded.Summary,
-                    Content = excluded.Content,
-                    ImageUrl = excluded.ImageUrl;
+                ON CONFLICT(Id) DO NOTHING;
                 """;
             command.Parameters.AddWithValue("$id", article.Id);
             command.Parameters.AddWithValue("$feedId", feedId);
@@ -322,10 +314,28 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             command.Parameters.AddWithValue("$summary", (object?)article.Summary ?? DBNull.Value);
             command.Parameters.AddWithValue("$content", (object?)article.Content ?? DBNull.Value);
             command.Parameters.AddWithValue("$imageUrl", (object?)article.ImageUrl ?? DBNull.Value);
+            var inserted = await command.ExecuteNonQueryAsync(cancellationToken);
+            if (inserted > 0)
+            {
+                addedCount += inserted;
+                continue;
+            }
+
+            command.CommandText = """
+                UPDATE Articles SET
+                    Title = $title,
+                    Link = $link,
+                    PublishedAt = $publishedAt,
+                    Summary = $summary,
+                    Content = $content,
+                    ImageUrl = $imageUrl
+                WHERE Id = $id;
+                """;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
+        return addedCount;
     }
 
     public Task SetArticleReadAsync(

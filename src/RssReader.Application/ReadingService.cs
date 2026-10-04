@@ -25,7 +25,6 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         string folderName,
         CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         var normalizedFolderName = RequireLabel(folderName, nameof(folderName));
         var feeds = await catalogStore.GetFeedsAsync(cancellationToken);
         if (feeds.All(feed => feed.Id != feedId))
@@ -46,13 +45,11 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
 
     public Task UnsubscribeAsync(Profile profile, string feedId, CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         return store.UnsubscribeAsync(profile.Id, feedId, cancellationToken);
     }
 
     public async Task AddFolderAsync(Profile profile, string name, CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         var normalized = RequireLabel(name, nameof(name));
         if (string.Equals(normalized, "All", StringComparison.OrdinalIgnoreCase))
         {
@@ -64,7 +61,6 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
 
     public async Task DeleteFolderAsync(Profile profile, string name, CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         await store.DeleteFolderAsync(profile.Id, name, cancellationToken);
     }
 
@@ -74,7 +70,6 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         string folderName,
         CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         var subscriptions = await store.GetSubscriptionsAsync(profile.Id, cancellationToken);
         if (subscriptions.All(subscription => subscription.FeedId != feedId))
         {
@@ -99,7 +94,6 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         string tagName,
         CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         var subscriptions = await store.GetSubscriptionsAsync(profile.Id, cancellationToken);
         if (subscriptions.All(subscription => subscription.FeedId != feedId))
         {
@@ -115,7 +109,6 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         string tagName,
         CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         return store.RemoveFeedTagAsync(profile.Id, feedId, tagName, cancellationToken);
     }
 
@@ -154,13 +147,11 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
 
     public Task MarkReadAsync(Profile profile, string articleId, bool isRead, CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         return store.SetArticleReadAsync(profile.Id, articleId, isRead, cancellationToken);
     }
 
     public Task SetSavedAsync(Profile profile, string articleId, bool isSaved, CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
         return store.SetArticleSavedAsync(profile.Id, articleId, isSaved, cancellationToken);
     }
 
@@ -172,13 +163,5 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         }
 
         return value.Trim();
-    }
-
-    private static void EnsureRegularProfile(Profile profile)
-    {
-        if (profile.IsCatalogMaster)
-        {
-            throw new InvalidOperationException("Catalog Master manages shared catalog data, not personal feeds.");
-        }
     }
 }

@@ -226,6 +226,15 @@ public sealed class CatalogServiceTests
                 .Select(pair => pair.FeedId)
                 .ToArray());
 
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetCollectionFeedIdsByCollectionAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<string>>>(_memberships
+                .GroupBy(pair => pair.CollectionId, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<string>)group.Select(pair => pair.FeedId).ToArray(),
+                    StringComparer.Ordinal));
+
         public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default)
         {
             _feeds.Add(feed);
@@ -256,11 +265,24 @@ public sealed class CatalogServiceTests
             return Task.CompletedTask;
         }
 
+        public Task UpdateCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default)
+        {
+            var index = _categories.FindIndex(item => item.Id == category.Id);
+            if (index >= 0)
+            {
+                _categories[index] = category;
+            }
+
+            return Task.CompletedTask;
+        }
+
         public Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default)
         {
             _categories.RemoveAll(category => category.Id == categoryId);
             return Task.CompletedTask;
         }
+
+        public Task MergeCategoriesAsync(string sourceCategoryId, string targetCategoryId, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default)
         {

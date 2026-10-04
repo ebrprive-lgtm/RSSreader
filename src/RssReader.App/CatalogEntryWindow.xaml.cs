@@ -18,12 +18,13 @@ public partial class CatalogEntryWindow : Window
     internal CatalogEntryWindow(
         CatalogManagementViewModel catalogManagement,
         CatalogEntryKind entryKind,
-        bool isEditingFeed = false)
+        bool isEditingFeed = false,
+        bool isEditingCategory = false)
     {
         InitializeComponent();
         _catalogManagement = catalogManagement;
         _entryKind = entryKind;
-        if (!isEditingFeed)
+        if (!isEditingFeed && !isEditingCategory)
         {
             _catalogManagement.ResetEntryForm();
         }
@@ -32,6 +33,8 @@ public partial class CatalogEntryWindow : Window
 
         var (heading, buttonText) = isEditingFeed && entryKind == CatalogEntryKind.Feed
             ? ("Edit feed", "Save changes")
+            : isEditingCategory && entryKind == CatalogEntryKind.Category
+                ? ("Rename category", "Save changes")
             : entryKind switch
         {
             CatalogEntryKind.Feed => ("Add feed", "Add feed"),
@@ -42,6 +45,12 @@ public partial class CatalogEntryWindow : Window
         Title = heading;
         DialogHeading.Text = heading;
         SubmitButton.Content = buttonText;
+        if (isEditingCategory)
+        {
+            WindowStyle = System.Windows.WindowStyle.None;
+            CloseWindowButton.Visibility = Visibility.Visible;
+        }
+
         FeedFields.Visibility = entryKind == CatalogEntryKind.Feed ? Visibility.Visible : Visibility.Collapsed;
         CategoryFields.Visibility = entryKind == CatalogEntryKind.Category ? Visibility.Visible : Visibility.Collapsed;
         CollectionFields.Visibility = entryKind == CatalogEntryKind.Collection ? Visibility.Visible : Visibility.Collapsed;
@@ -52,6 +61,11 @@ public partial class CatalogEntryWindow : Window
             FeedWebsiteUrlBox.Text = catalogManagement.FeedWebsiteUrl;
             FeedDescriptionBox.Text = catalogManagement.FeedDescription;
             FeedCategoryBox.SelectedItem = catalogManagement.SelectedCategory;
+        }
+
+        if (isEditingCategory)
+        {
+            CategoryNameBox.Text = catalogManagement.CategoryName;
         }
     }
 
@@ -77,6 +91,17 @@ public partial class CatalogEntryWindow : Window
                 break;
         }
 
+        if (string.IsNullOrWhiteSpace(_catalogManagement.ErrorMessage))
+        {
+            DialogResult = true;
+        }
+    }
+
+    private void CloseWindowButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    private async void MergeCategoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        await _catalogManagement.MergeCategoryCommand.ExecuteAsync();
         if (string.IsNullOrWhiteSpace(_catalogManagement.ErrorMessage))
         {
             DialogResult = true;

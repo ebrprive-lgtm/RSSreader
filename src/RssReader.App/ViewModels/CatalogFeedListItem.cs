@@ -58,11 +58,14 @@ public sealed class CatalogFeedListItem : ObservableObject
     public string? CategoryId { get; }
     public string? WebsiteUrl { get; }
     public int SameNameCount { get; }
+    public bool HasSameName => SameNameCount > 1;
+    public bool HasDescription => !string.IsNullOrWhiteSpace(Description);
     public DateTimeOffset? LastHealthCheckedAt { get; }
     public bool? LastHealthCheckSucceeded { get; }
     public string SameNameDisplay => SameNameCount > 1 ? $"{SameNameCount} feeds share this name" : string.Empty;
     public string MetadataReviewDisplay { get; }
     public bool HasMetadataGaps => MetadataReviewDisplay.Length > 0;
+    public bool HasHealthCheck => LastHealthCheckedAt is not null;
     public string PublisherWebsiteDisplay =>
         string.IsNullOrWhiteSpace(WebsiteUrl) ? string.Empty : $"Publisher website: {WebsiteUrl}";
     public string HealthCheckDisplay => IsHealthCheckInProgress

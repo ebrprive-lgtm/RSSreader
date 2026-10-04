@@ -36,9 +36,12 @@ public sealed class FeedRefreshService(
             cancellationToken);
     }
 
-    public async Task<string> GetRawFeedContentAsync(
+    public async Task<string> GetRawArticleContentAsync(
         string profileId,
         string feedId,
+        string? externalId,
+        string? link,
+        string title,
         CancellationToken cancellationToken = default)
     {
         if (feedDownloader is not IRawFeedContentDownloader rawFeedContentDownloader)
@@ -55,7 +58,12 @@ public sealed class FeedRefreshService(
         var feed = (await catalogStore.GetFeedsAsync(cancellationToken))
             .FirstOrDefault(candidate => candidate.Id == feedId)
             ?? throw new InvalidOperationException("The feed is no longer in the catalog.");
-        return await rawFeedContentDownloader.DownloadRawContentAsync(feed, cancellationToken);
+        return await rawFeedContentDownloader.DownloadRawArticleContentAsync(
+            feed,
+            externalId,
+            link,
+            title,
+            cancellationToken);
     }
 
     private async Task<FeedRefreshSummary> RefreshSubscriptionsAsync(
@@ -66,6 +74,7 @@ public sealed class FeedRefreshService(
         var feedLookup = feeds.ToDictionary(feed => feed.Id, StringComparer.Ordinal);
         var failures = new ConcurrentBag<string>();
         var downloadedCount = 0;
+        var addedCount = 0;
         var gate = new SemaphoreSlim(4);
 
         var refreshTasks = subscriptions
@@ -78,8 +87,9 @@ public sealed class FeedRefreshService(
                     var feed = feedLookup[subscription.FeedId];
                     var items = await feedDownloader.DownloadAsync(feed, cancellationToken);
                     var articles = items.Select(item => ToArticle(feed, item)).ToArray();
-                    await readerStore.SaveArticlesAsync(feed.Id, articles, cancellationToken);
+                    var added = await readerStore.SaveArticlesAsync(feed.Id, articles, cancellationToken);
                     Interlocked.Add(ref downloadedCount, articles.Length);
+                    Interlocked.Add(ref addedCount, added);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -96,7 +106,10 @@ public sealed class FeedRefreshService(
             });
 
         await Task.WhenAll(refreshTasks);
-        return new FeedRefreshSummary(subscriptions.Count, downloadedCount, failures.ToArray());
+        return new FeedRefreshSummary(subscriptions.Count, downloadedCount, failures.ToArray())
+        {
+            ArticlesAdded = addedCount
+        };
     }
 
     private static FeedArticle ToArticle(CatalogFeed feed, DownloadedFeedItem item)
@@ -120,4 +133,7 @@ public sealed class FeedRefreshService(
     }
 }
 
-public sealed record FeedRefreshSummary(int FeedsChecked, int ArticlesFetched, IReadOnlyList<string> Failures);
+public sealed record FeedRefreshSummary(int FeedsChecked, int ArticlesFetched, IReadOnlyList<string> Failures)
+{
+    public int ArticlesAdded { get; init; }
+}

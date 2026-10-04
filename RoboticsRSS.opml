@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opml version="2.0">
+  <head>
+    <title>Robotics RSS</title>
+    <dateCreated>Sat, 03 Oct 2026 00:00:00 GMT</dateCreated>
+    <ownerName>Robotics RSS</ownerName>
+    <ownerId>https://rss.feedspot.com/best_rss_feeds/#robotics</ownerId>
+  </head>
+  <body>
+    <outline text="Robotics RSS" title="Robotics RSS">
+      <outline text="Robotics" title="Robotics">
+        <outline text="Robohub RSS Feed" title="Robohub RSS Feed" type="rss" xmlUrl="https://robohub.org/feed/" htmlUrl="https://robohub.org/category/news/" />
+        <outline text="The Robot Report RSS Feed" title="The Robot Report RSS Feed" type="rss" xmlUrl="https://www.therobotreport.com/feed/" htmlUrl="https://www.therobotreport.com/" />
+        <outline text="Robotiq Blog RSS Feed" title="Robotiq Blog RSS Feed" type="rss" xmlUrl="https://blog.robotiq.com/rss.xml" htmlUrl="https://blog.robotiq.com/" />
+        <outline text="New Atlas RSS Feed" title="New Atlas RSS Feed" type="rss" xmlUrl="https://newatlas.com/robotics/index.rss" htmlUrl="https://newatlas.com/robotics/" />
+        <outline text="Roboticmagazine RSS Feed" title="Roboticmagazine RSS Feed" type="rss" xmlUrl="https://www.roboticmagazine.com/feed" htmlUrl="https://www.roboticmagazine.com/" />
+        <outline text="Tech Xplore » Robotics RSS Feed" title="Tech Xplore » Robotics RSS Feed" type="rss" xmlUrl="https://techxplore.com/rss-feed/robotics-news/" htmlUrl="https://techxplore.com/robotics-news/" />
+        <outline text="Make RSS Feed" title="Make RSS Feed" type="rss" xmlUrl="https://makezine.com/category/technology/robotics/feed/" htmlUrl="https://makezine.com/category/technology/robotics/" />
+        <outline text="SingularityHub » Robotics RSS Feed" title="SingularityHub » Robotics RSS Feed" type="rss" xmlUrl="https://singularityhub.com/feed/" htmlUrl="https://singularityhub.com/category/robotics/" />
+        <outline text="The Robot Report » Self-Driving Vehicles RSS Feed" title="The Robot Report » Self-Driving Vehicles RSS Feed" type="rss" xmlUrl="https://www.therobotreport.com/feed/" htmlUrl="https://www.therobotreport.com/category/robots-platforms/self-driving-vehicles/" />
+        <outline text="RoboDK Blog RSS Feed" title="RoboDK Blog RSS Feed" type="rss" xmlUrl="https://robodk.com/blog/feed/" htmlUrl="https://robodk.com/blog" />
+      </outline>
+    </outline>
+  </body>
+</opml>

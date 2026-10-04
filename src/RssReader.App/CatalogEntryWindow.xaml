@@ -10,6 +10,10 @@
         ShowInTaskbar="False"
         Background="White">
     <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -19,6 +23,22 @@
         <TextBlock x:Name="DialogHeading"
                    FontSize="20"
                    FontWeight="SemiBold" />
+        <Button x:Name="CloseWindowButton"
+            Grid.Column="1"
+            Content="&#xE711;"
+            FontFamily="Segoe MDL2 Assets"
+            FontSize="13"
+            Width="32"
+            Height="32"
+            Padding="0"
+            Margin="8,0,0,0"
+            Background="Transparent"
+            BorderThickness="0"
+            Foreground="{StaticResource MutedTextBrush}"
+            AutomationProperties.Name="Close rename category"
+            ToolTip="Close"
+            Visibility="Collapsed"
+            Click="CloseWindowButton_Click" />
         <StackPanel x:Name="FeedFields" Grid.Row="1" Margin="0,20,0,0">
             <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold" />
             <TextBox x:Name="FeedNameBox" Margin="0,5,0,12" Padding="9,7" />
@@ -37,20 +57,39 @@
         </StackPanel>
         <StackPanel x:Name="CategoryFields" Grid.Row="1" Margin="0,20,0,0" Visibility="Collapsed">
             <TextBlock Text="Category name" FontSize="12" FontWeight="SemiBold" />
-            <TextBox x:Name="CategoryNameBox" Margin="0,5,0,0" Padding="9,7" />
+            <TextBox x:Name="CategoryNameBox"
+                     Margin="0,5,0,0"
+                     Padding="9,7"
+                     Text="{Binding CategoryName, UpdateSourceTrigger=PropertyChanged}" />
         </StackPanel>
         <StackPanel x:Name="CollectionFields" Grid.Row="1" Margin="0,20,0,0" Visibility="Collapsed">
             <TextBlock Text="Collection name" FontSize="12" FontWeight="SemiBold" />
             <TextBox x:Name="CollectionNameBox" Margin="0,5,0,0" Padding="9,7" />
         </StackPanel>
         <TextBlock Grid.Row="2"
+               Grid.ColumnSpan="2"
                    Text="{Binding ErrorMessage}"
                    Foreground="#A33C35"
                    Margin="0,12,0,0"
                    TextWrapping="Wrap" />
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
-            <Button Content="Cancel" IsCancel="True" MinWidth="82" Padding="10,7" Margin="0,0,8,0" />
-            <Button x:Name="SubmitButton" Content="Add" IsDefault="True" Click="SubmitButton_Click" MinWidth="82" Padding="10,7" />
-        </StackPanel>
+        <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,22,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="MergeCategoryButton"
+                    Content="{Binding MergeCategoryButtonLabel}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Padding="10,7"
+                    AutomationProperties.Name="Merge category into existing category"
+                    ToolTip="{Binding MergeCategoryButtonLabel}"
+                    Visibility="{Binding CanMergeCategory, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Click="MergeCategoryButton_Click" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel" IsCancel="True" MinWidth="82" Padding="10,7" Margin="0,0,8,0" />
+                <Button x:Name="SubmitButton" Content="Add" IsDefault="True" Click="SubmitButton_Click" MinWidth="82" Padding="10,7" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

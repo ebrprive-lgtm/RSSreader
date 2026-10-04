@@ -1,0 +1,27 @@
+<UserControl x:Class="RssReader.App.ArticleHtmlViewer"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             Background="White"
+             AutomationProperties.Name="Article content">
+    <Grid Background="White">
+        <wv2:WebView2 x:Name="Browser"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Visibility="Collapsed" />
+        <StackPanel x:Name="StatusPanel"
+                    VerticalAlignment="Top"
+                    Margin="0,12,0,0">
+            <TextBlock x:Name="StatusMessage"
+                       Text="Preparing article viewer..."
+                       FontSize="13"
+                       Foreground="#5D6A62" />
+            <TextBlock x:Name="FallbackText"
+                       Margin="0,8,0,0"
+                       FontSize="15"
+                       LineHeight="24"
+                       TextWrapping="Wrap"
+                       Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</UserControl>

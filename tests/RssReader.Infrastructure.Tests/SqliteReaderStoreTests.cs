@@ -8,6 +8,29 @@ namespace RssReader.Infrastructure.Tests;
 public sealed class SqliteReaderStoreTests
 {
     [TestMethod]
+    public async Task SaveArticlesReportsOnlyNewRowsAndStillUpdatesExistingRows()
+    {
+        using var database = new TemporaryDatabase();
+        var profiles = new SqliteProfileStore(database.Path);
+        var catalog = new SqliteCatalogStore(database.Path);
+        var reader = new SqliteReaderStore(database.Path);
+        await profiles.InitializeAsync();
+        await catalog.InitializeAsync();
+        await reader.InitializeAsync();
+        var profile = Profile.CreateRegular("Reader");
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        await profiles.AddAsync(profile);
+        await catalog.AddFeedAsync(feed);
+        await reader.AddFolderAsync(profile.Id, "News");
+        await reader.SubscribeAsync(profile.Id, feed.Id, "News");
+        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", null, DateTimeOffset.UtcNow, null, null);
+
+        Assert.AreEqual(1, await reader.SaveArticlesAsync(feed.Id, [article]));
+        Assert.AreEqual(0, await reader.SaveArticlesAsync(feed.Id, [article with { Title = "Updated headline" }]));
+        Assert.AreEqual("Updated headline", (await reader.GetArticlesAsync(profile.Id)).Single().Article.Title);
+    }
+
+    [TestMethod]
     public async Task SubscriptionsArticlesAndReadingStateAreIsolatedByProfile()
     {
         using var database = new TemporaryDatabase();
@@ -38,7 +61,7 @@ public sealed class SqliteReaderStoreTests
 
         Assert.AreEqual(1, firstArticles.Count);
         Assert.AreEqual("Summary & details", firstArticles[0].Article.Summary);
-        Assert.AreEqual($"Body{Environment.NewLine}second line", firstArticles[0].Article.Content);
+        Assert.AreEqual("<p>Body<br/>second line</p>", firstArticles[0].Article.Content);
         Assert.AreEqual("https://example.com/cover.jpg", firstArticles[0].Article.ImageUrl);
         Assert.IsTrue(firstArticles[0].IsRead);
         Assert.IsTrue(firstArticles[0].IsSaved);
@@ -77,12 +100,11 @@ public sealed class SqliteReaderStoreTests
         Assert.AreEqual(0, otherTags.Count);
         Assert.AreEqual("Gaming", (await reader.GetSubscriptionsAsync(profile.Id)).Single().FolderName);
 
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => reader.DeleteFolderAsync(profile.Id, "Gaming"));
-        await reader.SetFeedFolderAsync(profile.Id, feed.Id, "Personal");
         await reader.DeleteFolderAsync(profile.Id, "Gaming");
 
-        Assert.AreEqual("Personal", (await reader.GetSubscriptionsAsync(profile.Id)).Single().FolderName);
+        Assert.AreEqual(0, (await reader.GetSubscriptionsAsync(profile.Id)).Count);
+        Assert.AreEqual(feed.Id, (await reader.GetSubscriptionsAsync(otherProfile.Id)).Single().FeedId);
+        Assert.AreEqual(0, (await reader.GetFeedTagsAsync(profile.Id)).Count);
         Assert.AreEqual("Personal", (await reader.GetFoldersAsync(profile.Id)).Single());
     }
 

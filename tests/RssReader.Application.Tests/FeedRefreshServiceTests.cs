@@ -29,9 +29,11 @@ public sealed class FeedRefreshServiceTests
 
         Assert.AreEqual(2, firstRefresh.FeedsChecked);
         Assert.AreEqual(1, firstRefresh.ArticlesFetched);
+        Assert.AreEqual(1, firstRefresh.ArticlesAdded);
         Assert.AreEqual(1, firstRefresh.Failures.Count);
         StringAssert.Contains(firstRefresh.Failures.Single(), "Broken feed");
         Assert.AreEqual(2, readerStore.SavedArticles.Count);
+        Assert.AreEqual(0, secondRefresh.ArticlesAdded);
         Assert.AreEqual(1, readerStore.SavedArticles.Select(item => item.Article.Id).Distinct().Count());
         Assert.IsTrue(readerStore.SavedArticles.All(item => item.FeedId == "feed-1" && item.Article.FeedId == "feed-1"));
     }
@@ -64,19 +66,32 @@ public sealed class FeedRefreshServiceTests
     }
 
     [TestMethod]
-    public async Task GetRawFeedContent_RequiresSubscriptionAndReturnsUnmodifiedSource()
+    public async Task GetRawArticleContent_RequiresSubscriptionAndPassesArticleIdentity()
     {
         var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
         var readerStore = new ReaderStoreStub(
         [new ProfileSubscription("profile-1", feed.Id, feed.Name, feed.FeedUrl, "News")]);
-        var downloader = new RawFeedDownloaderStub("<?xml version=\"1.0\"?><rss><channel /></rss>");
+        var downloader = new RawFeedDownloaderStub("<item><guid>story-1</guid></item>");
         var service = new FeedRefreshService(readerStore, new CatalogStoreStub([feed]), downloader);
 
-        var rawContent = await service.GetRawFeedContentAsync("profile-1", feed.Id);
+        var rawContent = await service.GetRawArticleContentAsync(
+            "profile-1",
+            feed.Id,
+            "story-1",
+            "https://example.com/story-1",
+            "Example story");
 
-        Assert.AreEqual("<?xml version=\"1.0\"?><rss><channel /></rss>", rawContent);
+        Assert.AreEqual("<item><guid>story-1</guid></item>", rawContent);
+        Assert.AreEqual("story-1", downloader.ExternalId);
+        Assert.AreEqual("https://example.com/story-1", downloader.Link);
+        Assert.AreEqual("Example story", downloader.Title);
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(
-            () => service.GetRawFeedContentAsync("other-profile", feed.Id));
+            () => service.GetRawArticleContentAsync(
+                "other-profile",
+                feed.Id,
+                "story-1",
+                "https://example.com/story-1",
+                "Example story"));
     }
 
     private sealed class FeedDownloaderStub(
@@ -89,13 +104,27 @@ public sealed class FeedRefreshServiceTests
 
     private sealed class RawFeedDownloaderStub(string rawContent) : IFeedDownloader, IRawFeedContentDownloader
     {
+        public string? ExternalId { get; private set; }
+        public string? Link { get; private set; }
+        public string? Title { get; private set; }
+
         public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
             CatalogFeed feed,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<DownloadedFeedItem>>([]);
 
-        public Task<string> DownloadRawContentAsync(CatalogFeed feed, CancellationToken cancellationToken = default) =>
-            Task.FromResult(rawContent);
+        public Task<string> DownloadRawArticleContentAsync(
+            CatalogFeed feed,
+            string? externalId,
+            string? link,
+            string title,
+            CancellationToken cancellationToken = default)
+        {
+            ExternalId = externalId;
+            Link = link;
+            Title = title;
+            return Task.FromResult(rawContent);
+        }
     }
 
     private sealed class CatalogStoreStub(IReadOnlyList<CatalogFeed> feeds) : ICatalogStore
@@ -105,11 +134,14 @@ public sealed class FeedRefreshServiceTests
         public Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<CatalogCategory>>([]);
         public Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<CatalogCollection>>([]);
         public Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(string collectionId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetCollectionFeedIdsByCollectionAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyDictionary<string, IReadOnlyList<string>>>(new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal));
         public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task UpdateCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task MergeCategoriesAsync(string sourceCategoryId, string targetCategoryId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task AddFeedToCollectionAsync(string collectionId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -118,6 +150,8 @@ public sealed class FeedRefreshServiceTests
 
     private sealed class ReaderStoreStub(IReadOnlyList<ProfileSubscription> subscriptions) : IReaderStore
     {
+        private readonly ConcurrentDictionary<string, byte> _savedIds = new(StringComparer.Ordinal);
+
         public ConcurrentBag<(string FeedId, FeedArticle Article)> SavedArticles { get; } = [];
 
         public Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default) =>
@@ -132,14 +166,19 @@ public sealed class FeedRefreshServiceTests
         public Task AddFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RemoveFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ArticleForProfile>> GetArticlesAsync(string profileId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<ArticleForProfile>>([]);
-        public Task SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default)
+        public Task<int> SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default)
         {
+            var addedCount = 0;
             foreach (var article in articles)
             {
                 SavedArticles.Add((feedId, article));
+                if (_savedIds.TryAdd(article.Id, 0))
+                {
+                    addedCount++;
+                }
             }
 
-            return Task.CompletedTask;
+            return Task.FromResult(addedCount);
         }
         public Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;

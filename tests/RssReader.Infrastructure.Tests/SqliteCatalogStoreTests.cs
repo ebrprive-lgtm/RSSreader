@@ -35,6 +35,7 @@ public sealed class SqliteCatalogStoreTests
         var loadedFeed = (await reloadedStore.GetFeedsAsync()).Single();
         var loadedCollection = (await reloadedStore.GetCollectionsAsync()).Single();
         var members = await reloadedStore.GetCollectionFeedIdsAsync(loadedCollection.Id);
+        var membersByCollection = await reloadedStore.GetCollectionFeedIdsByCollectionAsync();
 
         Assert.AreEqual(category.Id, loadedFeed.CategoryId);
         Assert.AreEqual(feed.WebsiteUrl, loadedFeed.WebsiteUrl);
@@ -42,6 +43,7 @@ public sealed class SqliteCatalogStoreTests
         Assert.AreEqual(true, loadedFeed.LastHealthCheckSucceeded);
         Assert.AreEqual("Updated description", loadedFeed.Description);
         Assert.AreEqual(feed.Id, members.Single());
+        Assert.AreEqual(feed.Id, membersByCollection[loadedCollection.Id].Single());
     }
 
     [TestMethod]
@@ -105,6 +107,49 @@ public sealed class SqliteCatalogStoreTests
 
         Assert.AreEqual(0, (await store.GetFeedsAsync()).Count);
         Assert.AreEqual(0, (await store.GetCollectionFeedIdsAsync(collection.Id)).Count);
+    }
+
+    [TestMethod]
+    public async Task RenamingCategoryPreservesItsIdAndFeedAssignments()
+    {
+        using var database = new TemporaryDatabase();
+        var store = new SqliteCatalogStore(database.Path);
+        await store.InitializeAsync();
+        var category = new CatalogCategory(Guid.NewGuid().ToString("N"), "Comics");
+        var feed = new CatalogFeed(Guid.NewGuid().ToString("N"), "Example", "https://example.com/feed.xml", null, category.Id);
+        await store.AddCategoryAsync(category);
+        await store.AddFeedAsync(feed);
+
+        await store.UpdateCategoryAsync(category with { Name = "Comics and cartoons" });
+
+        var reloadedStore = new SqliteCatalogStore(database.Path);
+        Assert.AreEqual(category.Id, (await reloadedStore.GetCategoriesAsync()).Single().Id);
+        Assert.AreEqual("Comics and cartoons", (await reloadedStore.GetCategoriesAsync()).Single().Name);
+        Assert.AreEqual(category.Id, (await reloadedStore.GetFeedsAsync()).Single().CategoryId);
+    }
+
+    [TestMethod]
+    public async Task MergingCategoriesMovesFeedsAndDeletesSourceCategory()
+    {
+        using var database = new TemporaryDatabase();
+        var store = new SqliteCatalogStore(database.Path);
+        await store.InitializeAsync();
+        var sourceCategory = new CatalogCategory(Guid.NewGuid().ToString("N"), "Science");
+        var targetCategory = new CatalogCategory(Guid.NewGuid().ToString("N"), "Research");
+        var sourceFeed = new CatalogFeed(Guid.NewGuid().ToString("N"), "Science feed", "https://example.com/science.xml", null, sourceCategory.Id);
+        var targetFeed = new CatalogFeed(Guid.NewGuid().ToString("N"), "Research feed", "https://example.com/research.xml", null, targetCategory.Id);
+        await store.AddCategoryAsync(sourceCategory);
+        await store.AddCategoryAsync(targetCategory);
+        await store.AddFeedAsync(sourceFeed);
+        await store.AddFeedAsync(targetFeed);
+
+        await store.MergeCategoriesAsync(sourceCategory.Id, targetCategory.Id);
+
+        var categories = await store.GetCategoriesAsync();
+        var feeds = await store.GetFeedsAsync();
+        Assert.AreEqual(1, categories.Count);
+        Assert.AreEqual(targetCategory.Id, categories.Single().Id);
+        Assert.IsTrue(feeds.All(feed => feed.CategoryId == targetCategory.Id));
     }
 
     private sealed class TemporaryDatabase : IDisposable

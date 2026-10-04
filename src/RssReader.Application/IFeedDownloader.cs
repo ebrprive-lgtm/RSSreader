@@ -9,7 +9,12 @@ public interface IFeedDownloader
 
 public interface IRawFeedContentDownloader
 {
-    Task<string> DownloadRawContentAsync(CatalogFeed feed, CancellationToken cancellationToken = default);
+    Task<string> DownloadRawArticleContentAsync(
+        CatalogFeed feed,
+        string? externalId,
+        string? link,
+        string title,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record DownloadedFeedItem(

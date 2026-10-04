@@ -28,15 +28,46 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         viewModel.FolderSelectionRequested = ShowFolderSelectionAsync;
+        viewModel.ConfirmUnfollowAllRequested = ConfirmUnfollowAllAsync;
+        viewModel.ConfirmDeleteFolderRequested = ConfirmDeleteFolderAsync;
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        SelectedArticleHtmlViewer.ExternalLinkRequested += ArticleHtmlViewer_ExternalLinkRequested;
+        UpdateSelectedArticleContent();
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
         Closed += (_, _) =>
         {
             _autoRefreshTimer.Stop();
             viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            SelectedArticleHtmlViewer.ExternalLinkRequested -= ArticleHtmlViewer_ExternalLinkRequested;
         };
         UpdateSidebarPresentation();
         ConfigureAutoRefreshTimer();
+    }
+
+    private Task<bool> ConfirmUnfollowAllAsync(int feedCount)
+    {
+        var feedLabel = feedCount == 1 ? "feed" : "feeds";
+        var result = MessageBox.Show(
+            this,
+            $"Unfollow {feedCount} {feedLabel} currently shown in this list?",
+            "Unfollow visible feeds",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        return Task.FromResult(result == MessageBoxResult.Yes);
+    }
+
+    private Task<bool> ConfirmDeleteFolderAsync(string folderName, int feedCount)
+    {
+        var message = feedCount == 0
+            ? $"Delete the empty folder '{folderName}'?"
+            : $"Delete folder '{folderName}' and unfollow its {feedCount} feed(s)?";
+        var result = MessageBox.Show(
+            this,
+            message,
+            "Delete folder",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        return Task.FromResult(result == MessageBoxResult.Yes);
     }
 
     public event Action? LogoutRequested;
@@ -45,6 +76,11 @@ public partial class MainWindow : Window
 
     private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedArticle))
+        {
+            UpdateSelectedArticleContent();
+        }
+
         if (e.PropertyName == nameof(MainWindowViewModel.AutoRefreshIntervalMinutes))
         {
             ConfigureAutoRefreshTimer();
@@ -54,6 +90,17 @@ public partial class MainWindow : Window
         {
             UpdateSidebarPresentation();
         }
+    }
+
+    private void UpdateSelectedArticleContent()
+    {
+        var article = _viewModel?.SelectedArticle;
+        SelectedArticleHtmlViewer.SetArticle(
+            article?.Content,
+            article?.Summary,
+            article?.ImageUrl,
+            article?.Link,
+            article?.FeedUrl);
     }
 
     private void ConfigureAutoRefreshTimer()
@@ -106,6 +153,22 @@ public partial class MainWindow : Window
     private void SidebarPanel_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => ShowSidebarPeek();
 
     private void SidebarPeekButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => ShowSidebarPeek();
+
+    private void SidebarLinkRoot_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is Grid { DataContext: SidebarLink { IsFolder: true } } row)
+        {
+            row.Tag = true;
+        }
+    }
+
+    private void SidebarLinkRoot_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is Grid { DataContext: SidebarLink { IsFolder: true } } row)
+        {
+            row.Tag = false;
+        }
+    }
 
     private void SidebarPanel_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => ScheduleSidebarPeekClose();
 
@@ -180,21 +243,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private void CatalogActionsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+    }
+
     private void PreferencesMenuItem_Click(object sender, RoutedEventArgs e) => PreferencesRequested?.Invoke();
 
     private void LogoutMenuItem_Click(object sender, RoutedEventArgs e) => LogoutRequested?.Invoke();
 
     private void SourceLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
     {
-        if (e.Uri.Scheme != Uri.UriSchemeHttp && e.Uri.Scheme != Uri.UriSchemeHttps)
+        OpenExternalUri(e.Uri);
+        e.Handled = true;
+    }
+
+    private void ArticleHtmlViewer_ExternalLinkRequested(Uri uri) => OpenExternalUri(uri);
+
+    private void OpenExternalUri(Uri uri)
+    {
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
         {
             return;
         }
 
         try
         {
-            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
-            e.Handled = true;
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
         }
         catch (Exception exception)
         {
@@ -210,14 +290,14 @@ public partial class MainWindow : Window
     private async void ShowRawFeed_Click(object sender, RoutedEventArgs e)
     {
         var article = _viewModel?.SelectedArticle;
-        if (article?.FeedId is not { } feedId || _viewModel is null)
+        if (article?.FeedId is null || _viewModel is null)
         {
             return;
         }
 
         try
         {
-            var rawContent = await _viewModel.GetRawFeedContentAsync(feedId);
+            var rawContent = await _viewModel.GetRawArticleContentAsync(article);
             var dialog = new RawFeedWindow(article.Source, rawContent) { Owner = this };
             dialog.ShowDialog();
         }
@@ -237,7 +317,10 @@ public partial class MainWindow : Window
         IReadOnlyList<string> suggestions,
         Func<string, Task> createFolderAsync)
     {
-        var dialog = new FolderSelectionWindow(folders, suggestions, createFolderAsync)
+        var dialog = new FolderSelectionWindow(
+            folders,
+            suggestions,
+            createFolderAsync)
         {
             Owner = this
         };
@@ -277,25 +360,110 @@ public partial class MainWindow : Window
             return;
         }
 
+        var feedList = (ListBox?)FindName("CatalogManagementFeedList");
+        var scrollOffset = feedList is null
+            ? null
+            : FindVisualDescendant<ScrollViewer>(feedList)?.VerticalOffset;
         catalogManagement.PrepareFeedEdit(feed);
         ShowCatalogEntry(CatalogEntryKind.Feed, isEditingFeed: true);
+
+        if (scrollOffset is { } offset)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (FindName("CatalogManagementFeedList") is ListBox updatedFeedList)
+                {
+                    FindVisualDescendant<ScrollViewer>(updatedFeedList)?.ScrollToVerticalOffset(offset);
+                }
+            }));
+        }
+    }
+
+    private void PreviewManagedFeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
+            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        var dialog = new CatalogFeedPreviewWindow(
+            feed,
+            token => catalogManagement.PreviewFeedAsync(feed, token),
+            () => catalogManagement.DeleteFeedCommand.ExecuteAsync(feed),
+            () => catalogManagement.CheckFeedHealthCommand.ExecuteAsync(feed))
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+    }
+
+    private void PreviewCatalogFeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        var dialog = new CatalogFeedPreviewWindow(
+            feed,
+            token => viewModel.LoadCatalogFeedPreviewAsync(feed, token))
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
+    }
+
+    private void RenameCategory_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CatalogCategory category } ||
+            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        catalogManagement.PrepareCategoryEdit(category);
+        ShowCatalogEntry(CatalogEntryKind.Category, isEditingCategory: true);
     }
 
     private void AddCategory_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Category);
 
     private void AddCollection_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Collection);
 
-    private void ShowCatalogEntry(CatalogEntryKind entryKind, bool isEditingFeed = false)
+    private void ShowCatalogEntry(
+        CatalogEntryKind entryKind,
+        bool isEditingFeed = false,
+        bool isEditingCategory = false)
     {
         if (DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
         {
             return;
         }
 
-        var dialog = new CatalogEntryWindow(catalogManagement, entryKind, isEditingFeed)
+        var dialog = new CatalogEntryWindow(catalogManagement, entryKind, isEditingFeed, isEditingCategory)
         {
             Owner = this
         };
         dialog.ShowDialog();
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        if (parent is T match)
+        {
+            return match;
+        }
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (FindVisualDescendant<T>(child) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
     }
 }
