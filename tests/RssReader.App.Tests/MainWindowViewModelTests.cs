@@ -23,6 +23,31 @@ public sealed class MainWindowViewModelTests
     public TestContext TestContext { get; set; } = null!;
 
     [TestMethod]
+    public void ReadLaterAutomationNameTracksSavedState()
+    {
+        var article = new ArticleRowViewModel(
+            "Example article",
+            "Example source",
+            DateTimeOffset.Now,
+            "Inbox",
+            [],
+            "Example summary");
+        var automationNameChanged = false;
+        article.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(ArticleRowViewModel.ReadLaterAutomationName))
+            {
+                automationNameChanged = true;
+            }
+        };
+
+        Assert.AreEqual("Add to read later", article.ReadLaterAutomationName);
+        article.IsSaved = true;
+        Assert.AreEqual("Remove from read later", article.ReadLaterAutomationName);
+        Assert.IsTrue(automationNameChanged);
+    }
+
+    [TestMethod]
     public void ManagedFeedPreviewCheckButtonClosesAndChecksFeed()
     {
         Exception? failure = null;
@@ -48,6 +73,8 @@ public sealed class MainWindowViewModelTests
                 preview.Show();
                 preview.UpdateLayout();
 
+                Assert.AreEqual(string.Empty, preview.Title);
+                Assert.AreEqual(WindowStyle.None, preview.WindowStyle);
                 var checkFeedButton = (Button)preview.FindName("CheckFeedButton");
                 var closeButton = (Button)preview.FindName("ClosePreviewButton");
                 Assert.AreEqual(Visibility.Visible, checkFeedButton.Visibility);
@@ -61,7 +88,10 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(checkFeedRequested);
                 Assert.IsTrue(previewWasClosedBeforeCheck);
                 Assert.IsFalse(preview.IsVisible);
+
+                var styleFailures = VerifyAdditionalCustomChrome();
                 app.Shutdown();
+                Assert.AreEqual(0, styleFailures.Count, string.Join(Environment.NewLine, styleFailures));
             }
             catch (Exception exception)
             {
@@ -73,6 +103,265 @@ public sealed class MainWindowViewModelTests
         thread.Join();
 
         Assert.IsNull(failure, failure?.ToString());
+    }
+
+    private static IReadOnlyList<string> VerifyAdditionalCustomChrome()
+    {
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var styleFailures = new List<string>();
+
+        void ScheduleClose(
+            Window window,
+            string automationName,
+            bool verifyCompactFrame = false,
+            string expectedTitle = "",
+            Action<Window>? inspect = null)
+        {
+            var timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(50)
+            };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                Assert.AreEqual(expectedTitle, window.Title);
+                Assert.AreEqual(WindowStyle.None, window.WindowStyle);
+                if (verifyCompactFrame)
+                {
+                    Assert.IsTrue(FindVisualChildren<Border>(window)
+                        .Any(border => border.CornerRadius.TopLeft == 6));
+                }
+
+                inspect?.Invoke(window);
+                var closeButton = FindVisualChildren<Button>(window)
+                    .Single(button => AutomationProperties.GetName(button) == automationName);
+                closeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            };
+            timer.Start();
+        }
+
+        void ShowAndCloseModal(
+            Window window,
+            string automationName,
+            bool verifyCompactFrame = false,
+            string expectedTitle = "",
+            Action<Window>? inspect = null)
+        {
+            ScheduleClose(window, automationName, verifyCompactFrame, expectedTitle, inspect);
+            Assert.IsFalse(window.ShowDialog() == true);
+        }
+
+        var mainWindow = new RssReader.App.MainWindow(
+            new MainWindowViewModel(Profile.CreateRegular("Reader")));
+        mainWindow.Show();
+        mainWindow.UpdateLayout();
+        Assert.AreEqual(WindowStyle.None, mainWindow.WindowStyle);
+        CollectionAssert.IsSubsetOf(
+            new[] { "Minimize window", "Maximize window", "Restore window", "Close window" },
+            FindVisualChildren<Button>(mainWindow).Select(button => AutomationProperties.GetName(button)).ToArray());
+        var windowButtons = FindVisualChildren<Button>(mainWindow)
+            .Where(button => AutomationProperties.GetName(button) is "Maximize window" or "Restore window" or "Minimize window" or "Close window")
+            .ToDictionary(button => AutomationProperties.GetName(button));
+        windowButtons["Maximize window"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.AreEqual(WindowState.Maximized, mainWindow.WindowState);
+        windowButtons["Restore window"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.AreEqual(WindowState.Normal, mainWindow.WindowState);
+        windowButtons["Minimize window"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.AreEqual(WindowState.Minimized, mainWindow.WindowState);
+        mainWindow.WindowState = WindowState.Normal;
+        var sidebarPinButton = (Button)mainWindow.FindName("SidebarPinButton");
+        var sidebarPeekButton = (Button)mainWindow.FindName("SidebarPeekButton");
+        Assert.AreEqual(sidebarPinButton.ToolTip, AutomationProperties.GetName(sidebarPinButton));
+        Assert.AreEqual(sidebarPeekButton.ToolTip, AutomationProperties.GetName(sidebarPeekButton));
+        windowButtons["Close window"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.IsFalse(mainWindow.IsVisible);
+
+        var catalogMainWindow = new RssReader.App.MainWindow(
+            new MainWindowViewModel(
+                Profile.CreateCatalogMaster(),
+                new CatalogService(new SqliteCatalogStore(":memory:"))));
+        try
+        {
+            catalogMainWindow.Show();
+            catalogMainWindow.UpdateLayout();
+            var catalogTabs = (TabControl)catalogMainWindow.FindName("CatalogManagementTabs")!;
+            catalogTabs.ApplyTemplate();
+            Assert.IsNotNull(catalogTabs.Template.FindName("HeaderPanel", catalogTabs));
+            var feedsTab = (TabItem)catalogTabs.ItemContainerGenerator.ContainerFromIndex(0);
+            feedsTab.ApplyTemplate();
+            Assert.IsNotNull(feedsTab.Template.FindName("TabSurface", feedsTab));
+            var categoryFilter = (ComboBox)catalogMainWindow.FindName("CatalogManagementCategoryFilter")!;
+            categoryFilter.ApplyTemplate();
+            Assert.IsNotNull(categoryFilter.Template.FindName("FocusRing", categoryFilter));
+            var selectedCategory = categoryFilter.SelectedItem as CatalogCategoryFilterOption;
+            var categoryTextBlocks = FindVisualChildren<TextBlock>(categoryFilter)
+                .Select(textBlock => textBlock.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToArray();
+            if (selectedCategory is null || !categoryTextBlocks.Contains(selectedCategory.Name))
+            {
+                styleFailures.Add(
+                    $"The catalog category ComboBox does not display the selected option Name. Selected='{selectedCategory?.Name ?? "<null>"}', text='{string.Join(" | ", categoryTextBlocks)}'.");
+            }
+
+            var catalogActionsButton = (Button)catalogMainWindow.FindName("CatalogActionsButton")!;
+            var catalogMenu = catalogActionsButton.ContextMenu!;
+            try
+            {
+                catalogMenu.PlacementTarget = catalogActionsButton;
+                catalogMenu.IsOpen = true;
+                catalogMenu.ApplyTemplate();
+                if (catalogMenu.Template.FindName("MenuFrame", catalogMenu) is null)
+                {
+                    styleFailures.Add("The catalog ContextMenu does not use the shared menu frame template.");
+                }
+
+                var importMenuItem = (MenuItem)catalogMenu.Items[0];
+                importMenuItem.ApplyTemplate();
+                if (importMenuItem.Template.FindName("MenuItemSurface", importMenuItem) is null)
+                {
+                    styleFailures.Add("The catalog MenuItem does not use the shared menu item template.");
+                }
+            }
+            catch (Exception exception)
+            {
+                styleFailures.Add($"The catalog popup menu could not be rendered: {exception.Message}");
+            }
+            finally
+            {
+                catalogMenu.IsOpen = false;
+            }
+
+            var metadataGapsCheckBox = FindVisualChildren<CheckBox>(catalogTabs)
+                .Single(checkBox => checkBox.Content?.ToString() == "Metadata gaps only");
+            metadataGapsCheckBox.ApplyTemplate();
+            Assert.IsNotNull(metadataGapsCheckBox.Template.FindName("CheckBorder", metadataGapsCheckBox));
+        }
+        finally
+        {
+            catalogMainWindow.Close();
+        }
+
+        var scrollbarTestWindow = new Window
+        {
+            Width = 220,
+            Height = 180,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Content = new ScrollViewer
+            {
+                Width = 180,
+                Height = 120,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = new Border { Height = 500 }
+            }
+        };
+        try
+        {
+            scrollbarTestWindow.Show();
+            scrollbarTestWindow.UpdateLayout();
+            var verticalScrollBar = FindVisualChildren<System.Windows.Controls.Primitives.ScrollBar>(scrollbarTestWindow)
+                .Single(scrollBar => scrollBar.Orientation == Orientation.Vertical);
+            if (verticalScrollBar.Margin != new Thickness(2))
+            {
+                styleFailures.Add("The vertical scrollbar is missing the 2 px viewport inset.");
+            }
+
+            if (verticalScrollBar.ActualHeight <= 100)
+            {
+                styleFailures.Add($"The vertical scrollbar track is too short: {verticalScrollBar.ActualHeight}px.");
+            }
+        }
+        finally
+        {
+            scrollbarTestWindow.Close();
+        }
+
+        ShowAndCloseModal(
+            new PreferencesWindow(new ProfilePreferences()),
+            "Close dialog",
+            verifyCompactFrame: true,
+            inspect: window =>
+            {
+                ((RadioButton)window.FindName("ReadingNavigation")!).RaiseEvent(
+                    new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                window.UpdateLayout();
+                var intervalComboBox = (ComboBox)window.FindName("AutoRefreshIntervalComboBox")!;
+                intervalComboBox.ApplyTemplate();
+                Assert.IsNotNull(intervalComboBox.Template.FindName("FocusRing", intervalComboBox));
+                var hideReadCheckBox = (CheckBox)window.FindName("HideReadArticlesCheckBox")!;
+                hideReadCheckBox.ApplyTemplate();
+                Assert.IsNotNull(hideReadCheckBox.Template.FindName("CheckBorder", hideReadCheckBox));
+            });
+        ShowAndCloseModal(new RawFeedWindow("Example feed", "<rss />"), "Close dialog");
+        ShowAndCloseModal(
+            new CreateFolderWindow(Array.Empty<string>(), Array.Empty<string>()),
+            "Close dialog",
+            verifyCompactFrame: true);
+        ShowAndCloseModal(
+            new FolderSelectionWindow(Array.Empty<string>(), Array.Empty<string>(), _ => Task.CompletedTask),
+            "Close dialog",
+            verifyCompactFrame: true);
+
+        var catalogManagement = new CatalogManagementViewModel(
+            Profile.CreateCatalogMaster(),
+            new CatalogService(new SqliteCatalogStore(":memory:")));
+        ShowAndCloseModal(
+            new CatalogEntryWindow(catalogManagement, CatalogEntryKind.Feed),
+            "Close dialog");
+
+        var standardPreview = new CatalogFeedPreviewWindow(
+            new CatalogFeedListItem("feed", "Example feed", "https://example.com/feed.xml", null, "Comics"),
+            _ => Task.FromResult(new CatalogFeedPreview("Example feed", "Comics", null, [])));
+        standardPreview.Show();
+        standardPreview.UpdateLayout();
+        Assert.AreEqual(string.Empty, standardPreview.Title);
+        Assert.AreEqual(WindowStyle.None, standardPreview.WindowStyle);
+        Assert.AreEqual(Visibility.Visible, ((Button)standardPreview.FindName("ClosePreviewButton")).Visibility);
+        Assert.AreEqual(Visibility.Collapsed, ((Button)standardPreview.FindName("CheckFeedButton")).Visibility);
+        ((Button)standardPreview.FindName("ClosePreviewButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.IsFalse(standardPreview.IsVisible);
+
+        ShowAndCloseModal(
+            new ProfileChooserWindow(new ProfileChooserViewModel(null!)),
+            "Close profile chooser",
+            verifyCompactFrame: true,
+            expectedTitle: "RSS Reader");
+        ShowAndCloseModal(new SplashWindow(), "Close startup window", expectedTitle: "RSS Reader");
+
+        void ScheduleMessageAction(string automationName)
+        {
+            var timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(50)
+            };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                var dialog = System.Windows.Application.Current.Windows.OfType<MessageDialogWindow>().Single();
+                Assert.AreEqual(string.Empty, dialog.Title);
+                Assert.AreEqual(WindowStyle.None, dialog.WindowStyle);
+                ((Button)dialog.FindName(automationName)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            };
+            timer.Start();
+        }
+
+        ScheduleMessageAction("AcceptButton");
+        Assert.AreEqual(
+            MessageBoxResult.OK,
+            MessageDialogWindow.Show(null, "Notice", MessageBoxButton.OK, MessageBoxImage.Information));
+        ScheduleMessageAction("AcceptButton");
+        Assert.AreEqual(
+            MessageBoxResult.Yes,
+            MessageDialogWindow.Show(null, "Continue?", MessageBoxButton.YesNo, MessageBoxImage.Warning));
+        ScheduleMessageAction("NoButton");
+        Assert.AreEqual(
+            MessageBoxResult.No,
+            MessageDialogWindow.Show(null, "Continue?", MessageBoxButton.YesNo, MessageBoxImage.Warning));
+        ScheduleMessageAction("CloseButton");
+        Assert.AreEqual(
+            MessageBoxResult.No,
+            MessageDialogWindow.Show(null, "Continue?", MessageBoxButton.YesNo, MessageBoxImage.Warning));
+        return styleFailures;
     }
 
     [TestMethod]

@@ -33,6 +33,7 @@ public sealed class ArticleRowViewModel(
     public string? ImageUrl { get; } = imageUrl;
     public string? ExternalId { get; } = externalId;
     public string? FeedUrl { get; } = feedUrl;
+    public string ReadLaterAutomationName => IsSaved ? "Remove from read later" : "Add to read later";
     public string SourceInitials
     {
         get
@@ -81,7 +82,13 @@ public sealed class ArticleRowViewModel(
     public bool IsSaved
     {
         get => _isSaved;
-        set => SetProperty(ref _isSaved, value);
+        set
+        {
+            if (SetProperty(ref _isSaved, value))
+            {
+                OnPropertyChanged(nameof(ReadLaterAutomationName));
+            }
+        }
     }
 
     public static string FormatAge(DateTimeOffset publishedAt, DateTimeOffset now)

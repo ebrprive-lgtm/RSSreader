@@ -10,4 +10,6 @@ public partial class RawFeedWindow : Window
         FeedSourceText.Text = feedSource;
         RawContentTextBox.Text = rawContent;
     }
+
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
 }

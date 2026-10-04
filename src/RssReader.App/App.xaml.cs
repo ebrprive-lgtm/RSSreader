@@ -69,9 +69,9 @@ public partial class App : System.Windows.Application
 		catch (Exception)
 		{
 			await UpdateStartupStatusAsync("Startup failed. See the error message for details.");
-			System.Windows.MessageBox.Show(
+			MessageDialogWindow.Show(
+				_splashWindow,
 				"RSS Reader could not start. Check local application data permissions and try again.",
-				"RSS Reader",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);
 			_splashWindow?.Close();
@@ -159,9 +159,9 @@ public partial class App : System.Windows.Application
 			}
 
 			System.Diagnostics.Debug.WriteLine(exception.ToString());
-			System.Windows.MessageBox.Show(
+			MessageDialogWindow.Show(
+				chooser,
 				$"The selected profile could not be opened.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-				"RSS Reader",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);
 		}
@@ -182,9 +182,9 @@ public partial class App : System.Windows.Application
 		}
 		catch (Exception exception)
 		{
-			System.Windows.MessageBox.Show(
+			MessageDialogWindow.Show(
+				owner,
 				$"Preferences could not be saved.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-				"RSS Reader",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);
 		}
@@ -201,9 +201,9 @@ public partial class App : System.Windows.Application
 		}
 		catch (Exception)
 		{
-			System.Windows.MessageBox.Show(
+			MessageDialogWindow.Show(
+				_readerWindow,
 				"The profile chooser could not be opened.",
-				"RSS Reader",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);
 		}

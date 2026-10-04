@@ -17,6 +17,8 @@ public partial class ProfileChooserWindow : Window
         DataContext = viewModel;
     }
 
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
+
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key is Key.LeftShift or Key.RightShift && !_shiftRevealActive)
@@ -55,10 +57,9 @@ public partial class ProfileChooserWindow : Window
             return;
         }
 
-        var result = MessageBox.Show(
+        var result = MessageDialogWindow.Show(
             this,
             $"Delete the profile \"{profile.Name}\"? Its subscriptions, folders, and reading state will be removed from this device. This action cannot be undone.",
-            "Delete profile",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes)
@@ -72,10 +73,9 @@ public partial class ProfileChooserWindow : Window
         }
         catch (Exception)
         {
-            MessageBox.Show(
+            MessageDialogWindow.Show(
                 this,
                 "The profile could not be deleted.",
-                "RSS Reader",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -89,9 +89,9 @@ public partial class ProfileChooserWindow : Window
         }
         catch (Exception)
         {
-            System.Windows.MessageBox.Show(
+            MessageDialogWindow.Show(
+                this,
                 "Profiles could not be loaded.",
-                "RSS Reader",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }

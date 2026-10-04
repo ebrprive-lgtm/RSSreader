@@ -1,7 +1,8 @@
 <Window x:Class="RssReader.App.PreferencesWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Preferences"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        WindowStyle="None"
         Width="900"
         Height="680"
         MinWidth="760"
@@ -10,6 +11,12 @@
         ShowInTaskbar="False"
         Background="White"
         Foreground="{StaticResource TextBrush}">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="40"
+                            ResizeBorderThickness="6"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
     <Window.Resources>
         <Style x:Key="PreferenceNavigationStyle" TargetType="RadioButton">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
@@ -20,19 +27,35 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="NavigationBorder"
-                                Background="Transparent"
-                                Padding="{TemplateBinding Padding}"
-                                CornerRadius="4">
-                            <ContentPresenter VerticalAlignment="Center" />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="NavigationBorder"
+                                    Background="Transparent"
+                                    Padding="{TemplateBinding Padding}"
+                                    CornerRadius="4">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="FocusRing"
+                                    Margin="-2"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="6"
+                                    Opacity="0"
+                                    IsHitTestVisible="False" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="NavigationBorder" Property="Background" Value="#F2F5F3" />
+                                <Setter TargetName="NavigationBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="NavigationBorder" Property="Background" Value="#F1F3F2" />
+                                <Setter TargetName="NavigationBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -44,15 +67,74 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Margin" Value="0,4" />
             <Setter Property="Padding" Value="2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent" MinHeight="26">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="16" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse x:Name="RadioRing"
+                                     Width="15"
+                                     Height="15"
+                                     Stroke="{StaticResource ControlBorderBrush}"
+                                     StrokeThickness="1"
+                                     Fill="{StaticResource ContentBrush}"
+                                     VerticalAlignment="Center" />
+                            <Ellipse x:Name="RadioDot"
+                                     Width="7"
+                                     Height="7"
+                                     Fill="{StaticResource AccentBrush}"
+                                     Visibility="Collapsed"
+                                     VerticalAlignment="Center" />
+                            <ContentPresenter Grid.Column="1"
+                                              Margin="9,0,0,0"
+                                              ContentSource="Content"
+                                              RecognizesAccessKey="True"
+                                              VerticalAlignment="Center" />
+                            <Border x:Name="FocusRing"
+                                    Margin="-2"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="5"
+                                    Opacity="0"
+                                    IsHitTestVisible="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="RadioRing" Property="Fill" Value="{StaticResource NeutralHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="RadioRing" Property="Stroke" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="RadioDot" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
-    <Grid>
+    <Grid Margin="8">
+        <Border Background="{StaticResource ContentBrush}"
+                BorderBrush="{StaticResource ControlBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+        <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="232" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" BorderBrush="#E1E5E3" BorderThickness="0,0,1,0" Padding="16,22">
+        <Border Grid.Column="0" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="0,0,1,0" Padding="16,22">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top"
                            Text="Preferences"
@@ -116,7 +198,7 @@
                         <RadioButton x:Name="PresentationTitleOnlyOption" Content="Title-only view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="PresentationMagazineOption" Content="Magazine view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="PresentationCardsOption" Content="Cards view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
-                        <Border Height="1" Background="#E3E7E5" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Default sort" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Choose the article order used in this profile."
                                    Foreground="{StaticResource MutedTextBrush}"
@@ -134,7 +216,7 @@
                                   Content="Hide read articles"
                                   FontSize="13"
                                   Padding="2" />
-                        <Border Height="1" Background="#E3E7E5" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Folder article limit" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Maximum articles shown per feed inside a folder."
                                    Foreground="{StaticResource MutedTextBrush}"
@@ -147,10 +229,10 @@
                                  MaxLength="3"
                                  ToolTip="Enter a number from 1 to 100" />
                         <TextBlock x:Name="ValidationMessage"
-                                   Foreground="#A33C35"
+                                   Foreground="{StaticResource DestructiveBrush}"
                                    Margin="0,6,0,0"
                                    TextWrapping="Wrap" />
-                        <Border Height="1" Background="#E3E7E5" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Feed updates" FontSize="13" FontWeight="SemiBold" />
                         <CheckBox x:Name="RefreshFeedsWhenOpenedCheckBox"
                                   Content="Refresh feeds when opening a feed or folder"
@@ -196,13 +278,22 @@
                            Foreground="{StaticResource MutedTextBrush}"
                            VerticalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="Cancel" IsCancel="True" MinWidth="82" Padding="12,7" Margin="0,0,8,0" />
-                    <Button Content="Save" IsDefault="True" MinWidth="82" Padding="12,7" Click="Save_Click"
-                            Background="{StaticResource AccentBrush}"
-                            Foreground="White"
-                            BorderThickness="0" />
+                    <Button Content="Cancel" IsCancel="True" Style="{StaticResource SecondaryActionButtonStyle}" MinWidth="82" Padding="12,7" Margin="0,0,8,0" />
+                    <Button Content="Save" IsDefault="True" Style="{StaticResource PrimaryActionButtonStyle}" MinWidth="82" Padding="12,7" Click="Save_Click" />
                 </StackPanel>
             </Grid>
         </Grid>
+        <Button Grid.Column="1"
+                Content="&#xE711;"
+                Style="{StaticResource IconActionButtonStyle}"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,4,8,0"
+                ToolTip="Close dialog"
+                AutomationProperties.Name="Close dialog"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                Click="CloseWindow_Click" />
+        </Grid>
+        </Border>
     </Grid>
 </Window>

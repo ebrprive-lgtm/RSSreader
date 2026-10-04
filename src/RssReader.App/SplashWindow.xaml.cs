@@ -10,4 +10,6 @@ public partial class SplashWindow : Window
     }
 
     public void SetStatus(string status) => StartupStatus.Text = status;
+
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
 }

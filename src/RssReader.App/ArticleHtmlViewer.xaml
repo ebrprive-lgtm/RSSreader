@@ -15,7 +15,7 @@
             <TextBlock x:Name="StatusMessage"
                        Text="Preparing article viewer..."
                        FontSize="13"
-                       Foreground="#5D6A62" />
+                       Foreground="{StaticResource MutedTextBrush}" />
             <TextBlock x:Name="FallbackText"
                        Margin="0,8,0,0"
                        FontSize="15"

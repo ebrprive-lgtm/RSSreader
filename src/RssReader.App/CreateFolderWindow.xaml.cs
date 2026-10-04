@@ -85,6 +85,8 @@ public partial class CreateFolderWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
     private void SetError(string message)
     {
         ErrorMessageText.Text = message;

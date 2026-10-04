@@ -57,6 +57,8 @@ public partial class FolderSelectionWindow : Window
         }
     }
 
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
     private void FoldersListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is FrameworkElement { DataContext: string })
@@ -82,10 +84,9 @@ public partial class FolderSelectionWindow : Window
         }
         catch (Exception exception)
         {
-            MessageBox.Show(
+            MessageDialogWindow.Show(
                 this,
             $"The folder could not be created.\n\n{exception.Message}",
-                "RSS Reader",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return;

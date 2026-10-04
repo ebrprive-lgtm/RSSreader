@@ -1,0 +1,82 @@
+<Window x:Class="RssReader.App.MessageDialogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title=""
+        Width="420"
+        MinWidth="360"
+        MaxWidth="560"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{StaticResource WindowBrush}"
+        Foreground="{StaticResource TextBrush}">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="36"
+                            ResizeBorderThickness="0"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Grid Margin="8">
+        <Border Background="{StaticResource ContentBrush}"
+                BorderBrush="{StaticResource ControlBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="20">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="30" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" shell:WindowChrome.IsHitTestVisibleInChrome="False">
+                        <Button x:Name="CloseButton"
+                            Content="&#xE711;"
+                            Style="{StaticResource DestructiveIconActionButtonStyle}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            ToolTip="Close dialog"
+                            AutomationProperties.Name="Close dialog"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                            Click="CloseWindow_Click" />
+                </Grid>
+                <Grid Grid.Row="1" Margin="0,10,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="4" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="SeverityMarker"
+                            Width="4"
+                            Margin="0,2,16,2"
+                            CornerRadius="2"
+                            Background="{StaticResource AccentBrush}" />
+                    <TextBlock x:Name="MessageText"
+                               Grid.Column="1"
+                               TextWrapping="Wrap"
+                               MaxWidth="470"
+                               VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Grid.Row="2"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right">
+                    <Button x:Name="NoButton"
+                            Content="No"
+                            Style="{StaticResource SecondaryActionButtonStyle}"
+                            MinWidth="76"
+                            Margin="0,0,8,0"
+                            IsCancel="True"
+                            Visibility="Collapsed"
+                            Click="NoButton_Click" />
+                    <Button x:Name="AcceptButton"
+                            Content="OK"
+                            Style="{StaticResource PrimaryActionButtonStyle}"
+                            MinWidth="76"
+                            IsDefault="True"
+                            Click="AcceptButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

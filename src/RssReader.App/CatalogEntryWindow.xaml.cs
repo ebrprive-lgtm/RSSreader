@@ -42,14 +42,8 @@ public partial class CatalogEntryWindow : Window
             CatalogEntryKind.Collection => ("Add collection", "Add collection"),
             _ => throw new ArgumentOutOfRangeException(nameof(entryKind))
         };
-        Title = heading;
         DialogHeading.Text = heading;
         SubmitButton.Content = buttonText;
-        if (isEditingCategory)
-        {
-            WindowStyle = System.Windows.WindowStyle.None;
-            CloseWindowButton.Visibility = Visibility.Visible;
-        }
 
         FeedFields.Visibility = entryKind == CatalogEntryKind.Feed ? Visibility.Visible : Visibility.Collapsed;
         CategoryFields.Visibility = entryKind == CatalogEntryKind.Category ? Visibility.Visible : Visibility.Collapsed;

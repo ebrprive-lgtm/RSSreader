@@ -29,6 +29,8 @@ public partial class PreferencesWindow : Window
 
     public ProfilePreferences Preferences { get; private set; }
 
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
+
     private void GeneralNavigation_Click(object sender, RoutedEventArgs e) => ShowSection("General", GeneralPanel);
 
     private void AppearanceNavigation_Click(object sender, RoutedEventArgs e) => ShowSection("Appearance", AppearancePanel);

@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Automation;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Navigation;
@@ -47,10 +48,9 @@ public partial class MainWindow : Window
     private Task<bool> ConfirmUnfollowAllAsync(int feedCount)
     {
         var feedLabel = feedCount == 1 ? "feed" : "feeds";
-        var result = MessageBox.Show(
+        var result = MessageDialogWindow.Show(
             this,
             $"Unfollow {feedCount} {feedLabel} currently shown in this list?",
-            "Unfollow visible feeds",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         return Task.FromResult(result == MessageBoxResult.Yes);
@@ -61,10 +61,9 @@ public partial class MainWindow : Window
         var message = feedCount == 0
             ? $"Delete the empty folder '{folderName}'?"
             : $"Delete folder '{folderName}' and unfollow its {feedCount} feed(s)?";
-        var result = MessageBox.Show(
+        var result = MessageDialogWindow.Show(
             this,
             message,
-            "Delete folder",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         return Task.FromResult(result == MessageBoxResult.Yes);
@@ -73,6 +72,14 @@ public partial class MainWindow : Window
     public event Action? LogoutRequested;
 
     public event Action? PreferencesRequested;
+
+    private void MinimizeWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void MaximizeWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Maximized;
+
+    private void RestoreWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Normal;
+
+    private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
 
     private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -130,8 +137,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        SidebarPinButton.ToolTip = _viewModel.IsSidebarPinned ? "Hide sidebar" : "Pin sidebar";
-        SidebarPeekButton.ToolTip = _viewModel.IsSidebarPinned ? "Hide sidebar" : "Pin sidebar";
+        var sidebarActionName = _viewModel.IsSidebarPinned ? "Hide sidebar" : "Pin sidebar";
+        SidebarPinButton.ToolTip = sidebarActionName;
+        AutomationProperties.SetName(SidebarPinButton, sidebarActionName);
+        SidebarPeekButton.ToolTip = sidebarActionName;
+        AutomationProperties.SetName(SidebarPeekButton, sidebarActionName);
         if (_viewModel.IsSidebarPinned)
         {
             _isSidebarPeekOpen = false;
@@ -278,10 +288,9 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            MessageBox.Show(
+            MessageDialogWindow.Show(
                 this,
                 $"The source link could not be opened.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                "Open source",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -303,10 +312,9 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            MessageBox.Show(
+            MessageDialogWindow.Show(
                 this,
                 $"Raw feed content could not be loaded.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                "Show RAW",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
