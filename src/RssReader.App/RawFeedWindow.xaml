@@ -6,6 +6,7 @@
         WindowStyle="None"
         Width="980"
         Height="700"
+        Topmost="True"
         MinWidth="700"
         MinHeight="460"
         WindowStartupLocation="CenterOwner"
@@ -61,7 +62,22 @@
                     <TextBlock Text="{Binding DisplayText}"
                                TextWrapping="Wrap"
                                FontFamily="Consolas"
-                               FontSize="12" />
+                               FontSize="12">
+                        <TextBlock.ContextMenu>
+                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="Copy" Click="CopyTreeNode_Click" />
+                            </ContextMenu>
+                        </TextBlock.ContextMenu>
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsEncoded}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </HierarchicalDataTemplate>
             </TreeView.Resources>
             <TreeView.ItemContainerStyle>
@@ -84,7 +100,7 @@
                         Padding="12,7"
                         Margin="0,0,8,0"
                         Click="CopyXml_Click" />
-            <Button Content="Close" IsCancel="True" Style="{StaticResource SecondaryActionButtonStyle}" MinWidth="84" Padding="12,7" />
+            <Button Content="Close" IsCancel="True" Style="{StaticResource SecondaryActionButtonStyle}" MinWidth="84" Padding="12,7" Click="CloseWindow_Click" />
             </StackPanel>
         </Grid>
     </Grid>

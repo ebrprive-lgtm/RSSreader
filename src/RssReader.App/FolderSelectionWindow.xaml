@@ -63,6 +63,7 @@
                         <ColumnDefinition Width="32" />
                     </Grid.ColumnDefinitions>
                     <TextBox x:Name="FolderSearchBox"
+                             AutomationProperties.Name="Search folders"
                              Padding="10,7"
                              FontSize="14"
                              VerticalContentAlignment="Center"

@@ -12,6 +12,7 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 - The application is a Windows WPF reader using MVVM, RSS/Atom syndication parsing, SQLite persistence, and WebView2 for article content.
 - Users can browse and follow catalog feeds, organize subscriptions into folders, assign profile-scoped feed tags, filter by publisher topics, and mark articles read or saved.
+- Today shows articles published in the previous 24 hours; All remains the unbounded archive view.
 - The selected-article view displays the feed, author/date metadata, publisher website link when available, and sanitized article HTML. The raw XML dialog supports tree inspection and copying the original selected-item XML.
 - Cards and Magazine presentations use the feed/article image metadata. Article HTML uses the images in the article body, with handling for duplicate lead images and centered image markup.
 - Catalog Master can create and maintain catalog feeds, categories, and collections. A newly created feed is synchronized to Follow Sources without restarting.
@@ -48,10 +49,10 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Checks:**
 
-- [ ] Infrastructure tests prove supported RSS/Atom metadata is parsed without live HTTP.
-- [ ] Sanitizer tests reject scripts, event handlers, unsafe schemes, and unsupported active markup.
-- [ ] Article document tests verify image count, duplicate detection, `aligncenter` layout markers, relative URL resolution, summary fallback, and distinct-image retention.
-- [ ] App test confirms article selection passes body content to the viewer without injecting the Cards/Magazine image.
+- [x] Infrastructure tests prove supported RSS/Atom metadata is parsed without live HTTP.
+- [x] Sanitizer tests reject scripts, event handlers, unsafe schemes, and unsupported active markup.
+- [x] Article document tests verify image count, duplicate detection, `aligncenter` layout markers, relative URL resolution, summary fallback, and distinct-image retention.
+- [x] App test confirms article selection passes body content to the viewer without injecting the Cards/Magazine image.
 - [ ] WPF visual check compares the Armagh article against the supplied website example at narrow and wide reader sizes.
 
 **Exit criteria:** Feed and article rendering regressions can be reproduced with local tests, and all expected differences from publisher websites are documented rather than handled with feed-specific hacks.
@@ -66,14 +67,14 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 - Show refresh progress and a concise failure result for each affected feed, with a retry action scoped to the failed feed or current selection.
 - Keep previously stored articles available after a refresh failure. Never clear cached articles or metadata because a request timed out or returned invalid content.
 - Distinguish a feed with no new articles from a feed that could not be fetched.
-- Decide whether refresh timestamps belong in shared catalog health metadata or profile-local refresh state before adding persistence. Do not repurpose Catalog Master health checks as proof of a user's recent content refresh.
+- Store each profile's per-feed last-attempt time, last-success time, and latest failure separately from shared catalog health. Do not repurpose Catalog Master health checks as proof of a user's recent content refresh.
 - Avoid noisy notifications for routine auto-refresh; summarize failures in a stable status surface.
 
 **Checks:**
 
-- [ ] Application tests cover success, no-new-articles, timeout, cancellation, invalid XML, and partial failure across several feeds.
-- [ ] SQLite tests verify that a failed refresh leaves existing article content, topics, author, images, and read/saved state intact.
-- [ ] View-model tests verify retry scope, progress cleanup, and readable error summaries.
+- [x] Application tests cover success, no-new-articles, timeout, cancellation, invalid XML, and partial failure across several feeds.
+- [x] SQLite tests verify that failed refreshes preserve cached article metadata and read/saved state, while profile-feed history distinguishes attempts, successes, and failures.
+- [x] View-model tests verify retry scope, progress cleanup, and readable error summaries.
 - [ ] Manual check with one working and one failing fake feed confirms successful feeds still update and the failure is actionable.
 - [ ] Verify auto-refresh does not repeatedly display a modal dialog or block article reading.
 
@@ -85,18 +86,18 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Work:**
 
-- Review current search behavior and document its fields and matching rules before extending it.
-- Evaluate adding author, publisher topic, and feed name to local search, while keeping matching case-insensitive and deterministic.
-- Add optional date-range filters only if existing date ordering and unread/saved filters do not cover the common task. Keep filter composition explicit.
+- Search is case-insensitive across article title, author, publisher topic, feed name, summary, and body, and composes with the active article-list route and filters.
+- Keep optional date-range filters deferred unless unread/saved filters and existing date ordering do not cover a demonstrated common task.
 - Improve empty states so they distinguish no articles in the current source, no articles matching search, and no articles matching the combined filters.
 - Preserve search and filter state when moving between Follow Sources, a feed/folder, and the article reader unless the user explicitly clears it.
 - Consider saved searches only after the core search fields and filter semantics are stable.
 
 **Checks:**
 
-- [ ] Application tests cover exact and partial matches in each supported field, case handling, blank queries, and special characters.
-- [ ] Combination tests prove search composes with route, topic, feed-tag, unread, saved, and date filters without leaking state between profiles.
-- [ ] View-model tests verify empty-state text and state retention when opening/backing out of an article.
+- [x] Application tests cover exact and partial matches in each supported field, case handling, blank queries, and special characters.
+- [x] Combination tests prove search composes with route, topic, feed-tag, unread, and saved filters without leaking state between profiles. Date-range filtering remains deferred.
+- [x] View-model tests verify empty-state text and search-state retention when opening/backing out of an article.
+- [x] Today route excludes articles at least 24 hours old while All retains older archive items.
 - [ ] Manual check with a representative article collection verifies that search results are understandable and clearing one filter does not reset unrelated filters.
 - [ ] Performance test records filter latency at increasing article counts without machine-specific pass/fail thresholds until a reference system is agreed.
 
@@ -108,16 +109,17 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Work:**
 
-- Evaluate previous/next article controls that respect the current filtered and sorted article sequence.
-- Provide keyboard commands for back to list, next/previous article, mark read/unread, and save/unsave. Show discoverable tooltips or menu labels for shortcuts.
+- Previous/next article controls and Alt+Arrow shortcuts follow the current filtered and sorted article sequence; controls disable at boundaries or when selection is no longer visible.
+- Provide keyboard commands for back to list (Esc), next/previous article (Alt+Arrow), mark read/unread (Ctrl+Shift+R), and save/unsave (Ctrl+Shift+S), with discoverable reader actions and tooltips.
 - Preserve scroll position and selected article when returning to the same result list, unless the active filters changed.
 - Confirm long article behavior: the reader should retain one clear scroll surface, keep image scaling predictable, and avoid text wrapping around centered block images.
 - Keep link activation separate from article selection and continue opening validated external HTTP(S) links outside the embedded reader.
 
 **Checks:**
 
-- [ ] View-model tests cover previous/next boundaries, filtered ordering, deleted/removed article cases, and selection state.
-- [ ] WPF tests cover keyboard focus, shortcut commands, action automation names, and Back behavior.
+- [x] View-model tests cover previous/next boundaries, date- and folder-sorted ordering, removed-from-filter selection, and selection state.
+- [x] WPF tests verify reader action automation names and keyboard bindings; view-model tests cover Back and read/save command effects.
+- [x] WPF test verifies predictable keyboard focus after returning to the list.
 - [ ] Manual check reads a multi-article feed using keyboard only and verifies focus remains predictable.
 - [ ] Manual check verifies long pages, centered and linked images, tables, and narrow-window layout.
 - [ ] Verify external links still pass through the validated external-link handler and do not navigate the embedded viewer away from its article document.
@@ -139,10 +141,10 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Checks:**
 
-- [ ] CatalogService tests cover duplicate URL normalization, same-name distinct feeds, category/collection membership, and authorization.
-- [ ] SQLite tests cover delete/update behavior and the agreed effects on subscriptions, cached articles, and collection membership.
-- [ ] View-model tests cover selection, filtered-out selections, bulk-operation cancellation, and partial failures.
-- [ ] App tests create/edit/delete a catalog feed, then verify Follow Sources reflects the change immediately without restarting.
+- [x] CatalogService tests cover duplicate URL normalization, same-name distinct feeds, category/collection membership, and authorization.
+- [x] SQLite tests cover feed deletion effects on subscriptions, cached articles/state, refresh history, tags, and collection membership across profiles; category deletion unassigns feeds.
+- [x] View-model tests cover selection, filtered-out selections, bulk-operation cancellation, and partial failures.
+- [x] App tests create/edit/delete a catalog feed, then verify Follow Sources reflects the change immediately without restarting.
 - [ ] Manual review of a generated duplicate report confirms it recommends candidates but does not delete or merge feeds automatically.
 
 **Exit criteria:** Catalog maintenance is reviewable, profile boundaries remain intact, and routine actions are recoverable and tested.
@@ -161,8 +163,8 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Checks:**
 
-- [ ] Automated WPF tests assert automation names on actionable controls and labels on input controls.
-- [ ] Keyboard tests cover tab order and activation for core workflows.
+- [x] Automated WPF tests assert automation names on actionable controls and labels on input controls.
+- [x] Keyboard tests cover tab order and activation for core workflows.
 - [ ] Manual screen-reader review covers opening a source, finding an article, reading metadata, and returning to the list.
 - [ ] Manual layout matrix checks 100%, 150%, and 200% display scaling at minimum and wide window sizes.
 - [ ] Capture and review screenshots for title truncation, metadata wrapping, toolbar overlap, and scroll affordances.
@@ -183,8 +185,8 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Checks:**
 
-- [ ] Tests simulate offline, timeout, cancellation, partial response, and oversized feed content.
-- [ ] SQLite round-trip tests verify cached article HTML and metadata remain readable without network access.
+- [x] Tests simulate offline, timeout, cancellation, partial response, and oversized feed content.
+- [x] SQLite round-trip tests verify cached article HTML and metadata remain readable without network access.
 - [ ] Manual airplane-mode check opens previously loaded articles, exposes stale/failure state, and does not hang the UI.
 - [ ] If image caching is approved, tests cover cache size limits, eviction, expiration, unsafe URLs, and cleanup on profile/catalog changes.
 
@@ -204,11 +206,13 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 **Checks:**
 
-- [ ] Record the reference machine, build configuration, dataset size, warm/cold state, and measurement method.
-- [ ] Add deterministic generated-data tests for large feed and article collections.
+- [x] Record the reference machine, build configuration, dataset size, warm/cold state, and measurement method.
+- [x] Add deterministic generated-data tests for large feed and article collections.
 - [ ] Profile allocations and UI-thread time for any measured hot path before changing its design.
 - [ ] Compare before/after latency and memory use on the same reference setup.
 - [ ] Re-run virtualization, sorting, filtering, and state-retention tests after performance changes.
+
+**Initial generated-data snapshot (2026-10-04):** Intel Core Ultra 7 270K Plus (24 cores/logical processors), 63.5 GiB RAM, Windows 11 Home build 26200, .NET SDK 8.0.424, Debug configuration. One in-process test run measured catalog list population/filtering at 575 feeds: 22.6/1.2 ms; 5,000 feeds: 63.2/2.9 ms; 25,000 feeds: 361.7/37.5 ms. Article query/filtering over a prebuilt in-memory dataset measured 575 articles: 2.3 ms; 5,000: 0.8 ms; 25,000: 14.2 ms. These are diagnostic observations, not thresholds: the test host and JIT are warm/sequential, article generation is outside the query timer, and startup, SQLite I/O, refresh, UI-thread work, rendering, scrolling, allocations, and cold starts were not measured. No design optimization is justified by this snapshot alone.
 
 **Exit criteria:** Any performance change has a reproducible baseline, a measured improvement, and no regression in correctness or scrolling behavior.
 
@@ -216,14 +220,16 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 
 Run checks relevant to the changed layer; do not use a full-suite run as a substitute for a focused regression test.
 
-- [ ] `dotnet build src/RssReader.App/RssReader.App.csproj --configuration Debug`
-- [ ] `dotnet test tests/RssReader.Domain.Tests/RssReader.Domain.Tests.csproj --configuration Debug`
-- [ ] `dotnet test tests/RssReader.Application.Tests/RssReader.Application.Tests.csproj --configuration Debug`
-- [ ] `dotnet test tests/RssReader.Infrastructure.Tests/RssReader.Infrastructure.Tests.csproj --configuration Debug`
+- [x] `dotnet build src/RssReader.App/RssReader.App.csproj --configuration Debug`
+- [x] `dotnet test tests/RssReader.Domain.Tests/RssReader.Domain.Tests.csproj --configuration Debug`
+- [x] `dotnet test tests/RssReader.Application.Tests/RssReader.Application.Tests.csproj --configuration Debug`
+- [x] `dotnet test tests/RssReader.Infrastructure.Tests/RssReader.Infrastructure.Tests.csproj --configuration Debug`
 - [ ] `dotnet test tests/RssReader.App.Tests/RssReader.App.Tests.csproj --configuration Debug`
-- [ ] Run the narrow test filter for each changed behavior, especially when WPF host stability is involved.
-- [ ] `git diff --check`
+- [x] Run the narrow test filter for each changed behavior, especially when WPF host stability is involved.
+- [x] `git diff --check`
 - [ ] Manually verify the affected workflow using deterministic data before release.
+
+**Verification note:** The full App suite reported 28 passed before two tests failed to create a second WPF `Application`; WebView2 COM finalization then aborted the host. The changed cached-article, reader-focus/Space-activation, and Preferences-tab-order tests passed when run individually. A separate isolated WPF virtualization run also crashed in `HwndSubclass`, including at its original fixture size; no virtualization code or fixture-size change was retained.
 
 Use isolated output paths for verification builds when the repository's normal `bin`/`obj` directories may be in use, for example `-p:BaseOutputPath="$env:TEMP\RssReaderVerification\bin\"` in PowerShell.
 
@@ -231,9 +237,9 @@ Use isolated output paths for verification builds when the repository's normal `
 
 - [ ] Scope and acceptance criteria for the phase are approved before implementation.
 - [ ] Existing profile data initializes and migrates without loss.
-- [ ] New and updated tests cover success, empty, failure, cancellation, and relevant boundary conditions.
-- [ ] No live feed, image host, or WebView2 network dependency is required by automated tests.
+- [x] New and updated tests cover success, empty, failure, cancellation, and relevant boundary conditions.
+- [x] No live feed, image host, or WebView2 network dependency is required by automated tests.
 - [ ] Accessibility names, keyboard behavior, and resized layout are reviewed for user-facing changes.
-- [ ] Focused tests pass; broader test runs and any known WPF host limitations are documented.
-- [ ] Build succeeds with no new warnings or errors.
-- [ ] `git diff --check` passes and documentation reflects any changed product semantics.
+- [x] Focused tests pass; broader test runs and any known WPF host limitations are documented.
+- [x] Build succeeds with no new warnings or errors.
+- [x] `git diff --check` passes and documentation reflects any changed product semantics.

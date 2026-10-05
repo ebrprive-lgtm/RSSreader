@@ -50,6 +50,32 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task OpmlImportReportsExactUrlDuplicatesSeparatelyFromSameNameFeeds()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        await service.AddFeedAsync(
+            Profile.CreateCatalogMaster(),
+            "Example Journal",
+            "https://example.com/feed.xml",
+            null,
+            null);
+        var viewModel = new CatalogManagementViewModel(Profile.CreateCatalogMaster(), service);
+        const string opml = "<opml version=\"2.0\"><body>" +
+            "<outline text=\"Exact duplicate\" xmlUrl=\"https://EXAMPLE.com:443/feed.xml\" />" +
+            "<outline text=\"Example Journal\" xmlUrl=\"https://different.example/feed.xml\" />" +
+            "</body></opml>";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(opml));
+
+        await viewModel.ImportOpmlAsync(stream);
+
+        StringAssert.Contains(viewModel.ImportMessage, "Exact URL duplicate (skipped): Exact duplicate matches Example Journal");
+        StringAssert.Contains(viewModel.ImportMessage, "Same name, different URL (kept separately): Example Journal");
+        Assert.AreEqual(2, viewModel.Feeds.Count);
+        Assert.IsTrue(viewModel.Feeds.All(feed => feed.Name == "Example Journal"));
+    }
+
+    [TestMethod]
     public async Task StarterPackAddsCuratedFeedsAndSkipsThemWhenRepeated()
     {
         var viewModel = new CatalogManagementViewModel(
@@ -63,7 +89,8 @@ public sealed class CatalogManagementViewModelTests
         await viewModel.LoadStarterPackCommand.ExecuteAsync();
 
         Assert.AreEqual(6, viewModel.Feeds.Count);
-        Assert.AreEqual("Added 0 feed(s); skipped 6.", viewModel.ImportMessage);
+        StringAssert.StartsWith(viewModel.ImportMessage, "Added 0 feed(s); skipped 6.");
+        StringAssert.Contains(viewModel.ImportMessage, "Exact URL duplicate (skipped):");
     }
 
     [TestMethod]
@@ -95,6 +122,70 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task CatalogDeletionRequiresConfirmationAndExplainsItsImpact()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        var actor = Profile.CreateCatalogMaster();
+        var category = await service.AddCategoryAsync(actor, "Technology");
+        var firstFeed = await service.AddFeedAsync(
+            actor,
+            "Example One",
+            "https://example.com/one.xml",
+            null,
+            category.Id);
+        var secondFeed = await service.AddFeedAsync(
+            actor,
+            "Example Two",
+            "https://example.com/two.xml",
+            null,
+            category.Id);
+        var collection = await service.AddCollectionAsync(actor, "Daily reads");
+        await service.AddFeedToCollectionAsync(actor, collection.Id, firstFeed.Id);
+        await service.AddFeedToCollectionAsync(actor, collection.Id, secondFeed.Id);
+        var viewModel = new CatalogManagementViewModel(actor, service);
+        await viewModel.InitializeAsync();
+        string? confirmationMessage = null;
+        viewModel.ConfirmDeleteRequested = message =>
+        {
+            confirmationMessage = message;
+            return Task.FromResult(false);
+        };
+
+        await viewModel.DeleteFeedCommand.ExecuteAsync(viewModel.Feeds.Single(feed => feed.Id == firstFeed.Id));
+
+        Assert.AreEqual(2, viewModel.Feeds.Count);
+        StringAssert.Contains(confirmationMessage!, "every profile");
+        StringAssert.Contains(confirmationMessage, "cached articles");
+        StringAssert.Contains(confirmationMessage, "read/saved state");
+        StringAssert.Contains(confirmationMessage, "collection memberships");
+
+        viewModel.ConfirmDeleteRequested = _ => Task.FromResult(true);
+        await viewModel.DeleteFeedCommand.ExecuteAsync(viewModel.Feeds.Single(feed => feed.Id == firstFeed.Id));
+        Assert.AreEqual(1, viewModel.Feeds.Count);
+        Assert.AreEqual(1, store.CollectionFeedIds.Count);
+
+        viewModel.ConfirmDeleteRequested = message =>
+        {
+            confirmationMessage = message;
+            return Task.FromResult(false);
+        };
+        await viewModel.DeleteCategoryCommand.ExecuteAsync(viewModel.Categories.Single());
+        Assert.AreEqual(1, viewModel.Categories.Count);
+        StringAssert.Contains(confirmationMessage!, "become uncategorized");
+
+        viewModel.ConfirmDeleteRequested = message =>
+        {
+            confirmationMessage = message;
+            return Task.FromResult(false);
+        };
+        await viewModel.DeleteCollectionCommand.ExecuteAsync(viewModel.Collections.Single());
+        Assert.AreEqual(1, viewModel.Collections.Count);
+        StringAssert.Contains(confirmationMessage!, "feed memberships are removed");
+        StringAssert.Contains(confirmationMessage, "feeds remain in the catalog");
+    }
+
+    [TestMethod]
     public async Task CatalogMasterFeedAppearsInFollowSourcesImmediatelyAfterCreation()
     {
         var catalogService = new CatalogService(new MemoryCatalogStore());
@@ -112,6 +203,20 @@ public sealed class CatalogManagementViewModelTests
         var feed = viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Single();
         Assert.AreEqual("New publication", feed.Name);
         Assert.AreEqual(1, viewModel.CatalogFeeds.Count);
+
+        catalogManagement.PrepareFeedEdit(catalogManagement.Feeds.Single());
+        catalogManagement.FeedName = "New publication revised";
+        await catalogManagement.AddFeedCommand.ExecuteAsync();
+        viewModel.CatalogSearchQuery = "New publication revised";
+
+        var revisedFeed = viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Single();
+        Assert.AreEqual(feed.Id, revisedFeed.Id);
+        Assert.AreEqual("New publication revised", revisedFeed.Name);
+
+        catalogManagement.ConfirmDeleteRequested = _ => Task.FromResult(true);
+        await catalogManagement.DeleteFeedCommand.ExecuteAsync(catalogManagement.Feeds.Single());
+        Assert.AreEqual(0, viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Count());
+        Assert.AreEqual(0, viewModel.CatalogFeeds.Count);
     }
 
     [TestMethod]

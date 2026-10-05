@@ -89,6 +89,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public ObservableCollection<CatalogCategoryFilterOption> CategoryFilterOptions { get; } = [];
     public ObservableCollection<CatalogCollectionFilterOption> CollectionFilterOptions { get; } = [];
     public ObservableCollection<CatalogHealthFilterOption> HealthFilterOptions { get; } = [];
+    public Func<string, Task<bool>>? ConfirmDeleteRequested { get; set; }
 
     public AsyncCommand AddFeedCommand { get; }
     public AsyncCommand<CatalogFeedListItem> CheckFeedHealthCommand { get; }
@@ -552,7 +553,16 @@ public sealed class CatalogManagementViewModel : ObservableObject
         {
             var result = await _catalogService.ImportFeedsAsync(_actor, feeds, cancellationToken);
             await RefreshAsync(cancellationToken);
-            ImportMessage = $"Added {result.AddedCount} feed(s); skipped {result.SkippedCount + parserSkippedCount}.";
+            var summary = $"Added {result.AddedCount} feed(s); skipped {result.SkippedCount + parserSkippedCount}.";
+            var duplicateReport = result.DuplicateCandidates.Select(candidate => candidate.Kind switch
+            {
+                FeedDuplicateKind.ExactUrl =>
+                    $"Exact URL duplicate (skipped): {candidate.ImportedName} matches {candidate.ExistingName} ({candidate.ImportedUrl}).",
+                FeedDuplicateKind.SameNameDifferentUrl =>
+                    $"Same name, different URL (kept separately): {candidate.ImportedName} ({candidate.ImportedUrl}) and {candidate.ExistingName} ({candidate.ExistingUrl}).",
+                _ => throw new ArgumentOutOfRangeException(nameof(candidate.Kind))
+            });
+            ImportMessage = string.Join(Environment.NewLine, new[] { summary }.Concat(duplicateReport));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -562,6 +572,13 @@ public sealed class CatalogManagementViewModel : ObservableObject
 
     private async Task DeleteFeedAsync(CatalogFeedListItem feed)
     {
+        var confirmation = ConfirmDeleteRequested;
+        if (confirmation is null || !await confirmation(
+            $"Remove '{feed.Name}' from the shared catalog? This removes its subscriptions and cached articles, including read/saved state, from every profile and removes its collection memberships. This cannot be undone."))
+        {
+            return;
+        }
+
         await _catalogService.DeleteFeedAsync(_actor, feed.Id);
         await RefreshAsync();
     }
@@ -647,6 +664,13 @@ public sealed class CatalogManagementViewModel : ObservableObject
 
     private async Task DeleteCategoryAsync(CatalogCategory category)
     {
+        var confirmation = ConfirmDeleteRequested;
+        if (confirmation is null || !await confirmation(
+            $"Delete category '{category.Name}'? Its feeds remain in the catalog and become uncategorized."))
+        {
+            return;
+        }
+
         await _catalogService.DeleteCategoryAsync(_actor, category.Id);
         await RefreshAsync();
     }
@@ -672,6 +696,13 @@ public sealed class CatalogManagementViewModel : ObservableObject
 
     private async Task DeleteCollectionAsync(CatalogCollection collection)
     {
+        var confirmation = ConfirmDeleteRequested;
+        if (confirmation is null || !await confirmation(
+            $"Delete collection '{collection.Name}'? Its feed memberships are removed, but the feeds remain in the catalog and in profiles."))
+        {
+            return;
+        }
+
         await _catalogService.DeleteCollectionAsync(_actor, collection.Id);
         await RefreshAsync();
     }

@@ -205,6 +205,12 @@
                                    Margin="0,4,0,10" />
                         <RadioButton x:Name="SortFolderOption" Content="By folder" GroupName="ArticleSort" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="SortNewestOption" Content="Newest first" GroupName="ArticleSort" Style="{StaticResource PreferenceOptionStyle}" />
+                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <CheckBox x:Name="LimitArticleWidthCheckBox"
+                                  Content="Limit article width to 900 px"
+                                  AutomationProperties.Name="Limit article width to 900 pixels"
+                                  FontSize="13"
+                                  Padding="2" />
                     </StackPanel>
 
                     <StackPanel x:Name="ReadingPanel" Visibility="Collapsed">
@@ -214,6 +220,7 @@
                                    Margin="0,4,0,12" />
                         <CheckBox x:Name="HideReadArticlesCheckBox"
                                   Content="Hide read articles"
+                                  AutomationProperties.Name="Hide read articles"
                                   FontSize="13"
                                   Padding="2" />
                         <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
@@ -223,6 +230,7 @@
                                    Margin="0,4,0,10"
                                    TextWrapping="Wrap" />
                         <TextBox x:Name="FolderArticleLimitBox"
+                                 AutomationProperties.Name="Folder article limit"
                                  Width="110"
                                  HorizontalAlignment="Left"
                                  Padding="8,6"
@@ -236,6 +244,7 @@
                         <TextBlock Text="Feed updates" FontSize="13" FontWeight="SemiBold" />
                         <CheckBox x:Name="RefreshFeedsWhenOpenedCheckBox"
                                   Content="Refresh feeds when opening a feed or folder"
+                                  AutomationProperties.Name="Refresh feeds when opening a feed or folder"
                                   FontSize="13"
                                   Margin="0,10,0,0"
                                   Padding="2" />
@@ -249,6 +258,7 @@
                                    Margin="0,4,0,8"
                                    TextWrapping="Wrap" />
                         <ComboBox x:Name="AutoRefreshIntervalComboBox"
+                                  AutomationProperties.Name="Refresh interval"
                                   Width="190"
                                   HorizontalAlignment="Left"
                                   Padding="7">
@@ -268,6 +278,7 @@
                                    TextWrapping="Wrap" />
                         <CheckBox x:Name="ShowRawFeedButtonCheckBox"
                                   Content="Show XML in the article viewer"
+                                  AutomationProperties.Name="Show XML in the article viewer"
                                   FontSize="13"
                                   Padding="2" />
                     </StackPanel>

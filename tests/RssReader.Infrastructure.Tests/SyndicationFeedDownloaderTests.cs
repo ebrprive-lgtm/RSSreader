@@ -222,6 +222,40 @@ public sealed class SyndicationFeedDownloaderTests
     }
 
         [TestMethod]
+        public async Task Download_AtomPreservesHtmlAndXhtmlContentMarkup()
+        {
+                const string xml = """
+                        <feed xmlns="http://www.w3.org/2005/Atom">
+                            <title>Sample Atom</title>
+                            <entry>
+                                <id>atom-html-1</id>
+                                <title>HTML content</title>
+                                <link href="https://example.test/html" />
+                                <content type="html">&lt;p&gt;HTML body with &lt;strong&gt;emphasis&lt;/strong&gt;.&lt;/p&gt;</content>
+                            </entry>
+                            <entry>
+                                <id>atom-xhtml-1</id>
+                                <title>XHTML content</title>
+                                <link href="https://example.test/xhtml" />
+                                <content type="xhtml">
+                                    <div xmlns="http://www.w3.org/1999/xhtml">
+                                        <p>XHTML body with <strong>emphasis</strong>.</p>
+                                    </div>
+                                </content>
+                            </entry>
+                        </feed>
+                        """;
+                using var client = CreateClient(xml);
+                var downloader = new SyndicationFeedDownloader(client);
+
+                var items = await downloader.DownloadAsync(CreateFeed());
+
+                Assert.AreEqual(2, items.Count);
+                StringAssert.Contains(items[0].Content, "<p>HTML body with <strong>emphasis</strong>.</p>");
+                StringAssert.Contains(items[1].Content, "<p>XHTML body with <strong>emphasis</strong>.</p>");
+        }
+
+        [TestMethod]
         public async Task Download_ConvertsHtmlSummaryToReadableText()
         {
                 const string xml = """
@@ -317,6 +351,16 @@ public sealed class SyndicationFeedDownloaderTests
     }
 
     [TestMethod]
+    public async Task Download_RejectsMalformedXml()
+    {
+        const string xml = "<rss version=\"2.0\"><channel><item></channel></rss>";
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        await Assert.ThrowsExceptionAsync<XmlException>(() => downloader.DownloadAsync(CreateFeed()));
+    }
+
+    [TestMethod]
     public async Task DownloadRejectsNonHttpFeedUrls()
     {
         using var client = CreateClient("<rss version=\"2.0\" />");
@@ -324,6 +368,103 @@ public sealed class SyndicationFeedDownloaderTests
         var invalidFeed = CreateFeed() with { FeedUrl = "file:///feed.xml" };
 
         await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => downloader.DownloadAsync(invalidFeed));
+    }
+
+    [TestMethod]
+    public async Task DownloadPropagatesOfflineRequestFailure()
+    {
+        using var client = new HttpClient(new DelegateResponseHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException("The feed is offline."))));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var failure = await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            () => downloader.DownloadAsync(CreateFeed()));
+
+        StringAssert.Contains(failure.Message, "offline");
+    }
+
+    [TestMethod]
+    public async Task DownloadHonorsHttpClientTimeout()
+    {
+        using var client = new HttpClient(new DelegateResponseHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new InvalidOperationException("The request should have timed out.");
+        }))
+        {
+            Timeout = TimeSpan.FromMilliseconds(100)
+        };
+        var downloader = new SyndicationFeedDownloader(client);
+
+        await Assert.ThrowsExceptionAsync<TaskCanceledException>(() => downloader.DownloadAsync(CreateFeed()));
+    }
+
+    [TestMethod]
+    public async Task DownloadHonorsCallerCancellation()
+    {
+        using var client = new HttpClient(new DelegateResponseHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new InvalidOperationException("The request should have been cancelled.");
+        }));
+        var downloader = new SyndicationFeedDownloader(client);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsExceptionAsync<TaskCanceledException>(
+            () => downloader.DownloadAsync(CreateFeed(), cancellation.Token));
+    }
+
+    [TestMethod]
+    public async Task DownloadPropagatesInterruptedResponseStream()
+    {
+        const string xml = "<rss version=\"2.0\"><channel><title>Interrupted response</title></channel></rss>";
+        var content = new StreamContent(new InterruptedReadStream(System.Text.Encoding.UTF8.GetBytes(xml)));
+        using var client = new HttpClient(new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = content
+        }));
+        var downloader = new SyndicationFeedDownloader(client);
+        Exception? failure = null;
+
+        try
+        {
+            await downloader.DownloadAsync(CreateFeed());
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+        }
+
+        Assert.IsTrue(failure is IOException or XmlException, $"Unexpected failure: {failure?.GetType().FullName ?? "none"}.");
+    }
+
+    [TestMethod]
+    public async Task DownloadRejectsDeclaredOversizedResponse()
+    {
+        var content = new StringContent("<rss version=\"2.0\" />");
+        content.Headers.ContentLength = 5_000_001;
+        using var client = new HttpClient(new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = content
+        }));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        await Assert.ThrowsExceptionAsync<InvalidDataException>(() => downloader.DownloadAsync(CreateFeed()));
+    }
+
+    [TestMethod]
+    public async Task DownloadRawContentRejectsOversizedStreamWithoutContentLength()
+    {
+        var content = new StringContent(new string('x', 5_000_001));
+        content.Headers.ContentLength = null;
+        using var client = new HttpClient(new StaticResponseHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = content
+        }));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        await Assert.ThrowsExceptionAsync<InvalidDataException>(() => downloader.DownloadRawContentAsync(CreateFeed()));
     }
 
     private static CatalogFeed CreateFeed() =>
@@ -340,5 +481,27 @@ public sealed class SyndicationFeedDownloaderTests
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) => Task.FromResult(response);
+    }
+
+    private sealed class DelegateResponseHandler(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsync) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) => sendAsync(request, cancellationToken);
+    }
+
+    private sealed class InterruptedReadStream(byte[] content) : MemoryStream(content)
+    {
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var bytesRead = base.Read(buffer, offset, Math.Min(count, 32));
+            if (bytesRead == 0)
+            {
+                throw new IOException("The response stream ended unexpectedly.");
+            }
+
+            return bytesRead;
+        }
     }
 }

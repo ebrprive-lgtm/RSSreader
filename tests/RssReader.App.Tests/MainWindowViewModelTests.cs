@@ -293,7 +293,8 @@ public sealed class MainWindowViewModelTests
         var articleTopicFilter = (ComboBox)mainWindow.FindName("ArticleTopicFilterComboBox")!;
         Assert.AreEqual("Filter articles by topic", AutomationProperties.GetName(articleTopicFilter));
         Assert.AreEqual(nameof(ArticleTopicOption.DisplayName), articleTopicFilter.DisplayMemberPath);
-        if (!FindVisualChildren<TextBlock>(articleTopicFilter).Any(textBlock => textBlock.Text == "All topics (5)"))
+        if (!FindVisualChildren<TextBlock>(articleTopicFilter)
+            .Any(textBlock => textBlock.Text == mainViewModel.ArticleTopicOptions[0].DisplayName))
         {
             styleFailures.Add("The article topic ComboBox does not display its explicit option label.");
         }
@@ -447,39 +448,114 @@ public sealed class MainWindowViewModelTests
                 var intervalComboBox = (ComboBox)window.FindName("AutoRefreshIntervalComboBox")!;
                 intervalComboBox.ApplyTemplate();
                 Assert.IsNotNull(intervalComboBox.Template.FindName("FocusRing", intervalComboBox));
+                Assert.AreEqual("Refresh interval", AutomationProperties.GetName(intervalComboBox));
+                Assert.AreEqual(
+                    "Folder article limit",
+                    AutomationProperties.GetName((TextBox)window.FindName("FolderArticleLimitBox")!));
+                var folderArticleLimitBox = (TextBox)window.FindName("FolderArticleLimitBox")!;
+                var refreshWhenOpenedCheckBox = (CheckBox)window.FindName("RefreshFeedsWhenOpenedCheckBox")!;
                 var hideReadCheckBox = (CheckBox)window.FindName("HideReadArticlesCheckBox")!;
                 hideReadCheckBox.ApplyTemplate();
                 Assert.IsNotNull(hideReadCheckBox.Template.FindName("CheckBorder", hideReadCheckBox));
+                Assert.AreEqual("Hide read articles", AutomationProperties.GetName(hideReadCheckBox));
+                Assert.IsTrue(folderArticleLimitBox.Focus());
+                Assert.IsTrue(folderArticleLimitBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next)));
+                Assert.AreSame(refreshWhenOpenedCheckBox, Keyboard.FocusedElement);
+                Assert.IsTrue(refreshWhenOpenedCheckBox.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next)));
+                Assert.AreSame(intervalComboBox, Keyboard.FocusedElement);
             });
-        const string rawFeedXml = "<rss>\r\n  <channel><title>Example feed title</title></channel>\r\n</rss>";
+        const string rawFeedXml = "<rss xmlns:content=\"http://purl.org/rss/1.0/modules/content/\"><channel><title>Example feed title</title><item><content:encoded><![CDATA[<p>Encoded <strong>bold</strong><br/>after</p>]]></content:encoded><content>&lt;p&gt;heading&lt;/p&gt;&lt;br/&gt;after</content><details><summary>Nested label</summary></details></item></channel></rss>";
         ShowAndCloseModal(
             new RawFeedWindow("Example feed", rawFeedXml),
             "Close dialog",
             inspect: window =>
             {
+                Assert.IsTrue(window.Topmost);
                 var xmlTree = (TreeView)window.FindName("RawContentTreeView")!;
                 Assert.AreEqual(1, xmlTree.Items.Count);
                 var root = (RawXmlTreeNode)xmlTree.Items[0];
-                Assert.AreEqual("<rss>", root.DisplayText);
+                Assert.AreEqual(
+                    "<rss xmlns:content=\"http://purl.org/rss/1.0/modules/content/\">",
+                    root.DisplayText);
                 Assert.IsTrue(root.IsExpanded);
                 Assert.AreEqual("<title>Example feed title</title>", root.Children[0].Children[0].DisplayText);
+                Assert.AreEqual("</rss>", root.Children[^1].DisplayText);
                 var rootText = FindVisualChildren<TextBlock>(window).Single(textBlock => textBlock.Text == root.DisplayText);
                 Assert.AreEqual(TextWrapping.Wrap, rootText.TextWrapping);
                 xmlTree.UpdateLayout();
                 var rootItem = (TreeViewItem?)xmlTree.ItemContainerGenerator.ContainerFromItem(root);
                 Assert.IsNotNull(rootItem);
                 Assert.IsTrue(rootItem.IsExpanded);
-                Assert.AreEqual(1, rootItem.Items.Count);
+                Assert.AreEqual(2, rootItem.Items.Count);
                 var channel = (RawXmlTreeNode)rootItem.Items[0];
                 Assert.AreEqual("<channel>", channel.DisplayText);
                 var channelItem = (TreeViewItem?)rootItem.ItemContainerGenerator.ContainerFromItem(channel);
                 Assert.IsNotNull(channelItem);
                 Assert.IsTrue(channelItem.IsExpanded);
                 channelItem.UpdateLayout();
-                Assert.AreEqual(1, channelItem.Items.Count);
+                Assert.AreEqual(3, channelItem.Items.Count);
                 var title = (RawXmlTreeNode)channelItem.Items[0];
                 Assert.AreEqual("<title>Example feed title</title>", title.DisplayText);
                 Assert.IsNotNull(channelItem.ItemContainerGenerator.ContainerFromItem(title));
+                Assert.AreEqual("</channel>", ((RawXmlTreeNode)channelItem.Items[^1]).DisplayText);
+                var item = (RawXmlTreeNode)channelItem.Items[1];
+                Assert.AreEqual("<item>", item.DisplayText);
+                Assert.AreEqual("</item>", item.Children[^1].DisplayText);
+                var encodedContent = item.Children[0];
+                Assert.AreEqual("<content:encoded>", encodedContent.DisplayText);
+                Assert.IsTrue(encodedContent.IsEncoded);
+                Assert.AreEqual("</content:encoded>", encodedContent.Children[^1].DisplayText);
+                Assert.AreEqual("<p>", encodedContent.Children[0].DisplayText);
+                CollectionAssert.AreEqual(
+                    new[] { "Encoded", "<strong>bold</strong>", "<br />", "after", "</p>" },
+                    encodedContent.Children[0].Children.Select(node => node.DisplayText).ToArray());
+                var content = item.Children[1];
+                Assert.AreEqual("<content>", content.DisplayText);
+                CollectionAssert.AreEqual(
+                    new[] { "<p>heading</p>", "<br/>", "after", "</content>" },
+                    content.Children.Select(node => node.DisplayText).ToArray());
+                var details = item.Children[2];
+                Assert.AreEqual("<details>", details.DisplayText);
+                Assert.AreEqual("<summary>Nested label</summary>", details.Children[0].DisplayText);
+                Assert.AreEqual("</details>", details.Children[^1].DisplayText);
+
+                var itemContainer = (TreeViewItem?)channelItem.ItemContainerGenerator.ContainerFromItem(item);
+                Assert.IsNotNull(itemContainer);
+                itemContainer.UpdateLayout();
+                var encodedContentContainer = (TreeViewItem?)itemContainer.ItemContainerGenerator.ContainerFromItem(encodedContent);
+                Assert.IsNotNull(encodedContentContainer);
+                encodedContentContainer.UpdateLayout();
+                var encodedContentText = FindVisualChildren<TextBlock>(window)
+                    .Single(textBlock => textBlock.Text == encodedContent.DisplayText);
+                var successBrush = (SolidColorBrush)System.Windows.Application.Current.Resources["SuccessBrush"];
+                var encodedContentBrush = (SolidColorBrush)encodedContentText.Foreground;
+                Assert.AreEqual(successBrush.Color, encodedContentBrush.Color);
+                var contextMenu = encodedContentText.ContextMenu!;
+                Assert.AreEqual(1, contextMenu.Items.Count);
+                Assert.AreEqual("Copy", ((MenuItem)contextMenu.Items[0]).Header);
+                contextMenu.PlacementTarget = encodedContentText;
+                contextMenu.ApplyTemplate();
+                var copyNodeMenuItem = (MenuItem)contextMenu.Items[0];
+                Assert.IsInstanceOfType(copyNodeMenuItem.DataContext, typeof(RawXmlTreeNode));
+                copyNodeMenuItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, copyNodeMenuItem));
+                var copiedEncodedContent = Clipboard.GetText();
+                var copiedXmlDocument = new System.Xml.XmlDocument();
+                copiedXmlDocument.LoadXml(copiedEncodedContent);
+                Assert.AreEqual("encoded", copiedXmlDocument.DocumentElement?.LocalName);
+                Assert.AreEqual(
+                    "http://purl.org/rss/1.0/modules/content/",
+                    copiedXmlDocument.DocumentElement?.NamespaceURI);
+                StringAssert.Contains(copiedEncodedContent, "<![CDATA[<p>Encoded");
+                var encodedParagraphContainer = (TreeViewItem?)encodedContentContainer.ItemContainerGenerator
+                    .ContainerFromItem(encodedContent.Children[0]);
+                Assert.IsNotNull(encodedParagraphContainer);
+                encodedParagraphContainer.UpdateLayout();
+                Assert.IsNotNull(encodedParagraphContainer.ItemContainerGenerator
+                    .ContainerFromItem(encodedContent.Children[0].Children[1]));
+                var detailsContainer = (TreeViewItem?)itemContainer.ItemContainerGenerator.ContainerFromItem(details);
+                Assert.IsNotNull(detailsContainer);
+                detailsContainer.UpdateLayout();
+                Assert.IsNotNull(detailsContainer.ItemContainerGenerator.ContainerFromItem(details.Children[0]));
                 var copyXmlButton = (Button)window.FindName("CopyXmlButton")!;
                 copyXmlButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, copyXmlButton));
                 Assert.AreEqual(rawFeedXml, Clipboard.GetText());
@@ -488,18 +564,30 @@ public sealed class MainWindowViewModelTests
         ShowAndCloseModal(
             new CreateFolderWindow(Array.Empty<string>(), Array.Empty<string>()),
             "Close dialog",
-            verifyCompactFrame: true);
+            verifyCompactFrame: true,
+            inspect: window => Assert.AreEqual(
+                "Folder name",
+                AutomationProperties.GetName((TextBox)window.FindName("FolderNameBox")!)));
         ShowAndCloseModal(
             new FolderSelectionWindow(Array.Empty<string>(), Array.Empty<string>(), _ => Task.CompletedTask),
             "Close dialog",
-            verifyCompactFrame: true);
+            verifyCompactFrame: true,
+            inspect: window => Assert.AreEqual(
+                "Search folders",
+                AutomationProperties.GetName((TextBox)window.FindName("FolderSearchBox")!)));
 
         var catalogManagement = new CatalogManagementViewModel(
             Profile.CreateCatalogMaster(),
             new CatalogService(new SqliteCatalogStore(":memory:")));
         ShowAndCloseModal(
             new CatalogEntryWindow(catalogManagement, CatalogEntryKind.Feed),
-            "Close dialog");
+            "Close dialog",
+            inspect: window =>
+            {
+                Assert.AreEqual("Feed name", AutomationProperties.GetName((TextBox)window.FindName("FeedNameBox")!));
+                Assert.AreEqual("Feed URL", AutomationProperties.GetName((TextBox)window.FindName("FeedUrlBox")!));
+                Assert.AreEqual("Feed category", AutomationProperties.GetName((ComboBox)window.FindName("FeedCategoryBox")!));
+            });
 
         var standardPreview = new CatalogFeedPreviewWindow(
             new CatalogFeedListItem("feed", "Example feed", "https://example.com/feed.xml", null, "Comics"),
@@ -517,7 +605,14 @@ public sealed class MainWindowViewModelTests
             new ProfileChooserWindow(new ProfileChooserViewModel(null!)),
             "Close profile chooser",
             verifyCompactFrame: true,
-            expectedTitle: "RSS Reader");
+            expectedTitle: "RSS Reader",
+            inspect: window =>
+            {
+                Assert.AreEqual("Profile name", AutomationProperties.GetName((TextBox)window.FindName("CreateProfileNameBox")!));
+                Assert.AreEqual("Create profile password", AutomationProperties.GetName((PasswordBox)window.FindName("CreatePasswordBox")!));
+                Assert.AreEqual("Recovery email", AutomationProperties.GetName((TextBox)window.FindName("RecoveryEmailBox")!));
+                Assert.AreEqual("Profile password", AutomationProperties.GetName((PasswordBox)window.FindName("UnlockPasswordBox")!));
+            });
         ShowAndCloseModal(new SplashWindow(), "Close startup window", expectedTitle: "RSS Reader");
 
         void ScheduleMessageAction(string automationName)
@@ -809,6 +904,7 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual("25", ((TextBox)preferencesWindow.FindName("FolderArticleLimitBox")).Text);
                 Assert.IsFalse(((CheckBox)preferencesWindow.FindName("RefreshFeedsWhenOpenedCheckBox")).IsChecked);
                 Assert.AreEqual("Every hour", ((ComboBoxItem)((ComboBox)preferencesWindow.FindName("AutoRefreshIntervalComboBox")).SelectedItem).Content);
+                Assert.IsTrue(((CheckBox)preferencesWindow.FindName("LimitArticleWidthCheckBox")).IsChecked);
                 var showXmlCheckBox = (CheckBox)preferencesWindow.FindName("ShowRawFeedButtonCheckBox");
                 Assert.IsTrue(showXmlCheckBox.IsChecked);
                 Assert.AreEqual("Show XML in the article viewer", showXmlCheckBox.Content);
@@ -816,8 +912,12 @@ public sealed class MainWindowViewModelTests
                 var rawWindow = new RssReader.App.RawFeedWindow("Test feed", "<?xml version=\"1.0\"?><rss />") { Owner = window };
                 rawWindow.Show();
                 rawWindow.UpdateLayout();
-                Assert.AreEqual("<?xml version=\"1.0\"?><rss />", ((TextBox)rawWindow.FindName("RawContentTextBox")).Text);
-                rawWindow.Close();
+                var rawContentTree = (TreeView)rawWindow.FindName("RawContentTreeView");
+                Assert.AreEqual("<rss />", ((RssReader.App.RawXmlTreeNode)rawContentTree.Items[0]).DisplayText);
+                var closeRawFeedButton = FindVisualChildren<Button>(rawWindow)
+                    .Single(button => Equals(button.Content, "Close"));
+                closeRawFeedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeRawFeedButton));
+                Assert.IsFalse(rawWindow.IsVisible);
 
                 var profileButton = (Button)window.FindName("ProfileMenuButton");
                 profileButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, profileButton));
@@ -879,6 +979,9 @@ public sealed class MainWindowViewModelTests
                 var initialViewerWidth = articleViewer.ActualWidth;
                 var initialViewerHeight = articleViewer.ActualHeight;
                 StringAssert.Contains(articleViewer.CurrentDocument, "https://example.com/inline-panel.png");
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains(
+                    "https://resources.arcamax.com/newspics/396/39604/3960483.gif",
+                    StringComparison.Ordinal));
                 var browser = (Microsoft.Web.WebView2.Wpf.WebView2?)articleViewer.FindName("Browser");
                 Assert.IsNotNull(browser);
                 Assert.AreEqual(
@@ -899,6 +1002,9 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(
                     articleViewer.LastNavigationSucceeded,
                     $"Navigation to {articleViewer.LastNavigationUriScheme} failed with {articleViewer.LastNavigationErrorStatus}.");
+                var navigationCountBeforeResize = articleViewer.DocumentNavigationCount;
+                var redrawNavigationCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                articleViewer.ArticleDocumentNavigationCompleted += () => redrawNavigationCompleted.TrySetResult();
                 var articleStatusPanel = (FrameworkElement)articleViewer.FindName("StatusPanel");
                 articleViewer.HandleNavigationResult(
                     false,
@@ -916,6 +1022,8 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual(Visibility.Visible, browser.Visibility);
                 Assert.AreEqual(Visibility.Collapsed, articleStatusPanel.Visibility);
                 window.Width += 180;
+                window.UpdateLayout();
+                window.Width += 60;
                 window.Height += 120;
                 window.UpdateLayout();
                 Assert.IsTrue(articleViewer.ActualWidth > initialViewerWidth);
@@ -936,6 +1044,8 @@ public sealed class MainWindowViewModelTests
                 CollectionAssert.AreEqual(
                     new[] { "By: ", "Jayme Lozano Carver, The Texas Tribune", " (", comicArticle.PublishedDateLabel, ")" },
                     selectedArticleAuthor.Inlines.OfType<Run>().Select(run => run.Text).ToArray());
+                PumpDispatcherUntil(redrawNavigationCompleted.Task);
+                Assert.AreEqual(navigationCountBeforeResize + 1, articleViewer.DocumentNavigationCount);
                 viewModel.BackToListCommand.Execute(null);
                 window.UpdateLayout();
 
@@ -1223,11 +1333,12 @@ public sealed class MainWindowViewModelTests
             await readerStore.AddFeedTagAsync(profile.Id, feed.Id, "Reviews");
             await readerStore.SaveArticlesAsync(feed.Id,
             [
-                new FeedArticle("article-1", feed.Id, "item-1", "Handheld review", null, DateTimeOffset.UtcNow, "Portable hardware", "Full story")
+                new FeedArticle("article-1", feed.Id, "item-1", "Handheld review", null, DateTimeOffset.UtcNow, "Portable hardware & accessories", "Full story")
                 {
-                    Categories = [new ArticleCategory("Press Releases")]
+                    Categories = [new ArticleCategory("Press Releases")],
+                    Author = "Jayme Lozano Carver"
                 },
-                new FeedArticle("article-2", feed.Id, "item-2", "Console update", null, DateTimeOffset.UtcNow.AddMinutes(-10), "System changes", "Update details")
+                new FeedArticle("article-2", feed.Id, "item-2", "Console update", null, DateTimeOffset.UtcNow.AddDays(-3), "System changes", "Update details")
                 {
                     Categories = [new ArticleCategory("Announcements")]
                 }
@@ -1241,7 +1352,7 @@ public sealed class MainWindowViewModelTests
                 new ProfilePreferences(ShowRawFeedButton: true));
             await viewModel.InitializeAsync();
 
-            Assert.AreEqual(2, viewModel.VisibleArticles.Count);
+            Assert.AreEqual(1, viewModel.VisibleArticles.Count);
             var loadedArticle = viewModel.VisibleArticles.Single(article => article.ArticleId == "article-1");
             Assert.AreEqual("https://example.com", loadedArticle.WebsiteUrl);
             Assert.IsTrue(loadedArticle.IsWebsiteLinkVisible);
@@ -1252,13 +1363,43 @@ public sealed class MainWindowViewModelTests
             Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
             Assert.AreEqual("Press Releases", viewModel.VisibleArticles.Single().TopicSummary);
             viewModel.ClearArticleTopicCommand.Execute(null);
-            Assert.AreEqual(2, viewModel.VisibleArticles.Count);
+            Assert.AreEqual(1, viewModel.VisibleArticles.Count);
 
             viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Search"));
             viewModel.SearchQuery = "Press Releases";
             Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "release";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "Jayme Lozano Carver";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "LOZANO";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "gaming news";
+            Assert.AreEqual(2, viewModel.VisibleArticles.Count);
+            viewModel.SearchQuery = "gaming";
+            Assert.AreEqual(2, viewModel.VisibleArticles.Count);
+            viewModel.SearchQuery = "PORTABLE";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "Portable hardware & accessories";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "hardware &";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "full story";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "full";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = string.Empty;
+            Assert.AreEqual(0, viewModel.VisibleArticles.Count);
+            viewModel.NavigateCommand.Execute(viewModel.TagLinks.Single(link => link.Route == "tag:Reviews"));
+            viewModel.SearchQuery = "LOZANO";
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.SearchQuery = "release";
+            viewModel.SelectedArticleTopic = viewModel.ArticleTopicOptions.Single(option => option.Term == "Press Releases");
+            Assert.AreEqual("article-1", viewModel.VisibleArticles.Single().ArticleId);
             viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
             viewModel.SearchQuery = string.Empty;
+            viewModel.SelectedArticleTopic = viewModel.ArticleTopicOptions.Single(option => option.Term is null);
+            Assert.AreEqual(2, viewModel.VisibleArticles.Count);
             viewModel.SelectArticleCommand.Execute(viewModel.VisibleArticles.Single(article => article.ArticleId == "article-1"));
             Assert.IsTrue(viewModel.IsRawFeedButtonVisible);
             Assert.AreEqual("Handheld review", viewModel.VisibleArticles.Single(article => article.ArticleId == "article-1").Title);
@@ -2001,6 +2142,59 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public async Task StartupRefreshChecksSubscriptionsWhileKeepingTodayAsStartPage()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-startup-refresh-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+            var profile = Profile.CreateRegular("Startup Reader");
+            await profileStore.AddAsync(profile);
+            var firstFeed = new CatalogFeed("feed-first", "First", "https://example.com/first.xml", null, null);
+            var secondFeed = new CatalogFeed("feed-second", "Second", "https://example.com/second.xml", null, null);
+            await catalogStore.AddFeedAsync(firstFeed);
+            await catalogStore.AddFeedAsync(secondFeed);
+            await readerStore.AddFolderAsync(profile.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, firstFeed.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, secondFeed.Id, "News");
+
+            var downloader = new RecordingFeedDownloader();
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                new FeedRefreshService(readerStore, catalogStore, downloader),
+                new ProfilePreferences(StartPage: ProfileStartPage.Today, RefreshFeedsWhenOpened: false));
+            await viewModel.InitializeAsync();
+
+            Assert.AreEqual("Today", viewModel.ActiveRoute);
+            await viewModel.RefreshNowAsync();
+
+            CollectionAssert.AreEquivalent(
+                new[] { firstFeed.Id, secondFeed.Id },
+                downloader.RequestedFeedIds.ToArray());
+            Assert.AreEqual("Today", viewModel.ActiveRoute);
+            Assert.IsFalse(viewModel.IsRefreshing);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task FirstOpenRefreshesNewFeedAndOpenPreferenceRefreshesFolderFeeds()
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-app-{Guid.NewGuid():N}.db");
@@ -2069,7 +2263,7 @@ public sealed class MainWindowViewModelTests
             downloader.ItemsByFeed = new Dictionary<string, IReadOnlyList<DownloadedFeedItem>>
             {
                 [existingFeed.Id] =
-                [new DownloadedFeedItem($"{existingFeed.Id}-item", "Existing headline", null, null, "Summary", "Content")],
+                [new DownloadedFeedItem($"{existingFeed.Id}-item", "Existing headline", null, null, "Cached summary", "<p>Cached article body</p>")],
                 [newFeed.Id] =
                 [new DownloadedFeedItem(
                     $"{newFeed.Id}-item",
@@ -2089,7 +2283,7 @@ public sealed class MainWindowViewModelTests
             downloader.ItemsByFeed = new Dictionary<string, IReadOnlyList<DownloadedFeedItem>>
             {
                 [existingFeed.Id] =
-                [new DownloadedFeedItem($"{existingFeed.Id}-item", "Existing headline", null, null, "Summary", "Content")],
+                [new DownloadedFeedItem($"{existingFeed.Id}-item", "Existing headline", null, null, "Cached summary", "<p>Cached article body</p>")],
                 [newFeed.Id] =
                 [
                     new DownloadedFeedItem(
@@ -2117,6 +2311,77 @@ public sealed class MainWindowViewModelTests
             Assert.AreEqual(
                 "<p>Updated article body <img src=\"https://example.com/updated.jpg\" /></p>",
                 viewModel.SelectedArticle?.Content);
+            StringAssert.Contains(viewModel.SelectedArticleRefreshStatusMessage!, "Last successful refresh:");
+
+            var cachedExistingArticle = (await readerStore.GetArticlesAsync(profile.Id))
+                .Single(article => article.Article.FeedId == existingFeed.Id && article.Article.Title == "Existing headline")
+                .Article with
+                {
+                    Title = "Cached before failed refresh",
+                    Summary = "Cached summary",
+                    Content = "<p>Cached article body</p>",
+                    ImageUrl = "https://example.com/cached-image.jpg",
+                    Categories = [new ArticleCategory("Science", "https://example.com/topics")],
+                    Author = "Example Author"
+                };
+            await readerStore.SaveArticlesAsync(existingFeed.Id, [cachedExistingArticle]);
+            await readerStore.SetArticleReadAsync(profile.Id, cachedExistingArticle.Id, true);
+            await readerStore.SetArticleSavedAsync(profile.Id, cachedExistingArticle.Id, true);
+
+            downloader.FailingFeedIds.Add(existingFeed.Id);
+            await viewModel.RefreshNowAsync();
+
+            Assert.IsTrue(viewModel.HasRefreshFailure);
+            StringAssert.Contains(viewModel.RefreshFailureMessage!, "Existing: The feed is unavailable.");
+            Assert.IsFalse(viewModel.RefreshFailureMessage!.Contains("New:", StringComparison.Ordinal));
+            Assert.AreEqual("Updated headline", viewModel.SelectedArticle?.Title);
+            var persistedExistingArticle = (await readerStore.GetArticlesAsync(profile.Id))
+                .Single(article => article.Article.Id == cachedExistingArticle.Id);
+            Assert.AreEqual("Cached before failed refresh", persistedExistingArticle.Article.Title);
+            Assert.AreEqual("Cached summary", persistedExistingArticle.Article.Summary);
+            Assert.AreEqual("<p>Cached article body</p>", persistedExistingArticle.Article.Content);
+            Assert.AreEqual("https://example.com/cached-image.jpg", persistedExistingArticle.Article.ImageUrl);
+            Assert.AreEqual("Science", persistedExistingArticle.Article.Categories.Single().Term);
+            Assert.AreEqual("Example Author", persistedExistingArticle.Article.Author);
+            Assert.IsTrue(persistedExistingArticle.IsRead);
+            Assert.IsTrue(persistedExistingArticle.IsSaved);
+            Assert.IsTrue(viewModel.RetryFailedFeedsCommand.CanExecute(null));
+            var failedFeedArticle = viewModel.VisibleArticles.Single(article => article.ArticleId == cachedExistingArticle.Id);
+            viewModel.SelectArticleCommand.Execute(failedFeedArticle);
+            Assert.AreEqual("<p>Cached article body</p>", viewModel.SelectedArticle?.Content);
+            StringAssert.Contains(viewModel.SelectedArticleRefreshStatusMessage!, "Last successful refresh:");
+            StringAssert.Contains(viewModel.SelectedArticleRefreshStatusMessage!, "Existing: The feed is unavailable.");
+
+            var reopenedViewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                new FeedRefreshService(readerStore, catalogStore, downloader),
+                new ProfilePreferences(RefreshFeedsWhenOpened: false));
+            await reopenedViewModel.InitializeAsync();
+
+            Assert.IsTrue(reopenedViewModel.HasFailedRefreshFeeds);
+            Assert.IsTrue(reopenedViewModel.RetryFailedFeedsCommand.CanExecute(null));
+            StringAssert.Contains(reopenedViewModel.RefreshFailureMessage!, "Existing: The feed is unavailable.");
+            var reopenedFailedArticle = reopenedViewModel.VisibleArticles.Single(article => article.ArticleId == cachedExistingArticle.Id);
+            reopenedViewModel.SelectArticleCommand.Execute(reopenedFailedArticle);
+            Assert.AreEqual("<p>Cached article body</p>", reopenedViewModel.SelectedArticle?.Content);
+            StringAssert.Contains(reopenedViewModel.SelectedArticleRefreshStatusMessage!, "Last successful refresh:");
+            StringAssert.Contains(reopenedViewModel.SelectedArticleRefreshStatusMessage!, "Existing: The feed is unavailable.");
+
+            var requestedFeedCount = downloader.RequestedFeedIds.Count;
+            downloader.FailingFeedIds.Clear();
+            viewModel.RetryFailedFeedsCommand.Execute(null);
+            await WaitForRefreshCompletionAsync(viewModel);
+
+            CollectionAssert.AreEqual(
+                new[] { existingFeed.Id },
+                downloader.RequestedFeedIds.Skip(requestedFeedCount).ToArray());
+            Assert.IsFalse(viewModel.HasRefreshFailure);
+            Assert.IsFalse(viewModel.HasFailedRefreshFeeds);
+            Assert.IsFalse(viewModel.SelectedArticleRefreshStatusMessage!.Contains(
+                "Existing: The feed is unavailable.",
+                StringComparison.Ordinal));
         }
         finally
         {
@@ -2342,6 +2607,24 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void TodayRouteShowsOnlyArticlesFromThePrevious24Hours()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var now = DateTimeOffset.UtcNow;
+
+        Assert.AreEqual("Today", viewModel.ActiveRoute);
+        Assert.AreEqual(3, viewModel.VisibleArticles.Count);
+        Assert.IsTrue(viewModel.VisibleArticles.All(article =>
+            article.PublishedAt > now.AddHours(-24) && article.PublishedAt <= now));
+        Assert.IsFalse(viewModel.VisibleArticles.Any(article => article.Title == "The small tools making a big difference"));
+        Assert.IsFalse(viewModel.VisibleArticles.Any(article => article.Title == "Why open standards still matter"));
+
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+
+        Assert.AreEqual(5, viewModel.VisibleArticles.Count);
+    }
+
+    [TestMethod]
     public void SearchFiltersByTitleSourceAndSummary()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
@@ -2352,12 +2635,48 @@ public sealed class MainWindowViewModelTests
 
         Assert.AreEqual(1, viewModel.VisibleArticles.Count);
         StringAssert.Contains(viewModel.VisibleArticles[0].Title, "handheld");
+        viewModel.SearchQuery = "THE NEXT GENERATION OF HANDHELD GAMING IS HERE";
+        Assert.AreEqual(1, viewModel.VisibleArticles.Count);
+    }
+
+    [TestMethod]
+    public void SearchEmptyStateDistinguishesBlankQueryFromNoMatches()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Search"));
+
+        Assert.IsTrue(viewModel.IsArticleListEmpty);
+        Assert.AreEqual("Enter a search term to find articles.", viewModel.ArticleListEmptyMessage);
+
+        viewModel.SearchQuery = "no matching article";
+
+        Assert.IsTrue(viewModel.IsArticleListEmpty);
+        Assert.AreEqual("No articles match this search.", viewModel.ArticleListEmptyMessage);
+    }
+
+    [TestMethod]
+    public void SearchQueryDoesNotLeakBetweenProfileViewModels()
+    {
+        var firstProfile = new MainWindowViewModel(Profile.CreateRegular("First Reader"));
+        var secondProfile = new MainWindowViewModel(Profile.CreateRegular("Second Reader"));
+        firstProfile.NavigateCommand.Execute(firstProfile.PrimaryLinks.Single(link => link.Route == "Search"));
+        secondProfile.NavigateCommand.Execute(secondProfile.PrimaryLinks.Single(link => link.Route == "Search"));
+
+        firstProfile.SearchQuery = "handheld";
+        secondProfile.SearchQuery = "Hyrule";
+
+        Assert.AreEqual("handheld", firstProfile.SearchQuery);
+        Assert.AreEqual("Hyrule", secondProfile.SearchQuery);
+        Assert.AreEqual("The next generation of handheld gaming is here", firstProfile.VisibleArticles.Single().Title);
+        Assert.AreEqual("A new chapter for the world of Hyrule", secondProfile.VisibleArticles.Single().Title);
     }
 
     [TestMethod]
     public void SelectingArticleReplacesListAndBackReturnsToList()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Search"));
+        viewModel.SearchQuery = "handheld";
         var article = viewModel.VisibleArticles[0];
 
         viewModel.SelectArticleCommand.Execute(article);
@@ -2370,7 +2689,242 @@ public sealed class MainWindowViewModelTests
 
         Assert.IsTrue(viewModel.IsArticleListVisible);
         Assert.IsFalse(viewModel.IsReadingViewVisible);
-        Assert.AreSame(article, viewModel.VisibleArticles[0]);
+        Assert.AreEqual("handheld", viewModel.SearchQuery);
+        Assert.AreSame(article, viewModel.VisibleArticles.Single());
+    }
+
+    [TestMethod]
+    public void SelectedArticleReadAndSavedCommandsToggleState()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var article = viewModel.VisibleArticles[0];
+        viewModel.SelectArticleCommand.Execute(article);
+
+        Assert.IsTrue(article.IsRead);
+        viewModel.ToggleReadCommand.Execute(null);
+        Assert.IsFalse(article.IsRead);
+        viewModel.ToggleReadCommand.Execute(null);
+        Assert.IsTrue(article.IsRead);
+
+        viewModel.ToggleSavedCommand.Execute(null);
+        Assert.IsTrue(article.IsSaved);
+        viewModel.ToggleSavedCommand.Execute(null);
+        Assert.IsFalse(article.IsSaved);
+    }
+
+    [TestMethod]
+    public void PreviousAndNextArticleFollowVisibleSortedSequenceAndBoundaries()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+        viewModel.IsSortByDate = true;
+        var articles = viewModel.VisibleArticles.OrderByDescending(article => article.PublishedAt).ToArray();
+
+        Assert.IsFalse(viewModel.PreviousArticleCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.NextArticleCommand.CanExecute(null));
+        viewModel.SelectArticleCommand.Execute(articles[0]);
+        Assert.IsFalse(viewModel.PreviousArticleCommand.CanExecute(null));
+        Assert.IsTrue(viewModel.NextArticleCommand.CanExecute(null));
+
+        viewModel.NextArticleCommand.Execute(null);
+        Assert.AreSame(articles[1], viewModel.SelectedArticle);
+        viewModel.PreviousArticleCommand.Execute(null);
+        Assert.AreSame(articles[0], viewModel.SelectedArticle);
+
+        viewModel.SelectArticleCommand.Execute(articles[^1]);
+        Assert.IsTrue(viewModel.PreviousArticleCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.NextArticleCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public void PreviousAndNextArticleFollowFolderSortedSequence()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "folder:Gaming"));
+        viewModel.IsSortByFolder = true;
+        var folderSortedArticles = viewModel.FolderSortedArticleListView
+            .Cast<ArticleRowViewModel>()
+            .ToArray();
+
+        Assert.AreEqual(2, folderSortedArticles.Length);
+        viewModel.SelectArticleCommand.Execute(folderSortedArticles[0]);
+
+        viewModel.NextArticleCommand.Execute(null);
+
+        Assert.AreSame(folderSortedArticles[1], viewModel.SelectedArticle);
+    }
+
+    [TestMethod]
+    public void ArticleNavigationDisablesWhenSelectionLeavesFilteredResults()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+        var removedByFilter = viewModel.VisibleArticles[^1];
+        viewModel.SelectArticleCommand.Execute(removedByFilter);
+
+        viewModel.SearchQuery = "handheld";
+
+        Assert.AreEqual(1, viewModel.VisibleArticles.Count);
+        StringAssert.Contains(viewModel.VisibleArticles.Single().Title, "handheld");
+        Assert.IsFalse(viewModel.PreviousArticleCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.NextArticleCommand.CanExecute(null));
+    }
+
+    [TestMethod]
+    public void ReaderActionsHaveAccessibleNamesAndKeyboardBindings()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new RssReader.App.App();
+                app.InitializeComponent();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+                var window = new RssReader.App.MainWindow(viewModel);
+                var articleSearchBox = (TextBox)window.FindName("ArticleSearchBox");
+                var goToSearchBox = (TextBox)window.FindName("GoToSearchBox");
+                var backButton = (Button)window.FindName("BackToListButton");
+                var toggleReadButton = (Button)window.FindName("ToggleReadButton");
+                var toggleSavedButton = (Button)window.FindName("ToggleSavedButton");
+                var previousButton = (Button)window.FindName("PreviousArticleButton");
+                var nextButton = (Button)window.FindName("NextArticleButton");
+
+                Assert.AreEqual("Search articles", AutomationProperties.GetName(articleSearchBox));
+                Assert.AreEqual("Go to", AutomationProperties.GetName(goToSearchBox));
+                Assert.AreEqual("Back to list", AutomationProperties.GetName(backButton));
+                Assert.AreEqual("Toggle article read status", AutomationProperties.GetName(toggleReadButton));
+                Assert.AreEqual("Toggle article saved status", AutomationProperties.GetName(toggleSavedButton));
+                Assert.AreEqual("Previous article", AutomationProperties.GetName(previousButton));
+                Assert.AreEqual("Next article", AutomationProperties.GetName(nextButton));
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.BackToListCommand),
+                    BindingOperations.GetBinding(backButton, Button.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.ToggleReadCommand),
+                    BindingOperations.GetBinding(toggleReadButton, Button.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.ToggleSavedCommand),
+                    BindingOperations.GetBinding(toggleSavedButton, Button.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.PreviousArticleCommand),
+                    BindingOperations.GetBinding(previousButton, Button.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.NextArticleCommand),
+                    BindingOperations.GetBinding(nextButton, Button.CommandProperty)?.Path.Path);
+
+                var backBinding = window.InputBindings.OfType<KeyBinding>()
+                    .Single(binding => binding.Key == Key.Escape);
+                var toggleReadBinding = window.InputBindings.OfType<KeyBinding>()
+                    .Single(binding => binding.Key == Key.R);
+                var toggleSavedBinding = window.InputBindings.OfType<KeyBinding>()
+                    .Single(binding => binding.Key == Key.S);
+                var previousBinding = window.InputBindings.OfType<KeyBinding>()
+                    .Single(binding => binding.Key == Key.Left);
+                var nextBinding = window.InputBindings.OfType<KeyBinding>()
+                    .Single(binding => binding.Key == Key.Right);
+                Assert.AreEqual(ModifierKeys.None, backBinding.Modifiers);
+                Assert.AreEqual(ModifierKeys.Control | ModifierKeys.Shift, toggleReadBinding.Modifiers);
+                Assert.AreEqual(ModifierKeys.Control | ModifierKeys.Shift, toggleSavedBinding.Modifiers);
+                Assert.AreEqual(ModifierKeys.Alt, previousBinding.Modifiers);
+                Assert.AreEqual(ModifierKeys.Alt, nextBinding.Modifiers);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.BackToListCommand),
+                    BindingOperations.GetBinding(backBinding, InputBinding.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.ToggleReadCommand),
+                    BindingOperations.GetBinding(toggleReadBinding, InputBinding.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.ToggleSavedCommand),
+                    BindingOperations.GetBinding(toggleSavedBinding, InputBinding.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.PreviousArticleCommand),
+                    BindingOperations.GetBinding(previousBinding, InputBinding.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.NextArticleCommand),
+                    BindingOperations.GetBinding(nextBinding, InputBinding.CommandProperty)?.Path.Path);
+
+                window.Close();
+                app.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
+    public void BackToListRestoresKeyboardFocusToOpenedArticle()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new RssReader.App.App();
+                app.InitializeComponent();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"))
+                {
+                    IsListView = true
+                };
+                var article = viewModel.VisibleArticles[0];
+                var window = new RssReader.App.MainWindow(viewModel);
+                app.MainWindow = window;
+                window.Show();
+                window.Activate();
+                window.UpdateLayout();
+                var articleList = (ListBox)window.FindName("ArticleRowsList");
+                articleList.ScrollIntoView(article);
+                articleList.UpdateLayout();
+
+                viewModel.SelectArticleCommand.Execute(article);
+                window.UpdateLayout();
+                viewModel.BackToListCommand.Execute(null);
+                Dispatcher.CurrentDispatcher.Invoke(DispatcherPriority.ApplicationIdle, new Action(() => { }));
+                window.UpdateLayout();
+
+                var articleContainer = (ListBoxItem?)articleList.ItemContainerGenerator.ContainerFromItem(article);
+                Assert.IsNotNull(articleContainer);
+                var focusedAction = Keyboard.FocusedElement as Button;
+                Assert.IsNotNull(focusedAction);
+                Assert.AreEqual(article.Title, AutomationProperties.GetName(focusedAction));
+                Assert.IsTrue(
+                    articleContainer.IsKeyboardFocusWithin,
+                    $"Expected focus within the article row, but focus was {Keyboard.FocusedElement?.GetType().FullName ?? "null"}.");
+
+                var articleActionSource = PresentationSource.FromVisual(focusedAction);
+                Assert.IsNotNull(articleActionSource);
+                focusedAction.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, articleActionSource, Environment.TickCount, Key.Space)
+                {
+                    RoutedEvent = Keyboard.KeyDownEvent
+                });
+                focusedAction.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, articleActionSource, Environment.TickCount, Key.Space)
+                {
+                    RoutedEvent = Keyboard.KeyUpEvent
+                });
+                Assert.AreSame(article, viewModel.SelectedArticle);
+
+                window.Close();
+                app.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.IsNull(failure, failure?.ToString());
     }
 
     [TestMethod]
@@ -2408,6 +2962,7 @@ public sealed class MainWindowViewModelTests
     public void DateSortShowsAFlatNewestFirstListWithFolderData()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
 
         viewModel.IsSortByDate = true;
 
@@ -2578,7 +3133,9 @@ public sealed class MainWindowViewModelTests
     {
         var sanitized = RssReader.App.ArticleHtmlSanitizer.SanitizeFragment(
             "<p>Read <strong>this</strong><img src='/images/panel.jpg' onerror='alert(1)' /></p>" +
-            "<script>alert(2)</script><a href='javascript:alert(3)'>unsafe link</a>",
+            "<img src='file:///private/image.jpg'><img src='data:image/png;base64,AAAA'>" +
+            "<script>alert(2)</script><a href='javascript:alert(3)'>unsafe link</a>" +
+            "<a href='file:///private/page.html'>local link</a>",
             "https://example.test/story");
 
         StringAssert.Contains(sanitized, "<p>");
@@ -2588,6 +3145,26 @@ public sealed class MainWindowViewModelTests
         Assert.IsFalse(sanitized.Contains("script", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(sanitized.Contains("onerror", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(sanitized.Contains("javascript:", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(sanitized.Contains("file:", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(sanitized.Contains("data:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderLimitsArticleWidthByDefaultAndCanUseAvailableWidth()
+    {
+        var limitedDocument = ArticleHtmlDocumentBuilder.Build("<p>Article content.</p>", null, null, null);
+        StringAssert.Contains(
+            limitedDocument,
+            "main { box-sizing: border-box; width: 100%; max-width: 900px; margin: 0 auto; }");
+
+        var fullWidthDocument = ArticleHtmlDocumentBuilder.Build(
+            "<p>Wide article content.</p>",
+            null,
+            null,
+            null,
+            limitArticleWidth: false);
+        StringAssert.Contains(fullWidthDocument, "main { padding: 12px 12px 24px; }");
+        Assert.IsFalse(fullWidthDocument.Contains("max-width: 900px", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -2675,6 +3252,51 @@ public sealed class MainWindowViewModelTests
         StringAssert.Contains(document, "https://example.test/images/panel.jpg");
     }
 
+    [TestMethod]
+    public void MainWindowSelectionPassesBodyHtmlWithoutFeedImageToArticleViewer()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new RssReader.App.App();
+                app.InitializeComponent();
+                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+                var window = new RssReader.App.MainWindow(viewModel);
+                var article = new ArticleRowViewModel(
+                    "Article",
+                    "Example feed",
+                    DateTimeOffset.UtcNow,
+                    "Comics",
+                    [],
+                    "Summary",
+                    feedId: "comic-feed",
+                    link: "https://example.test/story",
+                    content: "<p>Body <img src=\"https://example.test/inline.png\" /></p>",
+                    imageUrl: "https://example.test/feed-image.png");
+
+                viewModel.SelectArticleCommand.Execute(article);
+
+                var articleViewer = (RssReader.App.ArticleHtmlViewer)window.FindName("SelectedArticleHtmlViewer");
+                StringAssert.Contains(articleViewer.CurrentDocument, "https://example.test/inline.png");
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains("https://example.test/feed-image.png", StringComparison.Ordinal));
+                window.Close();
+                app.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
     private static async Task WaitForRefreshCompletionAsync(MainWindowViewModel viewModel)
     {
         var timeout = DateTimeOffset.UtcNow.AddSeconds(5);
@@ -2712,6 +3334,8 @@ public sealed class MainWindowViewModelTests
     {
         public System.Collections.Concurrent.ConcurrentQueue<string> RequestedFeedIds { get; } = new();
 
+        public HashSet<string> FailingFeedIds { get; } = [];
+
         public IReadOnlyList<DownloadedFeedItem>? ItemsToReturn { get; set; }
 
         public IReadOnlyDictionary<string, IReadOnlyList<DownloadedFeedItem>>? ItemsByFeed { get; set; }
@@ -2723,6 +3347,11 @@ public sealed class MainWindowViewModelTests
             CancellationToken cancellationToken = default)
         {
             RequestedFeedIds.Enqueue(feed.Id);
+            if (FailingFeedIds.Contains(feed.Id))
+            {
+                throw new InvalidOperationException("The feed is unavailable.");
+            }
+
             if (DownloadHandler is not null)
             {
                 return await DownloadHandler(cancellationToken);

@@ -40,7 +40,53 @@ public sealed class CatalogServiceTests
         await service.AddFeedToCollectionAsync(catalogMaster, collection.Id, feed.Id);
 
         Assert.AreEqual(1, (await service.GetFeedsAsync()).Count);
+        Assert.AreEqual(category.Id, feed.CategoryId);
         Assert.AreEqual(feed.Id, (await service.GetCollectionFeedIdsAsync(collection.Id)).Single());
+    }
+
+    [TestMethod]
+    public async Task FeedUrlsNormalizeForDuplicateDetectionButSameNameFeedsAreAllowed()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        var actor = Profile.CreateCatalogMaster();
+        const string feedName = "Same publisher";
+
+        var original = await service.AddFeedAsync(
+            actor,
+            feedName,
+            "https://EXAMPLE.com:443/feed.xml",
+            null,
+            null);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => service.AddFeedAsync(
+            actor,
+            "Renamed duplicate",
+            "https://example.com/feed.xml",
+            null,
+            null));
+
+        var distinctFeed = await service.AddFeedAsync(
+            actor,
+            feedName,
+            "https://different.example/feed.xml",
+            null,
+            null);
+
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => service.UpdateFeedAsync(
+            actor,
+            distinctFeed.Id,
+            distinctFeed.Name,
+            "https://EXAMPLE.com:443/feed.xml",
+            distinctFeed.Description,
+            distinctFeed.CategoryId));
+
+        var feeds = await service.GetFeedsAsync();
+        Assert.AreEqual(2, feeds.Count);
+        Assert.AreEqual(original.Id, feeds[0].Id);
+        Assert.AreEqual(distinctFeed.Id, feeds[1].Id);
+        Assert.AreEqual(feedName, feeds[0].Name);
+        Assert.AreEqual(feedName, feeds[1].Name);
     }
 
     [TestMethod]
@@ -174,15 +220,22 @@ public sealed class CatalogServiceTests
         [
             new OpmlFeed("The Verge", "https://example.com/feed.xml", null, "technology", "https://www.theverge.com"),
             new OpmlFeed("Duplicate", "https://EXAMPLE.com/feed.xml", null, "Technology"),
+            new OpmlFeed("the verge", "https://different.example/feed.xml", null, "Technology"),
             new OpmlFeed("Invalid URL", "file:///feed.xml", null, null),
             new OpmlFeed(" ", "https://example.com/unnamed.xml", null, null)
         ]);
 
-        Assert.AreEqual(1, result.AddedCount);
+        Assert.AreEqual(2, result.AddedCount);
         Assert.AreEqual(3, result.SkippedCount);
-        var importedFeed = (await service.GetFeedsAsync()).Single();
+        Assert.AreEqual(2, result.DuplicateCandidates.Count);
+        Assert.IsTrue(result.DuplicateCandidates.Any(candidate =>
+            candidate.Kind == FeedDuplicateKind.ExactUrl && candidate.ImportedName == "Duplicate"));
+        Assert.IsTrue(result.DuplicateCandidates.Any(candidate =>
+            candidate.Kind == FeedDuplicateKind.SameNameDifferentUrl && candidate.ImportedName == "the verge"));
+        var importedFeed = (await service.GetFeedsAsync()).Single(feed => feed.FeedUrl == "https://example.com/feed.xml");
         Assert.AreEqual(category.Id, importedFeed.CategoryId);
         Assert.AreEqual("https://www.theverge.com/", importedFeed.WebsiteUrl);
+        Assert.AreEqual(2, (await service.GetFeedsAsync()).Count);
         Assert.AreEqual(1, (await service.GetCategoriesAsync()).Count);
     }
 

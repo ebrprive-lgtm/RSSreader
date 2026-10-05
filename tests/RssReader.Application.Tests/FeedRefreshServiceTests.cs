@@ -12,10 +12,14 @@ public sealed class FeedRefreshServiceTests
     {
         var firstFeed = new CatalogFeed("feed-1", "Working feed", "https://example.com/working.xml", null, null);
         var secondFeed = new CatalogFeed("feed-2", "Broken feed", "https://example.com/broken.xml", null, null);
+        var timeoutFeed = new CatalogFeed("feed-3", "Slow feed", "https://example.com/slow.xml", null, null);
+        var invalidXmlFeed = new CatalogFeed("feed-4", "Invalid XML feed", "https://example.com/invalid.xml", null, null);
         var readerStore = new ReaderStoreStub(
         [
             new ProfileSubscription("profile-1", firstFeed.Id, firstFeed.Name, firstFeed.FeedUrl, "Unfiled"),
-            new ProfileSubscription("profile-1", secondFeed.Id, secondFeed.Name, secondFeed.FeedUrl, "Unfiled")
+            new ProfileSubscription("profile-1", secondFeed.Id, secondFeed.Name, secondFeed.FeedUrl, "Unfiled"),
+            new ProfileSubscription("profile-1", timeoutFeed.Id, timeoutFeed.Name, timeoutFeed.FeedUrl, "Unfiled"),
+            new ProfileSubscription("profile-1", invalidXmlFeed.Id, invalidXmlFeed.Name, invalidXmlFeed.FeedUrl, "Unfiled")
         ]);
         var downloader = new FeedDownloaderStub(new Dictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>>
         {
@@ -31,24 +35,63 @@ public sealed class FeedRefreshServiceTests
                     Categories: [new ArticleCategory("Press Releases")],
                     Author: "Example Author")
             ],
-            [secondFeed.Id] = () => throw new HttpRequestException("Feed unavailable")
+            [secondFeed.Id] = () => throw new HttpRequestException("Feed unavailable"),
+            [timeoutFeed.Id] = () => throw new TimeoutException("Feed timed out"),
+            [invalidXmlFeed.Id] = () => throw new System.Xml.XmlException("Invalid feed XML")
         });
-        var service = new FeedRefreshService(readerStore, new CatalogStoreStub([firstFeed, secondFeed]), downloader);
+        var service = new FeedRefreshService(
+            readerStore,
+            new CatalogStoreStub([firstFeed, secondFeed, timeoutFeed, invalidXmlFeed]),
+            downloader);
 
         var firstRefresh = await service.RefreshProfileAsync("profile-1");
         var secondRefresh = await service.RefreshProfileAsync("profile-1");
 
-        Assert.AreEqual(2, firstRefresh.FeedsChecked);
+        Assert.AreEqual(4, firstRefresh.FeedsChecked);
         Assert.AreEqual(1, firstRefresh.ArticlesFetched);
         Assert.AreEqual(1, firstRefresh.ArticlesAdded);
-        Assert.AreEqual(1, firstRefresh.Failures.Count);
-        StringAssert.Contains(firstRefresh.Failures.Single(), "Broken feed");
+        Assert.AreEqual(3, firstRefresh.Failures.Count);
+        StringAssert.Contains(string.Join(" ", firstRefresh.Failures), "Broken feed");
+        StringAssert.Contains(string.Join(" ", firstRefresh.Failures), "Slow feed: Feed timed out");
+        StringAssert.Contains(string.Join(" ", firstRefresh.Failures), "Invalid XML feed: Invalid feed XML");
+        CollectionAssert.AreEquivalent(
+            new[] { secondFeed.Id, timeoutFeed.Id, invalidXmlFeed.Id },
+            firstRefresh.FailedFeedIds.ToArray());
         Assert.AreEqual(2, readerStore.SavedArticles.Count);
         Assert.AreEqual(0, secondRefresh.ArticlesAdded);
         Assert.AreEqual(1, readerStore.SavedArticles.Select(item => item.Article.Id).Distinct().Count());
         Assert.IsTrue(readerStore.SavedArticles.All(item => item.FeedId == "feed-1" && item.Article.FeedId == "feed-1"));
         Assert.AreEqual("Press Releases", readerStore.SavedArticles.First().Article.Categories.Single().Term);
         Assert.AreEqual("Example Author", readerStore.SavedArticles.First().Article.Author);
+        var refreshStates = readerStore.RefreshStates.ToDictionary(state => state.FeedId, StringComparer.Ordinal);
+        Assert.IsNotNull(refreshStates[firstFeed.Id].LastSuccessfulAt);
+        Assert.IsNull(refreshStates[firstFeed.Id].LastFailure);
+        Assert.IsNull(refreshStates[secondFeed.Id].LastSuccessfulAt);
+        StringAssert.Contains(refreshStates[secondFeed.Id].LastFailure!, "Feed unavailable");
+        StringAssert.Contains(refreshStates[timeoutFeed.Id].LastFailure!, "Feed timed out");
+        StringAssert.Contains(refreshStates[invalidXmlFeed.Id].LastFailure!, "Invalid feed XML");
+    }
+
+    [TestMethod]
+    public async Task RefreshProfilePropagatesCancellation()
+    {
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        var readerStore = new ReaderStoreStub(
+        [new ProfileSubscription("profile-1", feed.Id, feed.Name, feed.FeedUrl, "Unfiled")]);
+        var service = new FeedRefreshService(
+            readerStore,
+            new CatalogStoreStub([feed]),
+            new FeedDownloaderStub(new Dictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>>
+            {
+                [feed.Id] = () => [new DownloadedFeedItem("item-1", "Headline", null, null, null, null)]
+            }));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsExceptionAsync<TaskCanceledException>(
+            () => service.RefreshProfileAsync("profile-1", cancellation.Token));
+
+        Assert.AreEqual(0, readerStore.SavedArticles.Count);
     }
 
     [TestMethod]
@@ -164,8 +207,10 @@ public sealed class FeedRefreshServiceTests
     private sealed class ReaderStoreStub(IReadOnlyList<ProfileSubscription> subscriptions) : IReaderStore
     {
         private readonly ConcurrentDictionary<string, byte> _savedIds = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<(string ProfileId, string FeedId), ProfileFeedRefreshState> _refreshStates = new();
 
         public ConcurrentBag<(string FeedId, FeedArticle Article)> SavedArticles { get; } = [];
+        public ProfileFeedRefreshState[] RefreshStates => _refreshStates.Values.ToArray();
 
         public Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileSubscription>>(subscriptions.Where(item => item.ProfileId == profileId).ToArray());
@@ -195,5 +240,27 @@ public sealed class FeedRefreshServiceTests
         }
         public Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ProfileFeedRefreshState>>(_refreshStates.Values.Where(state => state.ProfileId == profileId).ToArray());
+        public Task RecordFeedRefreshAttemptAsync(string profileId, string feedId, DateTimeOffset attemptedAt, CancellationToken cancellationToken = default)
+        {
+            _refreshStates.AddOrUpdate(
+                (profileId, feedId),
+                _ => new ProfileFeedRefreshState(profileId, feedId, attemptedAt, null, null),
+                (_, state) => state with { LastAttemptAt = attemptedAt, LastFailure = null });
+            return Task.CompletedTask;
+        }
+        public Task RecordFeedRefreshResultAsync(string profileId, string feedId, DateTimeOffset? successfulAt, string? failure, CancellationToken cancellationToken = default)
+        {
+            _refreshStates.AddOrUpdate(
+                (profileId, feedId),
+                _ => new ProfileFeedRefreshState(profileId, feedId, DateTimeOffset.MinValue, successfulAt, failure),
+                (_, state) => state with
+                {
+                    LastSuccessfulAt = successfulAt ?? state.LastSuccessfulAt,
+                    LastFailure = failure
+                });
+            return Task.CompletedTask;
+        }
     }
 }

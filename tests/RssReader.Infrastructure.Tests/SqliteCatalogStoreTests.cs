@@ -86,11 +86,19 @@ public sealed class SqliteCatalogStoreTests
     }
 
     [TestMethod]
-    public async Task DeletingCategoryAndFeedMaintainsRelationships()
+    public async Task DeletingCategoryAndFeedMaintainsRelationshipsAcrossProfiles()
     {
         using var database = new TemporaryDatabase();
+        var profileStore = new SqliteProfileStore(database.Path);
         var store = new SqliteCatalogStore(database.Path);
+        var readerStore = new SqliteReaderStore(database.Path);
+        await profileStore.InitializeAsync();
         await store.InitializeAsync();
+        await readerStore.InitializeAsync();
+        var firstProfile = Profile.CreateRegular("First reader");
+        var secondProfile = Profile.CreateRegular("Second reader");
+        await profileStore.AddAsync(firstProfile);
+        await profileStore.AddAsync(secondProfile);
         var category = new CatalogCategory(Guid.NewGuid().ToString("N"), "Gaming");
         var feed = new CatalogFeed(Guid.NewGuid().ToString("N"), "Example", "https://example.com/gaming.xml", null, category.Id);
         var collection = new CatalogCollection(Guid.NewGuid().ToString("N"), "Games");
@@ -98,6 +106,25 @@ public sealed class SqliteCatalogStoreTests
         await store.AddFeedAsync(feed);
         await store.AddCollectionAsync(collection);
         await store.AddFeedToCollectionAsync(collection.Id, feed.Id);
+        await readerStore.AddFolderAsync(firstProfile.Id, "Gaming");
+        await readerStore.AddFolderAsync(secondProfile.Id, "Gaming");
+        await readerStore.SubscribeAsync(firstProfile.Id, feed.Id, "Gaming");
+        await readerStore.SubscribeAsync(secondProfile.Id, feed.Id, "Gaming");
+        var cachedArticle = new FeedArticle(
+            "article-1",
+            feed.Id,
+            "external-1",
+            "Cached headline",
+            null,
+            DateTimeOffset.UtcNow,
+            "Summary",
+            "<p>Cached content</p>");
+        await readerStore.SaveArticlesAsync(feed.Id, [cachedArticle]);
+        await readerStore.SetArticleReadAsync(firstProfile.Id, cachedArticle.Id, true);
+        await readerStore.SetArticleSavedAsync(firstProfile.Id, cachedArticle.Id, true);
+        await readerStore.AddFeedTagAsync(firstProfile.Id, feed.Id, "Reviews");
+        await readerStore.RecordFeedRefreshAttemptAsync(firstProfile.Id, feed.Id, DateTimeOffset.UtcNow);
+        await readerStore.RecordFeedRefreshResultAsync(firstProfile.Id, feed.Id, DateTimeOffset.UtcNow, null);
 
         await store.DeleteCategoryAsync(category.Id);
         var feedAfterCategoryDeletion = (await store.GetFeedsAsync()).Single();
@@ -107,6 +134,12 @@ public sealed class SqliteCatalogStoreTests
 
         Assert.AreEqual(0, (await store.GetFeedsAsync()).Count);
         Assert.AreEqual(0, (await store.GetCollectionFeedIdsAsync(collection.Id)).Count);
+        Assert.AreEqual(0, (await readerStore.GetSubscriptionsAsync(firstProfile.Id)).Count);
+        Assert.AreEqual(0, (await readerStore.GetSubscriptionsAsync(secondProfile.Id)).Count);
+        Assert.AreEqual(0, (await readerStore.GetArticlesAsync(firstProfile.Id)).Count);
+        Assert.AreEqual(0, (await readerStore.GetArticlesAsync(secondProfile.Id)).Count);
+        Assert.AreEqual(0, (await readerStore.GetFeedTagsAsync(firstProfile.Id)).Count);
+        Assert.AreEqual(0, (await readerStore.GetFeedRefreshStatesAsync(firstProfile.Id)).Count);
     }
 
     [TestMethod]

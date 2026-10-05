@@ -32,6 +32,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _expandedSidebarFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _subscribedFeedIds = new(StringComparer.Ordinal);
+    private Dictionary<string, ProfileFeedRefreshState> _feedRefreshStates = new(StringComparer.Ordinal);
     private ProfilePreferences _profilePreferences;
     private Dictionary<string, string[]> _feedIdsByFolder = new(StringComparer.OrdinalIgnoreCase);
     private string _activeRoute;
@@ -39,6 +40,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _catalogSearchQuery = string.Empty;
     private string _quickQuery = string.Empty;
     private string _statusMessage = string.Empty;
+    private string? _refreshFailureMessage;
+    private string[] _failedRefreshFeedIds = [];
     private string _catalogLoadErrorMessage = string.Empty;
     private CatalogCategoryOption? _selectedCatalogCategory;
     private CatalogCollectionOption? _selectedCatalogCollection;
@@ -164,6 +167,8 @@ public sealed class MainWindowViewModel : ObservableObject
         NavigateCommand = new RelayCommand<SidebarLink>(NavigateTo);
         ActivateSidebarLinkCommand = new RelayCommand<SidebarLink>(ActivateSidebarLink);
         SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
+        PreviousArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(-1), () => CanNavigateToAdjacentArticle(-1));
+        NextArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(1), () => CanNavigateToAdjacentArticle(1));
         NavigateToSelectedArticleFeedCommand = new RelayCommand(NavigateToSelectedArticleFeed);
         BackToListCommand = new RelayCommand(() => SelectedArticle = null);
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
@@ -181,6 +186,9 @@ public sealed class MainWindowViewModel : ObservableObject
             DeleteFolderAsync,
             link => _readingService is not null && link.IsFolder);
         RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsRefreshing && !IsCatalogMaster);
+        RetryFailedFeedsCommand = new RelayCommand(
+            () => _ = RetryFailedFeedsAsync(),
+            () => !IsRefreshing && HasFailedRefreshFeeds);
         ToggleSubscriptionCommand = new AsyncCommand<CatalogFeedListItem>(ToggleSubscriptionAsync);
 
         UpdateSelectedLinks();
@@ -220,6 +228,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<SidebarLink> NavigateCommand { get; }
     public RelayCommand<SidebarLink> ActivateSidebarLinkCommand { get; }
     public RelayCommand<ArticleRowViewModel> SelectArticleCommand { get; }
+    public RelayCommand PreviousArticleCommand { get; }
+    public RelayCommand NextArticleCommand { get; }
     public RelayCommand NavigateToSelectedArticleFeedCommand { get; }
     public RelayCommand BackToListCommand { get; }
     public RelayCommand ToggleSavedCommand { get; }
@@ -235,6 +245,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand UnfollowAllCatalogFeedsCommand { get; }
     public AsyncCommand<SidebarLink> DeleteFolderCommand { get; }
     public RelayCommand RefreshCommand { get; }
+    public RelayCommand RetryFailedFeedsCommand { get; }
     public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
 
     public Task<string> GetRawArticleContentAsync(
@@ -621,6 +632,7 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(RefreshFeedsWhenOpened));
         OnPropertyChanged(nameof(AutoRefreshIntervalMinutes));
         OnPropertyChanged(nameof(IsRawFeedButtonVisible));
+        OnPropertyChanged(nameof(LimitArticleWidth));
         SetArticleViewModeIfSelected(
             true,
             preferences.Presentation == ProfileArticlePresentation.Cards,
@@ -710,6 +722,21 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    public string? RefreshFailureMessage
+    {
+        get => _refreshFailureMessage;
+        private set
+        {
+            if (SetProperty(ref _refreshFailureMessage, value))
+            {
+                OnPropertyChanged(nameof(HasRefreshFailure));
+            }
+        }
+    }
+
+    public bool HasRefreshFailure => !string.IsNullOrWhiteSpace(RefreshFailureMessage);
+    public bool HasFailedRefreshFeeds => _failedRefreshFeedIds.Length > 0;
+
     public bool IsRefreshing
     {
         get => _isRefreshing;
@@ -718,6 +745,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _isRefreshing, value))
             {
                 RefreshCommand.NotifyCanExecuteChanged();
+                RetryFailedFeedsCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -845,6 +873,10 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsReadingViewVisible));
                 OnPropertyChanged(nameof(IsRawFeedButtonVisible));
                 OnPropertyChanged(nameof(HasSelectedArticleFeed));
+                OnPropertyChanged(nameof(SelectedArticleRefreshStatusMessage));
+                OnPropertyChanged(nameof(HasSelectedArticleRefreshState));
+                PreviousArticleCommand.NotifyCanExecuteChanged();
+                NextArticleCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -863,14 +895,45 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsGoToRoute => ActiveRoute == "Go to...";
     public bool RefreshFeedsWhenOpened => _profilePreferences.RefreshFeedsWhenOpened;
     public int AutoRefreshIntervalMinutes => _profilePreferences.AutoRefreshIntervalMinutes;
+    public bool LimitArticleWidth => _profilePreferences.LimitArticleWidth;
     public bool IsArticleCountVisible => IsArticleListVisible;
     public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible && !IsGoToRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
     public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
     public bool HasSelectedArticleFeed => SelectedArticle?.FeedId is not null;
+    public string? SelectedArticleRefreshStatusMessage
+    {
+        get
+        {
+            if (SelectedArticle?.FeedId is not { } feedId || !_feedRefreshStates.TryGetValue(feedId, out var state))
+            {
+                return null;
+            }
+
+            var lastAttempt = state.LastAttemptAt.ToLocalTime().ToString("g");
+            var lastSuccess = state.LastSuccessfulAt?.ToLocalTime().ToString("g") ?? "Never";
+            var message = $"Last attempt: {lastAttempt}. Last successful refresh: {lastSuccess}.";
+            return string.IsNullOrWhiteSpace(state.LastFailure)
+                ? message
+                : $"{message} {state.LastFailure}";
+        }
+    }
+
+    public bool HasSelectedArticleRefreshState => SelectedArticleRefreshStatusMessage is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
     public bool IsCatalogAdminVisible => IsCatalogMaster && ActiveRoute == "Manage catalog";
     public bool IsArticleListEmpty => VisibleArticles.Count == 0;
+    public string ArticleListEmptyMessage => ActiveRoute switch
+    {
+        "Search" when string.IsNullOrWhiteSpace(SearchQuery) => "Enter a search term to find articles.",
+        "Search" => "No articles match this search.",
+        "Read later" => "No saved articles.",
+        "Recently read" => "No recently read articles.",
+        _ when ActiveRoute.StartsWith("feed:", StringComparison.Ordinal) => "No articles in this feed.",
+        _ when ActiveRoute.StartsWith("folder:", StringComparison.Ordinal) => "No articles in this folder.",
+        _ when ActiveRoute.StartsWith("tag:", StringComparison.Ordinal) => "No articles with this feed tag.",
+        _ => "No articles in this view."
+    };
 
     private bool IsCatalogFeedVisible(object item)
     {
@@ -1224,6 +1287,40 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private ArticleRowViewModel[] GetArticleNavigationSequence() => IsSortByDate
+        ? VisibleArticles
+            .OrderByDescending(article => article.PublishedAt)
+            .ThenBy(article => article.Folder, StringComparer.OrdinalIgnoreCase)
+            .ToArray()
+        : VisibleArticles
+            .OrderBy(article => article.Folder, StringComparer.OrdinalIgnoreCase)
+            .ThenByDescending(article => article.PublishedAt)
+            .ToArray();
+
+    private bool CanNavigateToAdjacentArticle(int offset)
+    {
+        if (SelectedArticle is null)
+        {
+            return false;
+        }
+
+        var sequence = GetArticleNavigationSequence();
+        var selectedIndex = Array.IndexOf(sequence, SelectedArticle);
+        return selectedIndex >= 0 && selectedIndex + offset >= 0 && selectedIndex + offset < sequence.Length;
+    }
+
+    private void NavigateToAdjacentArticle(int offset)
+    {
+        if (!CanNavigateToAdjacentArticle(offset))
+        {
+            return;
+        }
+
+        var sequence = GetArticleNavigationSequence();
+        var selectedIndex = Array.IndexOf(sequence, SelectedArticle);
+        OpenArticle(sequence[selectedIndex + offset]);
+    }
+
     private void ToggleSaved()
     {
         if (SelectedArticle is not null)
@@ -1260,6 +1357,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var subscriptions = await readingService.GetSubscriptionsAsync(ActiveProfile.Id, cancellationToken);
+        await LoadFeedRefreshStatesAsync(cancellationToken);
         UpdateFolderNavigation(folders, subscriptions);
         var tags = await readingService.GetFeedTagsAsync(ActiveProfile.Id, cancellationToken);
         var articles = await readingService.GetArticlesAsync(ActiveProfile.Id, new ArticleFilter(), cancellationToken);
@@ -1352,6 +1450,24 @@ public sealed class MainWindowViewModel : ObservableObject
         ApplyArticleFilters();
     }
 
+    private async Task LoadFeedRefreshStatesAsync(CancellationToken cancellationToken)
+    {
+        if (_readingService is null)
+        {
+            return;
+        }
+
+        var states = await _readingService.GetFeedRefreshStatesAsync(ActiveProfile.Id, cancellationToken);
+        _feedRefreshStates = states.ToDictionary(state => state.FeedId, StringComparer.Ordinal);
+        var failedStates = states.Where(state => !string.IsNullOrWhiteSpace(state.LastFailure)).ToArray();
+        SetFailedRefreshFeedIds(failedStates.Select(state => state.FeedId));
+        RefreshFailureMessage = failedStates.Length == 0
+            ? null
+            : string.Join(" ", failedStates.Select(state => state.LastFailure));
+        OnPropertyChanged(nameof(SelectedArticleRefreshStatusMessage));
+        OnPropertyChanged(nameof(HasSelectedArticleRefreshState));
+    }
+
     private async Task RefreshAsync()
     {
         if (_feedRefreshService is null)
@@ -1365,6 +1481,18 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public Task RefreshNowAsync() => RefreshAsync();
+
+    private async Task RetryFailedFeedsAsync()
+    {
+        var refreshService = _feedRefreshService;
+        var failedFeedIds = _failedRefreshFeedIds.ToArray();
+        if (refreshService is null || failedFeedIds.Length == 0)
+        {
+            return;
+        }
+
+        await RefreshUsingAsync(() => refreshService.RefreshFeedsAsync(ActiveProfile.Id, failedFeedIds));
+    }
 
     private async Task RefreshRouteFeedsAsync(string route)
     {
@@ -1416,9 +1544,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
         IsRefreshing = true;
         StatusMessage = "Refreshing feeds...";
+        RefreshFailureMessage = null;
+        SetFailedRefreshFeedIds([]);
         try
         {
             var summary = await refresh();
+            await LoadFeedRefreshStatesAsync(CancellationToken.None);
             if (refreshesAllFeeds)
             {
                 _pendingInitialRefreshFeedIds.Clear();
@@ -1431,16 +1562,24 @@ public sealed class MainWindowViewModel : ObservableObject
 
             StatusMessage = summary.Failures.Count == 0
                 ? $"Checked {summary.FeedsChecked} feeds; fetched {summary.ArticlesFetched} articles; New {summary.ArticlesAdded}."
-                : $"Fetched {summary.ArticlesFetched} articles; New {summary.ArticlesAdded}; {summary.Failures.Count} feed(s) failed. {string.Join(" ", summary.Failures)}";
+                : $"Fetched {summary.ArticlesFetched} articles; New {summary.ArticlesAdded}; {summary.Failures.Count} feed(s) failed.";
         }
         catch (Exception exception)
         {
             StatusMessage = $"Refresh failed: {exception.Message}";
+            RefreshFailureMessage = exception.Message;
         }
         finally
         {
             IsRefreshing = false;
         }
+    }
+
+    private void SetFailedRefreshFeedIds(IEnumerable<string> feedIds)
+    {
+        _failedRefreshFeedIds = feedIds.ToArray();
+        OnPropertyChanged(nameof(HasFailedRefreshFeeds));
+        RetryFailedFeedsCommand.NotifyCanExecuteChanged();
     }
 
     private async Task ToggleSubscriptionAsync(CatalogFeedListItem feed)
@@ -1643,19 +1782,29 @@ public sealed class MainWindowViewModel : ObservableObject
             articles = articles.Where(article => article.FeedId == feedId);
         }
 
-        if (ActiveRoute == "Search")
+        if (ActiveRoute == "Today")
         {
-            var query = SearchQuery.Trim();
-            articles = string.IsNullOrEmpty(query)
-                ? []
-                : articles.Where(article =>
-                    article.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    article.Source.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    article.Summary.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    (article.Content?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                    article.Topics.Any(topic =>
-                        topic.Term.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                        (topic.Label?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)));
+            var now = DateTimeOffset.UtcNow;
+            var cutoff = now.AddHours(-24);
+            articles = articles.Where(article => article.PublishedAt > cutoff && article.PublishedAt <= now);
+        }
+
+        var query = SearchQuery.Trim();
+        if (ActiveRoute == "Search" && string.IsNullOrEmpty(query))
+        {
+            articles = [];
+        }
+        else if (!string.IsNullOrEmpty(query))
+        {
+            articles = articles.Where(article =>
+                article.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                article.Source.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                article.Summary.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                (article.Content?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (article.Author?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                article.Topics.Any(topic =>
+                    topic.Term.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    (topic.Label?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)));
         }
 
         if (UnreadOnly)
@@ -1688,6 +1837,9 @@ public sealed class MainWindowViewModel : ObservableObject
         _visibleArticles.ReplaceAll(articles);
 
         OnPropertyChanged(nameof(IsArticleListEmpty));
+        OnPropertyChanged(nameof(ArticleListEmptyMessage));
+        PreviousArticleCommand.NotifyCanExecuteChanged();
+        NextArticleCommand.NotifyCanExecuteChanged();
     }
 
     private void UpdateArticleTopicOptions(IReadOnlyList<ArticleRowViewModel> articles)

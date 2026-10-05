@@ -15,7 +15,7 @@ public sealed class FeedRefreshService(
         CancellationToken cancellationToken = default)
     {
         var subscriptions = await readerStore.GetSubscriptionsAsync(profileId, cancellationToken);
-        return await RefreshSubscriptionsAsync(subscriptions, cancellationToken);
+        return await RefreshSubscriptionsAsync(profileId, subscriptions, cancellationToken);
     }
 
     public async Task<FeedRefreshSummary> RefreshFeedsAsync(
@@ -32,6 +32,7 @@ public sealed class FeedRefreshService(
         var requestedFeedIds = feedIds.ToHashSet(StringComparer.Ordinal);
         var subscriptions = await readerStore.GetSubscriptionsAsync(profileId, cancellationToken);
         return await RefreshSubscriptionsAsync(
+            profileId,
             subscriptions.Where(subscription => requestedFeedIds.Contains(subscription.FeedId)).ToArray(),
             cancellationToken);
     }
@@ -67,12 +68,14 @@ public sealed class FeedRefreshService(
     }
 
     private async Task<FeedRefreshSummary> RefreshSubscriptionsAsync(
+        string profileId,
         IReadOnlyList<ProfileSubscription> subscriptions,
         CancellationToken cancellationToken)
     {
         var feeds = await catalogStore.GetFeedsAsync(cancellationToken);
         var feedLookup = feeds.ToDictionary(feed => feed.Id, StringComparer.Ordinal);
         var failures = new ConcurrentBag<string>();
+        var failedFeedIds = new ConcurrentBag<string>();
         var downloadedCount = 0;
         var addedCount = 0;
         var gate = new SemaphoreSlim(4);
@@ -85,19 +88,44 @@ public sealed class FeedRefreshService(
                 try
                 {
                     var feed = feedLookup[subscription.FeedId];
+                    await readerStore.RecordFeedRefreshAttemptAsync(
+                        profileId,
+                        feed.Id,
+                        DateTimeOffset.UtcNow,
+                        cancellationToken);
                     var items = await feedDownloader.DownloadAsync(feed, cancellationToken);
                     var articles = items.Select(item => ToArticle(feed, item)).ToArray();
                     var added = await readerStore.SaveArticlesAsync(feed.Id, articles, cancellationToken);
+                    await readerStore.RecordFeedRefreshResultAsync(
+                        profileId,
+                        feed.Id,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        CancellationToken.None);
                     Interlocked.Add(ref downloadedCount, articles.Length);
                     Interlocked.Add(ref addedCount, added);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
+                    await readerStore.RecordFeedRefreshResultAsync(
+                        profileId,
+                        subscription.FeedId,
+                        null,
+                        null,
+                        CancellationToken.None);
                     throw;
                 }
                 catch (Exception exception)
                 {
-                    failures.Add($"{subscription.FeedName}: {exception.Message}");
+                    var failure = $"{subscription.FeedName}: {exception.Message}";
+                    failures.Add(failure);
+                    failedFeedIds.Add(subscription.FeedId);
+                    await readerStore.RecordFeedRefreshResultAsync(
+                        profileId,
+                        subscription.FeedId,
+                        null,
+                        failure,
+                        CancellationToken.None);
                 }
                 finally
                 {
@@ -108,7 +136,8 @@ public sealed class FeedRefreshService(
         await Task.WhenAll(refreshTasks);
         return new FeedRefreshSummary(subscriptions.Count, downloadedCount, failures.ToArray())
         {
-            ArticlesAdded = addedCount
+            ArticlesAdded = addedCount,
+            FailedFeedIds = failedFeedIds.ToArray()
         };
     }
 
@@ -140,4 +169,5 @@ public sealed class FeedRefreshService(
 public sealed record FeedRefreshSummary(int FeedsChecked, int ArticlesFetched, IReadOnlyList<string> Failures)
 {
     public int ArticlesAdded { get; init; }
+    public IReadOnlyList<string> FailedFeedIds { get; init; } = [];
 }

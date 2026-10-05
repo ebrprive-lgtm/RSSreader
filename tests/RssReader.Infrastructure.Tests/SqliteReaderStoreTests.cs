@@ -98,23 +98,72 @@ public sealed class SqliteReaderStoreTests
         await reader.AddFolderAsync(secondProfile.Id, "News");
         await reader.SubscribeAsync(firstProfile.Id, feed.Id, "News");
         await reader.SubscribeAsync(secondProfile.Id, feed.Id, "News");
-        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", "https://example.com/story", DateTimeOffset.UtcNow, "<p>Summary &amp; <strong>details</strong></p>", "<p>Body<br/>second line</p>", "https://example.com/cover.jpg");
+        var publishedAt = DateTimeOffset.UtcNow;
+        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", "https://example.com/story", publishedAt, "<p>Summary &amp; <strong>details</strong></p>", "<p>Body<br/>second line</p>", "https://example.com/cover.jpg")
+        {
+            Author = "Example Author",
+            Categories = [new ArticleCategory("Press Releases")]
+        };
         await reader.SaveArticlesAsync(feed.Id, [article]);
         await reader.SetArticleReadAsync(firstProfile.Id, article.Id, true);
         await reader.SetArticleSavedAsync(firstProfile.Id, article.Id, true);
 
-        var firstArticles = await reader.GetArticlesAsync(firstProfile.Id);
-        var secondArticles = await reader.GetArticlesAsync(secondProfile.Id);
+        var reopenedReader = new SqliteReaderStore(database.Path);
+        await reopenedReader.InitializeAsync();
+        var firstArticles = await reopenedReader.GetArticlesAsync(firstProfile.Id);
+        var secondArticles = await reopenedReader.GetArticlesAsync(secondProfile.Id);
 
         Assert.AreEqual(1, firstArticles.Count);
+        Assert.AreEqual("Headline", firstArticles[0].Article.Title);
+        Assert.AreEqual("https://example.com/story", firstArticles[0].Article.Link);
+        Assert.AreEqual(publishedAt, firstArticles[0].Article.PublishedAt);
         Assert.AreEqual("Summary & details", firstArticles[0].Article.Summary);
         Assert.AreEqual("<p>Body<br/>second line</p>", firstArticles[0].Article.Content);
         Assert.AreEqual("https://example.com/cover.jpg", firstArticles[0].Article.ImageUrl);
+        Assert.AreEqual("Example Author", firstArticles[0].Article.Author);
+        Assert.AreEqual("Press Releases", firstArticles[0].Article.Categories.Single().Term);
         Assert.IsTrue(firstArticles[0].IsRead);
         Assert.IsTrue(firstArticles[0].IsSaved);
         Assert.AreEqual(1, secondArticles.Count);
         Assert.IsFalse(secondArticles[0].IsRead);
         Assert.IsFalse(secondArticles[0].IsSaved);
+    }
+
+    [TestMethod]
+    public async Task FeedRefreshStateIsProfileScopedAndPreservesLastSuccessAfterFailure()
+    {
+        using var database = new TemporaryDatabase();
+        var profiles = new SqliteProfileStore(database.Path);
+        var catalog = new SqliteCatalogStore(database.Path);
+        var reader = new SqliteReaderStore(database.Path);
+        await profiles.InitializeAsync();
+        await catalog.InitializeAsync();
+        await reader.InitializeAsync();
+
+        var firstProfile = Profile.CreateRegular("First Reader");
+        var secondProfile = Profile.CreateRegular("Second Reader");
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        await profiles.AddAsync(firstProfile);
+        await profiles.AddAsync(secondProfile);
+        await catalog.AddFeedAsync(feed);
+        await reader.AddFolderAsync(firstProfile.Id, "News");
+        await reader.AddFolderAsync(secondProfile.Id, "News");
+        await reader.SubscribeAsync(firstProfile.Id, feed.Id, "News");
+        await reader.SubscribeAsync(secondProfile.Id, feed.Id, "News");
+
+        var firstAttempt = new DateTimeOffset(2026, 10, 4, 10, 0, 0, TimeSpan.Zero);
+        var firstSuccess = firstAttempt.AddMinutes(2);
+        var failedRetry = firstSuccess.AddHours(1);
+        await reader.RecordFeedRefreshAttemptAsync(firstProfile.Id, feed.Id, firstAttempt);
+        await reader.RecordFeedRefreshResultAsync(firstProfile.Id, feed.Id, firstSuccess, null);
+        await reader.RecordFeedRefreshAttemptAsync(firstProfile.Id, feed.Id, failedRetry);
+        await reader.RecordFeedRefreshResultAsync(firstProfile.Id, feed.Id, null, "Feed unavailable");
+
+        var firstProfileState = (await reader.GetFeedRefreshStatesAsync(firstProfile.Id)).Single();
+        Assert.AreEqual(failedRetry, firstProfileState.LastAttemptAt);
+        Assert.AreEqual(firstSuccess, firstProfileState.LastSuccessfulAt);
+        Assert.AreEqual("Feed unavailable", firstProfileState.LastFailure);
+        Assert.AreEqual(0, (await reader.GetFeedRefreshStatesAsync(secondProfile.Id)).Count);
     }
 
     [TestMethod]

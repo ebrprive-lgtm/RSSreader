@@ -49,6 +49,8 @@ flowchart LR
 
 Store profile records plus profile-owned settings, feed subscriptions, folders, feed tags, reading state, and saved items. Store the shared catalog and its categories/collections separately from personal profile data. Enforce both profile ownership and catalog-management permissions in application services and repository operations so switching profiles cannot expose or mutate another profile's data and ordinary profiles cannot change the shared catalog. Store normalized feed and article metadata, subscription/category relationships, and per-profile read or saved state. Deduplicate items using stable feed identifiers where available, with a normalized link and publication data fallback. Keep feed failures isolated so one unavailable server does not stop other subscriptions from updating.
 
+Deleting a catalog feed cascades across every profile: subscriptions, feed tags, refresh history, cached articles and their read/saved state, and collection memberships are removed. Deleting a category leaves its feeds in the catalog with no category; deleting a collection removes only its memberships and leaves its feeds untouched.
+
 ## Catalog and Feed Sources
 
 The shared catalog supplies discoverable feed URLs, feed categories, and collections. A reserved local profile named **Catalog Master** is the sole profile allowed to add, edit, remove, or explicitly check catalog feeds, and to manage categories and collections. Per-feed health checks use the existing bounded downloader and persist only the result and check time; the result is historical, not a guarantee of continued availability. Regular profiles may subscribe to or unsubscribe from catalog feeds, but cannot change the shared catalog or add arbitrary URLs to it. The catalog source, initial contents, and update mechanism remain open decisions. A catalog entry does not guarantee that a publisher provides full article text or frequent updates.
@@ -64,6 +66,7 @@ Only retrieve feeds and article content that the user is authorized to access. D
 - Test parsing against representative RSS and Atom samples, including malformed and partial feeds.
 - Test duplicate handling, conditional refresh behavior, and persistence of read/saved state.
 - Keep local data usable offline; a failed refresh must not remove previously stored articles.
+- Stored article text/HTML, summary, metadata, refresh state, and per-profile read/saved state remain local and available offline. Article and feed image URLs are stored, but image bytes load from publishers and are not cached, so images may be unavailable offline.
 - Test Catalog Master catalog-management permissions independently of UI visibility, including attempts by regular profiles to add/remove catalog feeds, categories, and collections.
 - Every feature is delivered with tests for its observable behavior; a feature is not complete until its tests pass.
 - Unit-test domain rules, application services, and each view model's commands, state transitions, validation, and error handling. Exercise WPF control wiring and critical user workflows with UI-level or integration tests rather than treating visual controls as isolated unit-test targets.

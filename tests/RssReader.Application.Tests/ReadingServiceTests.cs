@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using RssReader.Application;
 using RssReader.Domain;
 
@@ -6,6 +7,8 @@ namespace RssReader.Application.Tests;
 [TestClass]
 public sealed class ReadingServiceTests
 {
+    public TestContext TestContext { get; set; } = null!;
+
     [TestMethod]
     public async Task GetArticlesCombinesProfileFolderTagReadLaterAndSearchFilters()
     {
@@ -69,6 +72,49 @@ public sealed class ReadingServiceTests
             Topic: new ArticleCategory("press releases", "https://example.com/topics")));
 
         Assert.AreEqual("article-1", result.Single().Article.Id);
+    }
+
+    [DataTestMethod]
+    [DataRow(575)]
+    [DataRow(5000)]
+    [DataRow(25000)]
+    public async Task GetArticlesSearchesGeneratedLargeCollections(int articleCount)
+    {
+        var profile = Profile.CreateRegular("Large Library Reader");
+        var feed = new CatalogFeed("feed-1", "Generated News", "https://example.com/feed.xml", null, null);
+        var readerStore = new MemoryReaderStore();
+        readerStore.Subscriptions.Add(new ProfileSubscription(profile.Id, feed.Id, feed.Name, feed.FeedUrl, "News"));
+        for (var articleIndex = 0; articleIndex < articleCount; articleIndex++)
+        {
+            var isMatch = articleIndex == articleCount - 1;
+            var articleId = $"article-{articleIndex:D5}";
+            readerStore.Articles.Add(new ArticleForProfile(
+                new FeedArticle(
+                    articleId,
+                    feed.Id,
+                    $"item-{articleIndex:D5}",
+                    isMatch ? $"Target article {articleIndex:D5}" : $"Generated article {articleIndex:D5}",
+                    null,
+                    DateTimeOffset.UnixEpoch.AddMinutes(articleIndex),
+                    $"Summary {articleIndex:D5}",
+                    null),
+                feed.Name,
+                "News",
+                false,
+                false));
+        }
+
+        var service = new ReadingService(readerStore, new MemoryCatalogStore([feed]));
+        var timer = Stopwatch.StartNew();
+        var results = await service.GetArticlesAsync(
+            profile.Id,
+            new ArticleFilter(FolderName: "News", SearchText: "target article"));
+        timer.Stop();
+
+        Assert.AreEqual(1, results.Count);
+        Assert.AreEqual($"article-{articleCount - 1:D5}", results[0].Article.Id);
+        TestContext.WriteLine(
+            $"Article count {articleCount:N0}: query and filter {timer.Elapsed.TotalMilliseconds:F1} ms.");
     }
 
     [TestMethod]
@@ -145,5 +191,9 @@ public sealed class ReadingServiceTests
         public Task<int> SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default) => Task.FromResult(0);
         public Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ProfileFeedRefreshState>>([]);
+        public Task RecordFeedRefreshAttemptAsync(string profileId, string feedId, DateTimeOffset attemptedAt, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RecordFeedRefreshResultAsync(string profileId, string feedId, DateTimeOffset? successfulAt, string? failure, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

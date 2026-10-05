@@ -2,7 +2,23 @@ using RssReader.Domain;
 
 namespace RssReader.Application;
 
-public sealed record FeedImportSummary(int AddedCount, int SkippedCount);
+public enum FeedDuplicateKind
+{
+    ExactUrl,
+    SameNameDifferentUrl
+}
+
+public sealed record FeedDuplicateCandidate(
+    FeedDuplicateKind Kind,
+    string ImportedName,
+    string ImportedUrl,
+    string ExistingName,
+    string ExistingUrl);
+
+public sealed record FeedImportSummary(
+    int AddedCount,
+    int SkippedCount,
+    IReadOnlyList<FeedDuplicateCandidate> DuplicateCandidates);
 public sealed record CatalogFeedHealthCheckResult(bool IsSuccessful, DateTimeOffset CheckedAt);
 
 public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDownloader = null)
@@ -182,29 +198,60 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
         ArgumentNullException.ThrowIfNull(importedFeeds);
 
         var categories = (await store.GetCategoriesAsync(cancellationToken)).ToList();
-        var existingUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingFeedsByUrl = new Dictionary<string, CatalogFeed>(StringComparer.OrdinalIgnoreCase);
+        var existingFeedsByName = new Dictionary<string, List<CatalogFeed>>(StringComparer.OrdinalIgnoreCase);
         foreach (var feed in await store.GetFeedsAsync(cancellationToken))
         {
             if (TryNormalizeFeedUrl(feed.FeedUrl, out var normalizedUrl))
             {
-                existingUrls.Add(normalizedUrl);
+                existingFeedsByUrl.TryAdd(normalizedUrl, feed);
             }
+
+            if (!existingFeedsByName.TryGetValue(feed.Name.Trim(), out var sameNameFeeds))
+            {
+                sameNameFeeds = [];
+                existingFeedsByName.Add(feed.Name.Trim(), sameNameFeeds);
+            }
+
+            sameNameFeeds.Add(feed);
         }
 
         var addedCount = 0;
         var skippedCount = 0;
+        var duplicateCandidates = new List<FeedDuplicateCandidate>();
         foreach (var importedFeed in importedFeeds)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(importedFeed.Name) ||
-                !TryNormalizeFeedUrl(importedFeed.FeedUrl, out var normalizedUrl) ||
-                !existingUrls.Add(normalizedUrl))
+                !TryNormalizeFeedUrl(importedFeed.FeedUrl, out var normalizedUrl))
             {
                 skippedCount++;
                 continue;
             }
 
             var normalizedName = RequireName(importedFeed.Name, "feed");
+            if (existingFeedsByUrl.TryGetValue(normalizedUrl, out var urlMatch))
+            {
+                duplicateCandidates.Add(new FeedDuplicateCandidate(
+                    FeedDuplicateKind.ExactUrl,
+                    normalizedName,
+                    normalizedUrl,
+                    urlMatch.Name,
+                    urlMatch.FeedUrl));
+                skippedCount++;
+                continue;
+            }
+
+            if (existingFeedsByName.TryGetValue(normalizedName, out var sameNameMatches))
+            {
+                duplicateCandidates.AddRange(sameNameMatches.Select(match => new FeedDuplicateCandidate(
+                    FeedDuplicateKind.SameNameDifferentUrl,
+                    normalizedName,
+                    normalizedUrl,
+                    match.Name,
+                    match.FeedUrl)));
+            }
+
             string? categoryId = null;
             if (!string.IsNullOrWhiteSpace(importedFeed.CategoryName))
             {
@@ -229,10 +276,18 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
                 categoryId,
                 TryNormalizeFeedUrl(importedFeed.WebsiteUrl, out var websiteUrl) ? websiteUrl : null);
             await store.AddFeedAsync(feed, cancellationToken);
+            existingFeedsByUrl.Add(normalizedUrl, feed);
+            if (!existingFeedsByName.TryGetValue(normalizedName, out sameNameMatches))
+            {
+                sameNameMatches = [];
+                existingFeedsByName.Add(normalizedName, sameNameMatches);
+            }
+
+            sameNameMatches.Add(feed);
             addedCount++;
         }
 
-        return new FeedImportSummary(addedCount, skippedCount);
+        return new FeedImportSummary(addedCount, skippedCount, duplicateCandidates);
     }
 
     public async Task<CatalogCategory> AddCategoryAsync(

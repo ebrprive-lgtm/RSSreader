@@ -17,6 +17,8 @@ public partial class MainWindow : Window
 {
     private readonly DispatcherTimer _autoRefreshTimer = new(DispatcherPriority.Background);
     private MainWindowViewModel? _viewModel;
+    private ArticleRowViewModel? _articleToRestoreFocus;
+    private string? _articleRouteWhenOpened;
     private bool _isSidebarPeekOpen;
 
     public MainWindow() : this(new MainWindowViewModel(Profile.CreateRegular("Reader")))
@@ -31,6 +33,11 @@ public partial class MainWindow : Window
         viewModel.FolderSelectionRequested = ShowFolderSelectionAsync;
         viewModel.ConfirmUnfollowAllRequested = ConfirmUnfollowAllAsync;
         viewModel.ConfirmDeleteFolderRequested = ConfirmDeleteFolderAsync;
+        if (viewModel.CatalogManagement is { } catalogManagement)
+        {
+            catalogManagement.ConfirmDeleteRequested = ConfirmCatalogDeletionAsync;
+        }
+
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
         SelectedArticleHtmlViewer.ExternalLinkRequested += ArticleHtmlViewer_ExternalLinkRequested;
         UpdateSelectedArticleContent();
@@ -66,6 +73,12 @@ public partial class MainWindow : Window
             message,
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
+        return Task.FromResult(result == MessageBoxResult.Yes);
+    }
+
+    private Task<bool> ConfirmCatalogDeletionAsync(string message)
+    {
+        var result = MessageDialogWindow.Show(this, message, MessageBoxButton.YesNo, MessageBoxImage.Warning);
         return Task.FromResult(result == MessageBoxResult.Yes);
     }
 
@@ -112,6 +125,25 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(MainWindowViewModel.SelectedArticle))
         {
             UpdateSelectedArticleContent();
+            if (_viewModel?.SelectedArticle is { } selectedArticle)
+            {
+                _articleToRestoreFocus = selectedArticle;
+                _articleRouteWhenOpened = _viewModel.ActiveRoute;
+            }
+            else if (_articleToRestoreFocus is { } articleToRestore &&
+                     string.Equals(_articleRouteWhenOpened, _viewModel?.ActiveRoute, StringComparison.Ordinal))
+            {
+                _articleToRestoreFocus = null;
+                _articleRouteWhenOpened = null;
+                Dispatcher.BeginInvoke(
+                    DispatcherPriority.Input,
+                    new Action(() => RestoreArticleListFocus(articleToRestore)));
+            }
+        }
+
+        if (e.PropertyName == nameof(MainWindowViewModel.LimitArticleWidth))
+        {
+            UpdateSelectedArticleContent();
         }
 
         if (e.PropertyName == nameof(MainWindowViewModel.AutoRefreshIntervalMinutes))
@@ -132,7 +164,49 @@ public partial class MainWindow : Window
             article?.Content,
             article?.Summary,
             article?.Link,
-            article?.FeedUrl);
+            article?.FeedUrl,
+            _viewModel?.LimitArticleWidth ?? true);
+    }
+
+    private void RestoreArticleListFocus(ArticleRowViewModel article)
+    {
+        if (_viewModel?.IsArticleListVisible != true)
+        {
+            return;
+        }
+
+        var articleList = new[]
+        {
+            ArticleRowsList,
+            ArticleMagazineList,
+            ArticleCardsList,
+            ArticleFolderCardsList
+        }.FirstOrDefault(list => list.IsVisible);
+        if (articleList is null)
+        {
+            return;
+        }
+
+        if (!_viewModel.VisibleArticles.Contains(article))
+        {
+            articleList.Focus();
+            return;
+        }
+
+        articleList.ScrollIntoView(article);
+        articleList.UpdateLayout();
+        if (articleList.ItemContainerGenerator.ContainerFromItem(article) is ListBoxItem articleContainer)
+        {
+            var articleAction = FindVisualDescendant<Button>(articleContainer);
+            if (articleAction?.Focus() != true)
+            {
+                articleList.Focus();
+            }
+        }
+        else
+        {
+            articleList.Focus();
+        }
     }
 
     private void ConfigureAutoRefreshTimer()
@@ -333,7 +407,7 @@ public partial class MainWindow : Window
         {
             var rawContent = await _viewModel.GetRawArticleContentAsync(article);
             var dialog = new RawFeedWindow(article.Source, rawContent) { Owner = this };
-            dialog.ShowDialog();
+            dialog.Show();
         }
         catch (Exception exception)
         {

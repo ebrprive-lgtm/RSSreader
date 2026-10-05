@@ -22,6 +22,7 @@ public partial class PreferencesWindow : Window
         FolderArticleLimitBox.Text = preferences.FolderArticleLimitPerFeed.ToString(CultureInfo.InvariantCulture);
         RefreshFeedsWhenOpenedCheckBox.IsChecked = preferences.RefreshFeedsWhenOpened;
         ShowRawFeedButtonCheckBox.IsChecked = preferences.ShowRawFeedButton;
+        LimitArticleWidthCheckBox.IsChecked = preferences.LimitArticleWidth;
         AutoRefreshIntervalComboBox.SelectedItem = AutoRefreshIntervalComboBox.Items
             .OfType<System.Windows.Controls.ComboBoxItem>()
             .First(item => int.Parse((string)item.Tag, CultureInfo.InvariantCulture) == preferences.AutoRefreshIntervalMinutes);
@@ -76,7 +77,8 @@ public partial class PreferencesWindow : Window
             limit,
             RefreshFeedsWhenOpenedCheckBox.IsChecked == true,
             int.Parse((string)((System.Windows.Controls.ComboBoxItem)AutoRefreshIntervalComboBox.SelectedItem).Tag, CultureInfo.InvariantCulture),
-            ShowRawFeedButtonCheckBox.IsChecked == true);
+            ShowRawFeedButtonCheckBox.IsChecked == true,
+            LimitArticleWidthCheckBox.IsChecked == true);
         DialogResult = true;
     }
 }

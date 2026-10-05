@@ -19,6 +19,13 @@
                             GlassFrameThickness="0"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding BackToListCommand}" />
+        <KeyBinding Key="Left" Modifiers="Alt" Command="{Binding PreviousArticleCommand}" />
+        <KeyBinding Key="Right" Modifiers="Alt" Command="{Binding NextArticleCommand}" />
+        <KeyBinding Key="R" Modifiers="Control+Shift" Command="{Binding ToggleReadCommand}" />
+        <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding ToggleSavedCommand}" />
+    </Window.InputBindings>
     <Window.Resources>
         <local:OptionalUriConverter x:Key="OptionalUriConverter" />
         <Style x:Key="ArticleRowButtonStyle" TargetType="Button">
@@ -413,7 +420,8 @@
                             Style="{StaticResource ArticleRowButtonStyle}"
                             HorizontalContentAlignment="Stretch"
                             Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="{Binding}">
+                            CommandParameter="{Binding}"
+                            AutomationProperties.Name="{Binding Title}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -501,7 +509,8 @@
                             Style="{StaticResource ArticleRowButtonStyle}"
                             HorizontalContentAlignment="Stretch"
                             Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="{Binding}">
+                            CommandParameter="{Binding}"
+                            AutomationProperties.Name="{Binding Title}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="154" />
@@ -583,7 +592,8 @@
         <DataTemplate x:Key="ArticleCardTemplate">
             <Button Style="{StaticResource ArticleRowButtonStyle}"
                     Command="{Binding DataContext.SelectArticleCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                    CommandParameter="{Binding}">
+                    CommandParameter="{Binding}"
+                    AutomationProperties.Name="{Binding Title}">
                 <Border Width="310"
                     Height="370"
                         Margin="0,0,12,12"
@@ -905,6 +915,23 @@
                                FontSize="11"
                                Foreground="{StaticResource MutedTextBrush}"
                                TextWrapping="Wrap" />
+                    <TextBlock x:Name="RefreshFailureHeader"
+                               Text="{Binding RefreshFailureMessage, Mode=OneWay}"
+                               Margin="0,4,0,0"
+                               FontSize="11"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextWrapping="Wrap"
+                               AutomationProperties.Name="Feed refresh failure"
+                               Visibility="{Binding HasRefreshFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button x:Name="RetryFailedFeedsHeaderButton"
+                            HorizontalAlignment="Left"
+                            Margin="0,4,0,0"
+                            Padding="8,4"
+                            Style="{StaticResource SecondaryActionButtonStyle}"
+                            Content="Retry failed feeds"
+                            Command="{Binding RetryFailedFeedsCommand}"
+                            AutomationProperties.Name="Retry failed feeds"
+                            Visibility="{Binding HasFailedRefreshFeeds, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 </StackPanel>
                 <Button x:Name="RefreshButton"
                         DockPanel.Dock="Right"
@@ -924,14 +951,16 @@
                         <TextBlock Text="Refresh" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-                <TextBox DockPanel.Dock="Right"
+                <TextBox x:Name="ArticleSearchBox"
+                         DockPanel.Dock="Right"
                          Width="290"
                          Height="38"
                          Padding="11,8"
                          VerticalContentAlignment="Center"
+                         AutomationProperties.Name="Search articles"
                          ToolTip="Search your saved feed articles"
                          Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                         Visibility="{Binding IsSearchRoute, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                         Visibility="{Binding IsArticleListVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </DockPanel>
 
             <Grid Grid.Row="1">
@@ -1113,7 +1142,7 @@
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center"
                                 Visibility="{Binding IsArticleListEmpty, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock Text="No articles in this view"
+                        <TextBlock Text="{Binding ArticleListEmptyMessage, Mode=OneWay}"
                                    FontSize="18"
                                    FontWeight="SemiBold"
                                    HorizontalAlignment="Center" />
@@ -1131,13 +1160,18 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0"
+                        <Button x:Name="BackToListButton"
+                            Grid.Column="0"
                                 Content="&#xE72B;  Back to list"
                                 FontFamily="Segoe UI, Segoe MDL2 Assets"
                                 HorizontalAlignment="Left"
@@ -1147,6 +1181,8 @@
                                 Background="Transparent"
                                 BorderThickness="0"
                                 Foreground="{StaticResource AccentBrush}"
+                                ToolTip="Back to list (Esc)"
+                                AutomationProperties.Name="Back to list"
                                 Command="{Binding BackToListCommand}" />
                         <Grid Grid.Column="1" VerticalAlignment="Center">
                             <Grid.ColumnDefinitions>
@@ -1231,7 +1267,100 @@
                             <Run Text="Topics: " FontWeight="SemiBold" />
                             <Run Text="{Binding SelectedArticle.FullTopicSummary, Mode=OneWay}" />
                         </TextBlock>
-                        <Button Grid.Column="2"
+                        <TextBlock x:Name="RefreshFailureStatus"
+                                   Grid.Row="4"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,4,0,0"
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Text="{Binding RefreshFailureMessage, Mode=OneWay}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.Name="Feed refresh failure"
+                                   Visibility="{Binding HasRefreshFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button x:Name="RetryFailedFeedsButton"
+                                Grid.Row="5"
+                                Grid.Column="1"
+                                Margin="0,4,0,0"
+                                Padding="8,4"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                Content="Retry failed feeds"
+                                Command="{Binding RetryFailedFeedsCommand}"
+                                AutomationProperties.Name="Retry failed feeds"
+                                Visibility="{Binding HasFailedRefreshFeeds, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <TextBlock x:Name="SelectedArticleRefreshStatus"
+                                   Grid.Row="6"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,4,0,0"
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Text="{Binding SelectedArticleRefreshStatusMessage, Mode=OneWay}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.Name="Selected feed refresh history"
+                                   Visibility="{Binding HasSelectedArticleRefreshState, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,8,0">
+                            <Button x:Name="ToggleReadButton"
+                                    Margin="0,0,4,0"
+                                    Padding="8,4"
+                                    Command="{Binding ToggleReadCommand}"
+                                    ToolTip="Toggle read status (Ctrl+Shift+R)"
+                                    AutomationProperties.Name="Toggle article read status">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}">
+                                        <Setter Property="Content" Value="Mark read" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedArticle.IsRead}" Value="True">
+                                                <Setter Property="Content" Value="Mark unread" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button x:Name="ToggleSavedButton"
+                                    Margin="0,0,8,0"
+                                    Padding="8,4"
+                                    Command="{Binding ToggleSavedCommand}"
+                                    ToolTip="Toggle saved status (Ctrl+Shift+S)"
+                                    AutomationProperties.Name="Toggle article saved status">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryActionButtonStyle}">
+                                        <Setter Property="Content" Value="Save" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SelectedArticle.IsSaved}" Value="True">
+                                                <Setter Property="Content" Value="Unsave" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                                <Button x:Name="PreviousArticleButton"
+                                    Width="32"
+                                    Height="32"
+                                    Padding="0"
+                                    Margin="0,0,4,0"
+                                    Style="{StaticResource IconActionButtonStyle}"
+                                    Command="{Binding PreviousArticleCommand}"
+                                    ToolTip="Previous article (Alt+Left)"
+                                    AutomationProperties.Name="Previous article">
+                                <TextBlock Text="&#xE76B;" FontFamily="Segoe MDL2 Assets" />
+                            </Button>
+                                <Button x:Name="NextArticleButton"
+                                    Width="32"
+                                    Height="32"
+                                    Padding="0"
+                                    Style="{StaticResource IconActionButtonStyle}"
+                                    Command="{Binding NextArticleCommand}"
+                                    ToolTip="Next article (Alt+Right)"
+                                    AutomationProperties.Name="Next article">
+                                <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" />
+                            </Button>
+                        </StackPanel>
+                        <Button Grid.Column="3"
                                 Content="Show XML"
                                 Click="ShowRawFeed_Click"
                             Style="{StaticResource SecondaryActionButtonStyle}"
@@ -1988,7 +2117,9 @@
                 <Grid Visibility="{Binding IsGoToRoute, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <StackPanel MaxWidth="560">
                         <TextBlock Text="Go to" FontSize="21" FontWeight="SemiBold" />
-                        <TextBox Text="{Binding QuickQuery, UpdateSourceTrigger=PropertyChanged}"
+                        <TextBox x:Name="GoToSearchBox"
+                                 AutomationProperties.Name="Go to"
+                                 Text="{Binding QuickQuery, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,14,0,12"
                                  Padding="11,9"
                                  Height="40"

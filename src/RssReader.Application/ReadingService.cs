@@ -19,6 +19,11 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         CancellationToken cancellationToken = default) =>
         store.GetFeedTagsAsync(profileId, cancellationToken);
 
+    public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(
+        string profileId,
+        CancellationToken cancellationToken = default) =>
+        store.GetFeedRefreshStatesAsync(profileId, cancellationToken);
+
     public async Task SubscribeAsync(
         Profile profile,
         string feedId,

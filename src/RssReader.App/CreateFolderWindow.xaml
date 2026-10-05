@@ -42,6 +42,7 @@
                 </DockPanel>
                 <TextBox x:Name="FolderNameBox"
                          Grid.Row="1"
+                         AutomationProperties.Name="Folder name"
                          Margin="0,8,0,0"
                          Padding="10,8"
                          MaxLength="40"

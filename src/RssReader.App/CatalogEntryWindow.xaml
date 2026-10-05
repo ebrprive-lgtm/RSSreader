@@ -54,15 +54,16 @@
             Click="CloseWindowButton_Click" />
         <StackPanel x:Name="FeedFields" Grid.Row="1" Margin="0,20,0,0">
             <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold" />
-            <TextBox x:Name="FeedNameBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBox x:Name="FeedNameBox" AutomationProperties.Name="Feed name" Margin="0,5,0,12" Padding="9,7" />
             <TextBlock Text="Feed URL" FontSize="12" FontWeight="SemiBold" />
-            <TextBox x:Name="FeedUrlBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBox x:Name="FeedUrlBox" AutomationProperties.Name="Feed URL" Margin="0,5,0,12" Padding="9,7" />
             <TextBlock Text="Publisher website (optional)" FontSize="12" FontWeight="SemiBold" />
-            <TextBox x:Name="FeedWebsiteUrlBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBox x:Name="FeedWebsiteUrlBox" AutomationProperties.Name="Publisher website" Margin="0,5,0,12" Padding="9,7" />
             <TextBlock Text="Description (optional)" FontSize="12" FontWeight="SemiBold" />
-            <TextBox x:Name="FeedDescriptionBox" Margin="0,5,0,12" Padding="9,7" />
+            <TextBox x:Name="FeedDescriptionBox" AutomationProperties.Name="Feed description" Margin="0,5,0,12" Padding="9,7" />
             <TextBlock Text="Category (optional)" FontSize="12" FontWeight="SemiBold" />
             <ComboBox x:Name="FeedCategoryBox"
+                      AutomationProperties.Name="Feed category"
                       ItemsSource="{Binding Categories}"
                       DisplayMemberPath="Name"
                       Margin="0,5,0,0"
@@ -71,13 +72,14 @@
         <StackPanel x:Name="CategoryFields" Grid.Row="1" Margin="0,20,0,0" Visibility="Collapsed">
             <TextBlock Text="Category name" FontSize="12" FontWeight="SemiBold" />
             <TextBox x:Name="CategoryNameBox"
+                     AutomationProperties.Name="Category name"
                      Margin="0,5,0,0"
                      Padding="9,7"
                      Text="{Binding CategoryName, UpdateSourceTrigger=PropertyChanged}" />
         </StackPanel>
         <StackPanel x:Name="CollectionFields" Grid.Row="1" Margin="0,20,0,0" Visibility="Collapsed">
             <TextBlock Text="Collection name" FontSize="12" FontWeight="SemiBold" />
-            <TextBox x:Name="CollectionNameBox" Margin="0,5,0,0" Padding="9,7" />
+            <TextBox x:Name="CollectionNameBox" AutomationProperties.Name="Collection name" Margin="0,5,0,0" Padding="9,7" />
         </StackPanel>
         <TextBlock Grid.Row="2"
                Grid.ColumnSpan="2"

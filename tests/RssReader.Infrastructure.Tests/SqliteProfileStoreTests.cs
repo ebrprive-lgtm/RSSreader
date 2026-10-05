@@ -57,7 +57,8 @@ public sealed class SqliteProfileStoreTests
             25,
             false,
             60,
-            true);
+            true,
+            false);
 
         await store.SavePreferencesAsync(firstProfile.Id, preferences);
         var reopenedStore = new SqliteProfileStore(database.Path);
@@ -105,7 +106,7 @@ public sealed class SqliteProfileStoreTests
     }
 
     [TestMethod]
-    public async Task Initialize_AddsDebugPreferenceToExistingProfilePreferences()
+    public async Task Initialize_AddsMissingPreferencesToExistingProfilePreferences()
     {
         using var database = new TemporaryDatabase();
         await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = database.Path }.ToString()))
@@ -141,6 +142,7 @@ public sealed class SqliteProfileStoreTests
         await store.InitializeAsync();
 
         Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).ShowRawFeedButton);
+        Assert.IsTrue((await store.GetPreferencesAsync("profile-1")).LimitArticleWidth);
     }
 
     [TestMethod]

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using System.IO;
 using System.Diagnostics;
 using System.Text;
@@ -10,6 +11,10 @@ namespace RssReader.App;
 
 public partial class ArticleHtmlViewer : UserControl
 {
+    private readonly DispatcherTimer _resizeRedrawTimer = new(DispatcherPriority.Background)
+    {
+        Interval = TimeSpan.FromMilliseconds(250)
+    };
     private string _document = ArticleHtmlDocumentBuilder.Build(null, null, null, null);
     private string? _fallbackText;
     private bool _isInitialized;
@@ -29,11 +34,14 @@ public partial class ArticleHtmlViewer : UserControl
                 "RssReader",
                 "WebView2")
         };
+        _resizeRedrawTimer.Tick += ResizeRedrawTimer_Tick;
+        SizeChanged += ArticleHtmlViewer_SizeChanged;
         Loaded += ArticleHtmlViewer_Loaded;
         Unloaded += ArticleHtmlViewer_Unloaded;
     }
 
     public event Action<Uri>? ExternalLinkRequested;
+    internal event Action? ArticleDocumentNavigationCompleted;
 
     internal string CurrentDocument => _document;
     internal Task InitializationTask => _initializationTask;
@@ -42,13 +50,20 @@ public partial class ArticleHtmlViewer : UserControl
     internal string? LastNavigationUriScheme { get; private set; }
     internal bool? LastNavigationSucceeded { get; private set; }
     internal CoreWebView2WebErrorStatus? LastNavigationErrorStatus { get; private set; }
+    internal int DocumentNavigationCount { get; private set; }
 
-    public void SetArticle(string? content, string? summary, string? articleUrl, string? feedUrl)
+    public void SetArticle(
+        string? content,
+        string? summary,
+        string? articleUrl,
+        string? feedUrl,
+        bool limitArticleWidth = true)
     {
         _fallbackText = summary;
-        _document = ArticleHtmlDocumentBuilder.Build(content, summary, articleUrl, feedUrl);
+        _document = ArticleHtmlDocumentBuilder.Build(content, summary, articleUrl, feedUrl, limitArticleWidth);
         if (_isInitialized)
         {
+            _resizeRedrawTimer.Stop();
             NavigateArticleDocument();
         }
     }
@@ -111,9 +126,30 @@ public partial class ArticleHtmlViewer : UserControl
     private void ArticleHtmlViewer_Unloaded(object sender, RoutedEventArgs e)
     {
         _isUnloaded = true;
+        _resizeRedrawTimer.Stop();
         if (_isInitialized)
         {
             Browser.CoreWebView2?.Stop();
+        }
+    }
+
+    private void ArticleHtmlViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged || !_isInitialized || _isUnloaded)
+        {
+            return;
+        }
+
+        _resizeRedrawTimer.Stop();
+        _resizeRedrawTimer.Start();
+    }
+
+    private void ResizeRedrawTimer_Tick(object? sender, EventArgs e)
+    {
+        _resizeRedrawTimer.Stop();
+        if (_isInitialized && !_isUnloaded && Browser.CoreWebView2 is not null)
+        {
+            NavigateArticleDocument();
         }
     }
 
@@ -155,6 +191,7 @@ public partial class ArticleHtmlViewer : UserControl
         LastNavigationSucceeded = e.IsSuccess;
         LastNavigationErrorStatus = e.WebErrorStatus;
         _navigationCompletion.TrySetResult();
+        ArticleDocumentNavigationCompleted?.Invoke();
         HandleNavigationResult(e.IsSuccess, e.WebErrorStatus);
     }
 
@@ -194,6 +231,7 @@ public partial class ArticleHtmlViewer : UserControl
     {
         _pendingDocumentNavigationUri = "data:text/html;charset=utf-8;base64," +
             Convert.ToBase64String(Encoding.UTF8.GetBytes(_document));
+        DocumentNavigationCount++;
         try
         {
             Browser.CoreWebView2.NavigateToString(_document);

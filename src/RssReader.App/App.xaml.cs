@@ -145,6 +145,11 @@ public partial class App : System.Windows.Application
 			MainWindow = readerWindow;
 			readerWindow.Show();
 			await viewModel.InitializeAsync();
+			if (!viewModel.IsCatalogMaster)
+			{
+				_ = viewModel.RefreshNowAsync();
+			}
+
 			chooser?.Close();
 			_profileChooserWindow = null;
 		}

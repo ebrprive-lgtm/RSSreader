@@ -9,7 +9,7 @@ internal static class ArticleHtmlDocumentBuilder
         :root { color-scheme: light; }
         html, body { margin: 0; padding: 0; background: #fff; }
         body { color: #202923; font: 16px/1.65 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
-        main { max-width: 860px; margin: 0 auto; padding: 12px 0 24px; }
+        main { padding: 12px 12px 24px; }
         img { max-width: 100%; height: auto; vertical-align: middle; }
         img.reader-centered-image { display: block; margin: 16px auto; }
         a.reader-centered-image-link { clear: both; display: block; text-align: center; }
@@ -28,7 +28,8 @@ internal static class ArticleHtmlDocumentBuilder
         string? content,
         string? summary,
         string? articleUrl,
-        string? feedUrl)
+        string? feedUrl,
+        bool limitArticleWidth = true)
     {
         var baseUrl = GetWebUrl(articleUrl) ?? GetWebUrl(feedUrl);
         var bodyFragment = string.IsNullOrWhiteSpace(content)
@@ -37,6 +38,9 @@ internal static class ArticleHtmlDocumentBuilder
         bodyFragment = RemoveDuplicateLeadingImage(bodyFragment, baseUrl);
         bodyFragment = PreserveCenteredImageAlignment(bodyFragment);
         var sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl);
+        var widthLimitStyle = limitArticleWidth
+            ? "main { box-sizing: border-box; width: 100%; max-width: 900px; margin: 0 auto; }"
+            : string.Empty;
 
         return $"""
             <!doctype html>
@@ -45,7 +49,7 @@ internal static class ArticleHtmlDocumentBuilder
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
               <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-              <style>{ReaderStyles}</style>
+              <style>{ReaderStyles}{widthLimitStyle}</style>
             </head>
             <body><main>{sanitizedFragment}</main></body>
             </html>
