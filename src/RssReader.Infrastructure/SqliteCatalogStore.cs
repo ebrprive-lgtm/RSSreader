@@ -39,7 +39,8 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
                 CategoryId TEXT NULL REFERENCES CatalogCategories(Id) ON DELETE SET NULL,
                 WebsiteUrl TEXT NULL,
                 LastHealthCheckedAt TEXT NULL,
-                LastHealthCheckSucceeded INTEGER NULL
+                LastHealthCheckSucceeded INTEGER NULL,
+                IsSharedCatalog INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE IF NOT EXISTS CatalogCollectionFeeds (
                 CollectionId TEXT NOT NULL REFERENCES CatalogCollections(Id) ON DELETE CASCADE,
@@ -51,6 +52,26 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
         await EnsureCatalogFeedColumnAsync(connection, "WebsiteUrl", "TEXT NULL", cancellationToken);
         await EnsureCatalogFeedColumnAsync(connection, "LastHealthCheckedAt", "TEXT NULL", cancellationToken);
         await EnsureCatalogFeedColumnAsync(connection, "LastHealthCheckSucceeded", "INTEGER NULL", cancellationToken);
+        await EnsureCatalogFeedColumnAsync(connection, "IsSharedCatalog", "INTEGER NOT NULL DEFAULT 1", cancellationToken);
+        await using var profileFeedsCommand = connection.CreateCommand();
+        profileFeedsCommand.CommandText = """
+            CREATE TABLE IF NOT EXISTS ProfileFeedOwners (
+                ProfileId TEXT NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
+                FeedId TEXT NOT NULL REFERENCES CatalogFeeds(Id) ON DELETE CASCADE,
+                PRIMARY KEY (ProfileId, FeedId)
+            );
+            CREATE TRIGGER IF NOT EXISTS TR_ProfileFeedOwners_Cleanup
+            AFTER DELETE ON ProfileFeedOwners
+            BEGIN
+                DELETE FROM CatalogFeeds
+                WHERE Id = OLD.FeedId
+                  AND IsSharedCatalog = 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM ProfileFeedOwners WHERE FeedId = OLD.FeedId
+                  );
+            END;
+            """;
+        await profileFeedsCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task EnsureCatalogFeedColumnAsync(
@@ -85,25 +106,157 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
         command.CommandText = """
             SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded
             FROM CatalogFeeds
+            WHERE IsSharedCatalog = 1
             ORDER BY Name COLLATE NOCASE;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var feeds = new List<CatalogFeed>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            feeds.Add(new CatalogFeed(
-                reader.GetString(0),
-                reader.GetString(1),
-                reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
-                reader.IsDBNull(7) ? null : reader.GetInt64(7) == 1));
+            feeds.Add(ReadCatalogFeed(reader));
         }
 
         return feeds;
     }
+
+    public async Task<IReadOnlyList<CatalogFeed>> GetFeedsForProfileAsync(
+        string profileId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT feed.Id, feed.Name, feed.FeedUrl, feed.Description, feed.CategoryId, feed.WebsiteUrl,
+                   feed.LastHealthCheckedAt, feed.LastHealthCheckSucceeded
+            FROM CatalogFeeds AS feed
+            WHERE feed.IsSharedCatalog = 1
+               OR EXISTS (
+                    SELECT 1 FROM ProfileFeedOwners AS owner
+                    WHERE owner.FeedId = feed.Id AND owner.ProfileId = $profileId
+               )
+            ORDER BY feed.Name COLLATE NOCASE;
+            """;
+        command.Parameters.AddWithValue("$profileId", profileId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var feeds = new List<CatalogFeed>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            feeds.Add(ReadCatalogFeed(reader));
+        }
+
+        return feeds;
+    }
+
+    public async Task<CatalogFeed> AddProfileFeedAsync(
+        string profileId,
+        CatalogFeed feed,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = connection.BeginTransaction();
+        string feedId;
+        var isSharedCatalog = false;
+        var needsInsert = true;
+        await using (var find = connection.CreateCommand())
+        {
+            find.Transaction = transaction;
+            find.CommandText = """
+                SELECT Id, IsSharedCatalog
+                FROM CatalogFeeds
+                WHERE FeedUrl = $feedUrl COLLATE NOCASE;
+                """;
+            find.Parameters.AddWithValue("$feedUrl", feed.FeedUrl);
+            await using var reader = await find.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                feedId = reader.GetString(0);
+                isSharedCatalog = reader.GetInt64(1) == 1;
+                needsInsert = false;
+            }
+            else
+            {
+                feedId = feed.Id;
+            }
+        }
+
+        if (needsInsert)
+        {
+            await using var insertFeed = connection.CreateCommand();
+            insertFeed.Transaction = transaction;
+            insertFeed.CommandText = """
+                INSERT INTO CatalogFeeds (
+                    Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, IsSharedCatalog)
+                VALUES ($id, $name, $feedUrl, $description, NULL, $websiteUrl, 0);
+                """;
+            insertFeed.Parameters.AddWithValue("$id", feed.Id);
+            insertFeed.Parameters.AddWithValue("$name", feed.Name);
+            insertFeed.Parameters.AddWithValue("$feedUrl", feed.FeedUrl);
+            insertFeed.Parameters.AddWithValue("$description", (object?)feed.Description ?? DBNull.Value);
+            insertFeed.Parameters.AddWithValue("$websiteUrl", (object?)feed.WebsiteUrl ?? DBNull.Value);
+            await insertFeed.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!isSharedCatalog)
+        {
+            await using var addOwner = connection.CreateCommand();
+            addOwner.Transaction = transaction;
+            addOwner.CommandText = """
+                INSERT OR IGNORE INTO ProfileFeedOwners (ProfileId, FeedId)
+                VALUES ($profileId, $feedId);
+                """;
+            addOwner.Parameters.AddWithValue("$profileId", profileId);
+            addOwner.Parameters.AddWithValue("$feedId", feedId);
+            await addOwner.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using var select = connection.CreateCommand();
+        select.Transaction = transaction;
+        select.CommandText = """
+            SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded
+            FROM CatalogFeeds WHERE Id = $feedId;
+            """;
+        select.Parameters.AddWithValue("$feedId", feedId);
+        await using var selectedReader = await select.ExecuteReaderAsync(cancellationToken);
+        if (!await selectedReader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException("The feed could not be added to this profile.");
+        }
+
+        var result = ReadCatalogFeed(selectedReader);
+        await selectedReader.DisposeAsync();
+        await transaction.CommitAsync(cancellationToken);
+        return result;
+    }
+
+    public async Task<bool> FeedUrlExistsAsync(
+        string feedUrl,
+        string? exceptFeedId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT EXISTS (
+                SELECT 1 FROM CatalogFeeds
+                WHERE FeedUrl = $feedUrl COLLATE NOCASE
+                  AND ($exceptFeedId IS NULL OR Id <> $exceptFeedId)
+            );
+            """;
+        command.Parameters.AddWithValue("$feedUrl", feedUrl);
+        command.Parameters.AddWithValue("$exceptFeedId", (object?)exceptFeedId ?? DBNull.Value);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) == 1;
+    }
+
+    private static CatalogFeed ReadCatalogFeed(SqliteDataReader reader) =>
+        new(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+            reader.IsDBNull(7) ? null : reader.GetInt64(7) == 1);
 
     public async Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default)
     {
@@ -217,7 +370,7 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
         ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } updateSucceeded ? (object)(updateSucceeded ? 1 : 0) : DBNull.Value));
 
     public Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "DELETE FROM CatalogFeeds WHERE Id = $id;",
+        "DELETE FROM CatalogFeeds WHERE Id = $id AND IsSharedCatalog = 1;",
         cancellationToken,
         ("$id", feedId));
 

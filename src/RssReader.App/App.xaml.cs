@@ -48,6 +48,7 @@ public partial class App : System.Windows.Application
 					services.AddSingleton<CatalogService>();
 					services.AddSingleton<CatalogFeedPreviewService>();
 					services.AddSingleton<ReadingService>();
+					services.AddSingleton<ProfileFeedService>();
 					services.AddSingleton<FeedRefreshService>();
 				})
 				.Build();
@@ -136,7 +137,9 @@ public partial class App : System.Windows.Application
 				readingService,
 				feedRefreshService,
 				preferences,
-				catalogFeedPreviewService);
+				catalogFeedPreviewService,
+				_host.Services.GetRequiredService<ProfileFeedService>(),
+				profileService);
 			readerWindow = new MainWindow(viewModel);
 			readerWindow.LogoutRequested += LogOut;
 			readerWindow.PreferencesRequested += () => ShowPreferences(readerWindow, viewModel);
@@ -214,4 +217,3 @@ public partial class App : System.Windows.Application
 		}
 	}
 }
-

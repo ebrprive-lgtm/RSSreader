@@ -129,6 +129,13 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             FROM ProfileSubscriptions AS subscription
             INNER JOIN CatalogFeeds AS feed ON feed.Id = subscription.FeedId
             WHERE subscription.ProfileId = $profileId
+              AND (
+                  feed.IsSharedCatalog = 1
+                  OR EXISTS (
+                      SELECT 1 FROM ProfileFeedOwners AS owner
+                      WHERE owner.FeedId = feed.Id AND owner.ProfileId = subscription.ProfileId
+                  )
+              )
             ORDER BY feed.Name COLLATE NOCASE;
             """;
         command.Parameters.AddWithValue("$profileId", profileId);
@@ -224,11 +231,39 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
         ("$feedId", feedId),
         ("$folder", folderName));
 
-    public Task UnsubscribeAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "DELETE FROM ProfileSubscriptions WHERE ProfileId = $profileId AND FeedId = $feedId;",
-        cancellationToken,
-        ("$profileId", profileId),
-        ("$feedId", feedId));
+    public async Task UnsubscribeAsync(
+        string profileId,
+        string feedId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenConnectionAsync(cancellationToken);
+        await using var transaction = connection.BeginTransaction();
+        await using (var unsubscribe = connection.CreateCommand())
+        {
+            unsubscribe.Transaction = transaction;
+            unsubscribe.CommandText = """
+                DELETE FROM ProfileSubscriptions
+                WHERE ProfileId = $profileId AND FeedId = $feedId;
+                """;
+            unsubscribe.Parameters.AddWithValue("$profileId", profileId);
+            unsubscribe.Parameters.AddWithValue("$feedId", feedId);
+            await unsubscribe.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using (var removePersonalFeed = connection.CreateCommand())
+        {
+            removePersonalFeed.Transaction = transaction;
+            removePersonalFeed.CommandText = """
+                DELETE FROM ProfileFeedOwners
+                WHERE ProfileId = $profileId AND FeedId = $feedId;
+                """;
+            removePersonalFeed.Parameters.AddWithValue("$profileId", profileId);
+            removePersonalFeed.Parameters.AddWithValue("$feedId", feedId);
+            await removePersonalFeed.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<string>> GetFoldersAsync(
         string profileId,
@@ -258,6 +293,22 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
     {
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var transaction = connection.BeginTransaction();
+        await using (var removePersonalFeeds = connection.CreateCommand())
+        {
+            removePersonalFeeds.Transaction = transaction;
+            removePersonalFeeds.CommandText = """
+                DELETE FROM ProfileFeedOwners
+                WHERE ProfileId = $profileId
+                  AND FeedId IN (
+                      SELECT FeedId FROM ProfileSubscriptions
+                      WHERE ProfileId = $profileId AND FolderName = $name COLLATE NOCASE
+                  );
+                """;
+            removePersonalFeeds.Parameters.AddWithValue("$profileId", profileId);
+            removePersonalFeeds.Parameters.AddWithValue("$name", name);
+            await removePersonalFeeds.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         await using (var unsubscribe = connection.CreateCommand())
         {
             unsubscribe.Transaction = transaction;
@@ -343,7 +394,15 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
                 FROM ArticleCategories AS category
                 INNER JOIN Articles AS article ON article.Id = category.ArticleId
                 INNER JOIN ProfileSubscriptions AS subscription ON subscription.FeedId = article.FeedId
+                INNER JOIN CatalogFeeds AS feed ON feed.Id = article.FeedId
                 WHERE subscription.ProfileId = $profileId
+                  AND (
+                      feed.IsSharedCatalog = 1
+                      OR EXISTS (
+                          SELECT 1 FROM ProfileFeedOwners AS owner
+                          WHERE owner.FeedId = feed.Id AND owner.ProfileId = subscription.ProfileId
+                      )
+                  )
                 ORDER BY category.Term COLLATE NOCASE;
                 """;
             categoriesCommand.Parameters.AddWithValue("$profileId", profileId);
@@ -377,6 +436,13 @@ public sealed class SqliteReaderStore(string databasePath) : IReaderStore
             LEFT JOIN ProfileArticleStates AS state
                 ON state.ArticleId = article.Id AND state.ProfileId = subscription.ProfileId
             WHERE subscription.ProfileId = $profileId
+              AND (
+                  feed.IsSharedCatalog = 1
+                  OR EXISTS (
+                      SELECT 1 FROM ProfileFeedOwners AS owner
+                      WHERE owner.FeedId = feed.Id AND owner.ProfileId = subscription.ProfileId
+                  )
+              )
             ORDER BY article.PublishedAt DESC;
             """;
         command.Parameters.AddWithValue("$profileId", profileId);

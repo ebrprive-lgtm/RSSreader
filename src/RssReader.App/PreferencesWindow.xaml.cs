@@ -78,7 +78,8 @@ public partial class PreferencesWindow : Window
             RefreshFeedsWhenOpenedCheckBox.IsChecked == true,
             int.Parse((string)((System.Windows.Controls.ComboBoxItem)AutoRefreshIntervalComboBox.SelectedItem).Tag, CultureInfo.InvariantCulture),
             ShowRawFeedButtonCheckBox.IsChecked == true,
-            LimitArticleWidthCheckBox.IsChecked == true);
+            LimitArticleWidthCheckBox.IsChecked == true,
+            Preferences.HideFollowedCatalogFeeds);
         DialogResult = true;
     }
 }

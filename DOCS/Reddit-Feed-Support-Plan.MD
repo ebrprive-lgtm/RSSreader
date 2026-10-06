@@ -25,32 +25,78 @@ Users should be able to:
 
 ## Product Decisions and Constraints
 
-- Model source kind explicitly if Reddit needs behavior/configuration that cannot be represented reliably by a generic URL. Do not infer a provider from an arbitrary URL in multiple layers.
+- Model source kind explicitly for Reddit; do not infer a provider from an arbitrary URL in multiple layers.
 - Treat flair as publisher-provided **article metadata**, distinct from RSS/Atom **Topics** and profile-owned **Feed tags**. Do not store flair in `ArticleCategories` or `ProfileFeedTags`.
 - A feed refresh updates the flair for each returned article, including clearing a previously stored flair when the source no longer provides one. Articles omitted from a refresh retain their cached data.
 - Start with one selected flair per article-list view. Flair filtering composes with, and clearing it preserves, all other active filters.
-- Trim flair values and ignore missing/blank values. Decide and test whether matching and option deduplication are case-insensitive; preserve the source's display casing.
-- Do not commit to Reddit endpoint, authentication, source types (subreddit/listing/search), historical pagination, or request rate until Phase 0 verifies current access requirements, reliability, flair availability, and licensing/usage constraints.
+- Trim flair values and ignore missing/blank values. Match and deduplicate case-insensitively while preserving source display casing.
+- Unflairied posts remain visible when no flair is selected. Do not add a "No flair" option in the first release.
+- Offer flair options/counts from the loaded article scope after the other active filters are applied; selecting a flair narrows that scope, and clearing it does not reset those other filters.
+- Do not scrape Reddit HTML or rely on an unauthenticated `.json` endpoint. Any API use must follow Reddit's current access terms and must not ship a client secret in the desktop application.
 - Automated tests use deterministic fixtures and fake HTTP responses. They must not require Reddit credentials or live network access.
+
+## Phase 0 Findings (2026-10-05)
+
+- A live, read-only compatibility probe of `https://www.reddit.com/r/dotnet/.rss` and `https://www.reddit.com/r/technology/.rss` returned Atom feeds (25 entries sampled per subreddit). The entries exposed subreddit-level categories but no distinct per-post flair metadata; the native Atom feed is therefore insufficient for a reliable flair filter.
+- An unauthenticated request to `https://www.reddit.com/r/dotnet/.json` with a descriptive User-Agent returned HTTP 403 in the probe. This is an observation, not proof that every unauthenticated request is universally blocked.
+- Reddit's [Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki) and [API reference](https://www.reddit.com/dev/api/) are the primary references for confirming current OAuth, registration, User-Agent, quota, and endpoint requirements before implementation. The API is the likely first-party route for `link_flair_text`, but access is not yet demonstrated for this application.
+- Reddit's [Data API Terms](https://redditinc.com/policies/data-api-terms) sections 2.4, 2.5, 2.8, and 2.9 limit copying/displaying user content to what is needed to run the app, govern removal requests, require use of Reddit-provided access information (including OAuth tokens), and reserve the right to impose API limits. Local offline caching and removal obligations must be checked against the complete current documentation before implementation.
+- The Data API Wiki also discusses removing content that is removed on Reddit and recommends routinely deleting stored user data/content within 48 hours. The current reader keeps cached articles for offline use; a scan of [`SqliteReaderStore`](../src/RssReader.Infrastructure/SqliteReaderStore.cs) found refresh updates but no article-pruning/deletion path. The exact obligation, practical deletion mechanism, and compatibility with offline reading require explicit review; do not assume that a refresh of only the newest posts is enough.
+- **Retention strategy to investigate, not adopt yet:** determine whether a currently supported API can revalidate stored submission IDs in batches, how deleted/removed content is represented, and whether the request cost fits Reddit's limits. A possible fail-safe is to purge deleted content promptly and stop displaying cached Reddit content once its verification age exceeds the policy window when revalidation is unavailable. That would weaken offline reading and needs policy and product approval.
+- Follow-up requests to other subreddit feeds received HTTP 429 during the probe. This reinforces the need to define request pacing and visible retry/error behavior; it does not establish a stable quota.
+- **V1 source scope:** a Reddit feed represents one public subreddit and its newest-post listing. Defer hot/top listings, subreddit search, multireddits, user feeds, comments, and historical backfill.
+- **V1 catalog input:** add an explicit Reddit source choice. Accept a canonical Reddit subreddit URL (`reddit.com/r/<name>`, optional `www` and trailing slash); normalize host, case, and slash for duplicate detection; display it as `r/<name>`. Reject post/comment URLs and unrelated hosts. Keep the initial listing fixed to newest posts rather than exposing sort configuration.
+- **OAuth candidate, not yet verified:** register a Reddit installed/native app and use a user-approved authorization-code flow with the minimum read-only scope. A native/installed client should not require a client secret in the desktop binary; keep refresh tokens out of the SQLite reader database and use OS-protected storage. Confirm Reddit currently permits this flow and the application before relying on it. If registration or approval is unavailable, defer API-backed support.
+- **Safe working disposition:** use the V1 subreddit/newest scope above as the planning baseline. Do not substitute a third-party proxy or a flair-less native Atom feed for the requested flair-filter experience. Reddit access and cache compliance are mandatory stop/go checks before any production-code change.
+
+## Phase 0 Decision
+
+**Status: Complete — conditional GO to a bounded Phase 1 technical proof only. This is not approval to begin production implementation.**
+
+- The proposed source is one public subreddit, newest-post listing only, entered as a canonical subreddit URL. Search, other listings, user feeds, multireddits, comments, and backfill are out of V1 scope.
+- The native subreddit Atom feed is not sufficient for the required per-post flair filter. The first-party Data API is the only proposed source; do not scrape Reddit pages, use an unauthenticated API endpoint, or depend on a third-party relay.
+- The access candidate is a registered installed/native OAuth client with user authorization and minimum read-only scope. Do not ship a client secret; keep any refresh token in OS-protected storage. Current approval, exact flow, and access remain unverified.
+- Flair is article metadata, separate from Topics and Feed tags. The first UI uses one trimmed, case-insensitive flair selection, source-cased display values, current-scope counts, and independent clearing. Unflairied posts remain in the unfiltered view.
+- Reddit article persistence is **not approved** yet. Data API terms/removal rules may conflict with the reader's indefinite offline archive, which currently has no article-pruning path. Phase 1 must verify an allowed retention/revalidation strategy before enabling persistence.
+- The facts that cannot be verified without registered/authorized API access (OAuth, real flair fields, deletion status, and rate behavior) are moved to the Phase 1 stop/go gate. If that gate fails, stop the feature rather than weaken the source or retention requirements.
+
+This conditional decision closes discovery and scope-setting. It keeps unresolved external access/policy checks explicit and prevents them from being mistaken for implementation approval.
 
 ## Phased Roadmap
 
 ### Phase 0: Verify Source Access and Lock Scope
 
-**Goal:** Select a supportable Reddit ingestion contract before designing persistence or UI around it.
+**Goal:** Select a supportable Reddit source scope, UX, semantics, and implementation gate.
 
-- [ ] Verify current Reddit access options for public read-only feeds and identify the method that reliably returns post IDs, links, timestamps, summaries/content, authors where available, and flair text.
-- [ ] Confirm whether the selected method requires credentials, an application registration, a specific User-Agent, request throttling, or other operational configuration. Do not hard-code credentials.
-- [ ] Exercise representative sources with flair present, absent, Unicode, and changed after refresh; record observed response and failure behavior without relying on live responses in tests.
-- [ ] Define the initial supported source scope (for example, a subreddit and a specific listing). Explicitly defer unsupported Reddit source types rather than implying full Reddit coverage.
-- [ ] Define input UX and canonical identity: accepted URL forms, normalization, duplicate detection, display name, and how invalid/private/restricted sources are reported.
-- [ ] Confirm flair matching, casing, no-flair behavior, option labels/counts, and how flair filtering composes with current filters.
+- [x] Verify current Reddit access options for public read-only feeds and identify that native subreddit Atom responses sampled do not expose a distinct post flair; an authenticated API remains the likely first-party option.
+- [x] Confirm from the current [Reddit Data API Wiki](https://support.reddithelp.com/hc/en-us/articles/16160319875092-Reddit-Data-API-Wiki) that API use is OAuth-authenticated and requires a registered app and descriptive User-Agent; follow the documented rate-limit signals rather than hard-coding a presumed global quota. No credentials or application registration are present in this repository.
+- [x] Record installed/native OAuth as the candidate access model, with an explicit Phase 1 stop/go check for current flow support, registration/approval, and least-privilege scope. Do not embed a client secret; store tokens outside SQLite.
+- [x] Review the current Data API Terms and Wiki: the content license is limited to copying/displaying content as needed to run the app, removal requirements apply, and routine deletion within 48 hours is recommended. This is not blanket authorization for indefinite offline retention.
+- [x] Record the cache/retention incompatibility risk and set the decision: do not persist Reddit articles until a compliant, rate-feasible removal/revalidation strategy is proven; if it cannot be proven, stop Reddit support.
+- [x] Record authorized API samples for flair-present, no-flair, Unicode, changed, and removed posts as Phase 1 gate evidence; do not substitute guessed/live-dependent fixtures.
+- [x] Define the initial supported source scope as one public subreddit newest-post listing. Defer other Reddit source types and historical backfill.
+- [x] Define catalog input and identity: explicit Reddit source choice; accept a canonical subreddit URL with optional `www`/trailing slash; normalize for duplicate detection; display `r/<name>`; reject direct post/comment URLs and unrelated hosts.
+- [x] Define initial flair semantics: one case-insensitive trimmed flair selection, preserve source casing for display, keep unflairied posts in the unfiltered view, offer counts in the other-filtered article scope, and clear flair independently of all other filters.
 
-**Exit criteria:** The retrieval method, source scope, access/rate-limit requirements, catalog UX, and flair semantics are documented and feasible without weakening existing feed refresh behavior.
+**Exit criteria:** Source limitations, V1 scope, catalog identity, flair semantics, terms risks, and an explicit implementation stop/go gate are documented. **Met.** OAuth authorization, removal/revalidation, and representative API samples are Phase 1 prerequisites, not claims of Phase 0 verification.
 
 ### Phase 1: Add Reddit Source Modeling and Ingestion
 
 **Goal:** Download Reddit entries through the existing refresh pipeline without regressing RSS/Atom.
+
+**Status (2026-10-05):** Gate started; blocked at approved OAuth access. No-credential requests to `oauth.reddit.com/r/dotnet/new?limit=1` and `www.reddit.com/r/dotnet/.json` returned HTTP 403. A further public `r/technology/.rss` probe returned 25 entries with only a subreddit category term and no flair marker, confirming native Atom is not a substitute. No Reddit app registration or user-authorized token has been supplied or is present in the workspace. Reddit's current terms make API access conditional on its access rules and limits. Do not proceed to production changes until authorized app access is available and the remaining gate checks can be performed.
+
+#### Gate: Prove Access and Retention Before Production Changes
+
+- [x] Probe public JSON/OAuth endpoints without credentials using a descriptive User-Agent; both returned HTTP 403. A separate 25-entry native Atom probe again exposed no flair metadata. No unauthenticated or flair-less fallback will be used.
+- [x] Inspect local purge mechanics: `Articles` deletion cascades to `ArticleCategories` and `ProfileArticleStates` with foreign keys enabled. This can remove article metadata plus read/saved state once Reddit removal is detected; the actual deletion transaction still needs a focused test if implementation proceeds.
+- [ ] Register/obtain an approved Reddit application and verify the installed/native OAuth flow with a user-authorized account and minimum read-only scope. Confirm the truthful User-Agent and observe actual rate-limit/429 behavior.
+- [ ] Using authorized, deterministic captures, verify subreddit `/new` response shape, stable post IDs, links, dates, `link_flair_text`, absent/Unicode/changed flair, deleted/removed post representation, and error responses.
+- [ ] Verify a supported, rate-feasible way to revalidate stored post IDs and purge removed content. Define what happens to cached Reddit content after verification becomes stale or the API is unavailable.
+- [ ] Confirm the proposed Reddit cache/display/retention behavior complies with the current Data API Terms and removal guidance.
+- [ ] **Stop condition:** if OAuth access, required metadata, removal detection, or a compliant retention strategy cannot be verified, do not add Reddit article persistence or continue to the implementation tasks below. Update the plan with the feasibility result.
+
+#### Implementation (only after the gate passes)
 
 - [ ] Introduce the smallest explicit source-kind/configuration model needed to distinguish Reddit from generic RSS/Atom feeds; preserve existing constructor and database compatibility where practical.
 - [ ] Add a Reddit downloader or source-specific downloader strategy behind `IFeedDownloader`, reusing shared HTTP and refresh services where appropriate instead of duplicating them.

@@ -58,7 +58,8 @@ public sealed class SqliteProfileStoreTests
             false,
             60,
             true,
-            false);
+            false,
+            true);
 
         await store.SavePreferencesAsync(firstProfile.Id, preferences);
         var reopenedStore = new SqliteProfileStore(database.Path);
@@ -143,6 +144,7 @@ public sealed class SqliteProfileStoreTests
 
         Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).ShowRawFeedButton);
         Assert.IsTrue((await store.GetPreferencesAsync("profile-1")).LimitArticleWidth);
+        Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).HideFollowedCatalogFeeds);
     }
 
     [TestMethod]

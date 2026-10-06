@@ -56,7 +56,7 @@ public sealed class FeedRefreshService(
             throw new InvalidOperationException("The feed is not followed by this profile.");
         }
 
-        var feed = (await catalogStore.GetFeedsAsync(cancellationToken))
+        var feed = (await catalogStore.GetFeedsForProfileAsync(profileId, cancellationToken))
             .FirstOrDefault(candidate => candidate.Id == feedId)
             ?? throw new InvalidOperationException("The feed is no longer in the catalog.");
         return await rawFeedContentDownloader.DownloadRawArticleContentAsync(
@@ -72,7 +72,7 @@ public sealed class FeedRefreshService(
         IReadOnlyList<ProfileSubscription> subscriptions,
         CancellationToken cancellationToken)
     {
-        var feeds = await catalogStore.GetFeedsAsync(cancellationToken);
+        var feeds = await catalogStore.GetFeedsForProfileAsync(profileId, cancellationToken);
         var feedLookup = feeds.ToDictionary(feed => feed.Id, StringComparer.Ordinal);
         var failures = new ConcurrentBag<string>();
         var failedFeedIds = new ConcurrentBag<string>();

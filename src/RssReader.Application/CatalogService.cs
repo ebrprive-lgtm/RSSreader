@@ -72,6 +72,11 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
             throw new InvalidOperationException("That feed URL is already in the catalog.");
         }
 
+        if (await store.FeedUrlExistsAsync(normalizedUrl, cancellationToken: cancellationToken))
+        {
+            throw new InvalidOperationException("That feed URL is already used by a profile's personal feed.");
+        }
+
         if (categoryId is not null)
         {
             var categories = await store.GetCategoriesAsync(cancellationToken);
@@ -126,6 +131,11 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
             string.Equals(feed.FeedUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase)))
         {
             throw new InvalidOperationException("That feed URL is already in the catalog.");
+        }
+
+        if (await store.FeedUrlExistsAsync(normalizedUrl, feedId, cancellationToken))
+        {
+            throw new InvalidOperationException("That feed URL is already used by another feed.");
         }
 
         if (categoryId is not null)
@@ -238,6 +248,18 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
                     normalizedUrl,
                     urlMatch.Name,
                     urlMatch.FeedUrl));
+                skippedCount++;
+                continue;
+            }
+
+            if (await store.FeedUrlExistsAsync(normalizedUrl, cancellationToken: cancellationToken))
+            {
+                duplicateCandidates.Add(new FeedDuplicateCandidate(
+                    FeedDuplicateKind.ExactUrl,
+                    normalizedName,
+                    normalizedUrl,
+                    "Personal profile feed",
+                    normalizedUrl));
                 skippedCount++;
                 continue;
             }
@@ -434,15 +456,5 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
     }
 
     private static bool TryNormalizeFeedUrl(string? feedUrl, out string normalizedUrl)
-    {
-        if (Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri) &&
-            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-        {
-            normalizedUrl = uri.AbsoluteUri;
-            return true;
-        }
-
-        normalizedUrl = string.Empty;
-        return false;
-    }
+        => FeedUrlNormalizer.TryNormalize(feedUrl, out normalizedUrl);
 }

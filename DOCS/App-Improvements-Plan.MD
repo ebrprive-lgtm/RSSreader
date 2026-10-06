@@ -16,6 +16,7 @@ Improve trust, speed, and usability across the recurring RSS reader workflows: f
 - The selected-article view displays the feed, author/date metadata, publisher website link when available, and sanitized article HTML. The raw XML dialog supports tree inspection and copying the original selected-item XML.
 - Cards and Magazine presentations use the feed/article image metadata. Article HTML uses the images in the article body, with handling for duplicate lead images and centered image markup.
 - Catalog Master can create and maintain catalog feeds, categories, and collections. A newly created feed is synchronized to Follow Sources without restarting.
+- Regular profiles can add profile-owned public RSS/Atom feeds and import/export their subscriptions as OPML. Imported nested outlines map to profile folders; personal sources stay outside the shared catalog.
 - Existing test projects cover Domain, Application, Infrastructure, and App behavior. The WPF App test host has had intermittent shared-Application/WebView2 shutdown failures; run WPF integration tests in isolation when diagnosing host failures.
 
 ## Prioritization

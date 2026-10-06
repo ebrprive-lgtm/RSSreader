@@ -97,13 +97,10 @@ public sealed class MainWindowViewModelTests
     public void ManagedFeedPreviewCheckButtonClosesAndChecksFeed()
     {
         Exception? failure = null;
-        var thread = new Thread(() =>
+        WpfTestHost.Run(() =>
         {
             try
             {
-                var app = new RssReader.App.App();
-                app.InitializeComponent();
-                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 CatalogFeedPreviewWindow? preview = null;
                 var checkFeedRequested = false;
                 var previewWasClosedBeforeCheck = false;
@@ -134,9 +131,7 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(checkFeedRequested);
                 Assert.IsTrue(previewWasClosedBeforeCheck);
                 Assert.IsFalse(preview.IsVisible);
-
                 var styleFailures = VerifyAdditionalCustomChrome();
-                app.Shutdown();
                 Assert.AreEqual(0, styleFailures.Count, string.Join(Environment.NewLine, styleFailures));
             }
             catch (Exception exception)
@@ -144,10 +139,6 @@ public sealed class MainWindowViewModelTests
                 failure = exception;
             }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
         Assert.IsNull(failure, failure?.ToString());
     }
 
@@ -655,13 +646,10 @@ public sealed class MainWindowViewModelTests
     public void MainWindowCanBeConstructedForARegularProfile()
     {
         Exception? failure = null;
-        var thread = new Thread(() =>
+        WpfTestHost.Run(() =>
         {
             try
             {
-                var app = new RssReader.App.App();
-                app.InitializeComponent();
-                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
                 var accessibilityFeed = new CatalogFeedListItem(
                     "feed-accessibility",
@@ -883,7 +871,7 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual("Follow selected feeds", AutomationProperties.GetName(batchFollowButton));
                 Assert.AreEqual("Follow selected (0)", AutomationProperties.GetHelpText(batchFollowButton));
                 Assert.IsFalse(batchFollowButton.IsEnabled);
-                Assert.IsFalse(((Button)window.FindName("ClearSelectedCatalogFeedsButton")).IsEnabled);
+                Assert.IsNull(window.FindName("ClearSelectedCatalogFeedsButton"));
                 viewModel.ClearCatalogFiltersCommand.Execute(null);
                 window.UpdateLayout();
 
@@ -978,10 +966,15 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual(Visibility.Visible, articleViewer.Visibility);
                 var initialViewerWidth = articleViewer.ActualWidth;
                 var initialViewerHeight = articleViewer.ActualHeight;
+                StringAssert.Contains(articleViewer.CurrentDocument, "max-width: 900px");
                 StringAssert.Contains(articleViewer.CurrentDocument, "https://example.com/inline-panel.png");
                 Assert.IsFalse(articleViewer.CurrentDocument.Contains(
                     "https://resources.arcamax.com/newspics/396/39604/3960483.gif",
                     StringComparison.Ordinal));
+                viewModel.ApplyPreferences(new ProfilePreferences(LimitArticleWidth: false));
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains("max-width: 900px", StringComparison.Ordinal));
+                StringAssert.Contains(articleViewer.CurrentDocument, "max-width: none");
+                viewModel.ApplyPreferences(new ProfilePreferences());
                 var browser = (Microsoft.Web.WebView2.Wpf.WebView2?)articleViewer.FindName("Browser");
                 Assert.IsNotNull(browser);
                 Assert.AreEqual(
@@ -1041,9 +1034,14 @@ public sealed class MainWindowViewModelTests
                     ((Hyperlink)websiteLink.Inlines.Single()).NavigateUri);
                 var selectedArticleAuthor = (TextBlock)window.FindName("SelectedArticleAuthor");
                 Assert.AreEqual(Visibility.Visible, selectedArticleAuthor.Visibility);
+                var authorInlines = selectedArticleAuthor.Inlines.OfType<Run>()
+                    .Select(run => run.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToArray();
                 CollectionAssert.AreEqual(
                     new[] { "By: ", "Jayme Lozano Carver, The Texas Tribune", " (", comicArticle.PublishedDateLabel, ")" },
-                    selectedArticleAuthor.Inlines.OfType<Run>().Select(run => run.Text).ToArray());
+                    authorInlines,
+                    $"Actual author inlines: [{string.Join(" | ", authorInlines)}]");
                 PumpDispatcherUntil(redrawNavigationCompleted.Task);
                 Assert.AreEqual(navigationCountBeforeResize + 1, articleViewer.DocumentNavigationCount);
                 viewModel.BackToListCommand.Execute(null);
@@ -1126,17 +1124,12 @@ public sealed class MainWindowViewModelTests
                 catalogMasterWindow.UpdateLayout();
                 Assert.AreEqual(1, renameButton.Opacity);
                 catalogMasterWindow.Close();
-                app.Shutdown();
             }
             catch (Exception exception)
             {
                 failure = exception;
             }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
         Assert.IsNull(failure, failure?.ToString());
     }
 
@@ -1144,13 +1137,10 @@ public sealed class MainWindowViewModelTests
     public void FeedTreeFolderCanExpandAndCollapseWithoutWpfAnimationErrors()
     {
         Exception? failure = null;
-        var thread = new Thread(() =>
+        WpfTestHost.Run(() =>
         {
             try
             {
-                var app = new RssReader.App.App();
-                app.InitializeComponent();
-                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
                 var folder = new SidebarLink("folder:Comics", "Comics", string.Empty, "(1)", indentLevel: 1);
                 var feed = new SidebarLink("feed:comics", "Example comic", "\uE774", indentLevel: 2, parentFolder: folder);
@@ -1197,19 +1187,14 @@ public sealed class MainWindowViewModelTests
                 viewModel.ActivateSidebarLinkCommand.Execute(folder);
                 window.UpdateLayout();
                 Assert.IsFalse(folder.IsExpanded);
-
                 window.Close();
-                app.Shutdown();
+                window.Close();
             }
             catch (Exception exception)
             {
                 failure = exception;
             }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
         Assert.IsNull(failure, failure?.ToString());
     }
 
@@ -2771,20 +2756,34 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void SearchNavigationHasDedicatedSearchSurfaceWithoutGoToRoute()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+
+        CollectionAssert.AreEqual(
+            new[] { "Today", "Follow sources", "Search" },
+            viewModel.PrimaryLinks.Select(link => link.Route).ToArray());
+        Assert.IsTrue(viewModel.IsArticleSearchBoxVisible);
+
+        viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Search"));
+
+        Assert.IsTrue(viewModel.IsSearchRoute);
+        Assert.IsFalse(viewModel.IsArticleSearchBoxVisible);
+    }
+
+    [TestMethod]
     public void ReaderActionsHaveAccessibleNamesAndKeyboardBindings()
     {
         Exception? failure = null;
-        var thread = new Thread(() =>
+        WpfTestHost.Run(() =>
         {
             try
             {
-                var app = new RssReader.App.App();
-                app.InitializeComponent();
-                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
                 var window = new RssReader.App.MainWindow(viewModel);
                 var articleSearchBox = (TextBox)window.FindName("ArticleSearchBox");
-                var goToSearchBox = (TextBox)window.FindName("GoToSearchBox");
+                var searchViewLabel = (TextBlock)window.FindName("SearchViewLabel");
+                var searchViewSearchBox = (TextBox)window.FindName("SearchViewSearchBox");
                 var backButton = (Button)window.FindName("BackToListButton");
                 var toggleReadButton = (Button)window.FindName("ToggleReadButton");
                 var toggleSavedButton = (Button)window.FindName("ToggleSavedButton");
@@ -2792,7 +2791,14 @@ public sealed class MainWindowViewModelTests
                 var nextButton = (Button)window.FindName("NextArticleButton");
 
                 Assert.AreEqual("Search articles", AutomationProperties.GetName(articleSearchBox));
-                Assert.AreEqual("Go to", AutomationProperties.GetName(goToSearchBox));
+                Assert.AreEqual("Search label", AutomationProperties.GetName(searchViewLabel));
+                Assert.AreEqual("Search", searchViewLabel.Text);
+                Assert.AreEqual("Search articles", AutomationProperties.GetName(searchViewSearchBox));
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.SearchQuery),
+                    BindingOperations.GetBinding(searchViewSearchBox, TextBox.TextProperty)?.Path.Path);
+                Assert.IsNull(window.FindName("GoToSearchBox"));
+                Assert.IsFalse(viewModel.PrimaryLinks.Any(link => link.Route == "Go to..."));
                 Assert.AreEqual("Back to list", AutomationProperties.GetName(backButton));
                 Assert.AreEqual("Toggle article read status", AutomationProperties.GetName(toggleReadButton));
                 Assert.AreEqual("Toggle article saved status", AutomationProperties.GetName(toggleSavedButton));
@@ -2844,19 +2850,14 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual(
                     nameof(MainWindowViewModel.NextArticleCommand),
                     BindingOperations.GetBinding(nextBinding, InputBinding.CommandProperty)?.Path.Path);
-
                 window.Close();
-                app.Shutdown();
+                window.Close();
             }
             catch (Exception exception)
             {
                 failure = exception;
             }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
         Assert.IsNull(failure, failure?.ToString());
     }
 
@@ -2864,20 +2865,17 @@ public sealed class MainWindowViewModelTests
     public void BackToListRestoresKeyboardFocusToOpenedArticle()
     {
         Exception? failure = null;
-        var thread = new Thread(() =>
+        WpfTestHost.Run(() =>
         {
             try
             {
-                var app = new RssReader.App.App();
-                app.InitializeComponent();
-                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"))
                 {
                     IsListView = true
                 };
                 var article = viewModel.VisibleArticles[0];
                 var window = new RssReader.App.MainWindow(viewModel);
-                app.MainWindow = window;
+                WpfTestHost.Application.MainWindow = window;
                 window.Show();
                 window.Activate();
                 window.UpdateLayout();
@@ -2913,17 +2911,12 @@ public sealed class MainWindowViewModelTests
                 Assert.AreSame(article, viewModel.SelectedArticle);
 
                 window.Close();
-                app.Shutdown();
             }
             catch (Exception exception)
             {
                 failure = exception;
             }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
         Assert.IsNull(failure, failure?.ToString());
     }
 
@@ -3155,7 +3148,7 @@ public sealed class MainWindowViewModelTests
         var limitedDocument = ArticleHtmlDocumentBuilder.Build("<p>Article content.</p>", null, null, null);
         StringAssert.Contains(
             limitedDocument,
-            "main { box-sizing: border-box; width: 100%; max-width: 900px; margin: 0 auto; }");
+            "main { max-width: 900px; margin: 0 auto; }");
 
         var fullWidthDocument = ArticleHtmlDocumentBuilder.Build(
             "<p>Wide article content.</p>",
@@ -3163,7 +3156,8 @@ public sealed class MainWindowViewModelTests
             null,
             null,
             limitArticleWidth: false);
-        StringAssert.Contains(fullWidthDocument, "main { padding: 12px 12px 24px; }");
+        StringAssert.Contains(fullWidthDocument, "main { box-sizing: border-box; width: 100%; padding: 12px 12px 24px; }");
+        StringAssert.Contains(fullWidthDocument, "main { max-width: none; margin: 0; }");
         Assert.IsFalse(fullWidthDocument.Contains("max-width: 900px", StringComparison.Ordinal));
     }
 
@@ -3256,13 +3250,10 @@ public sealed class MainWindowViewModelTests
     public void MainWindowSelectionPassesBodyHtmlWithoutFeedImageToArticleViewer()
     {
         Exception? failure = null;
-        var thread = new Thread(() =>
+        WpfTestHost.Run(() =>
         {
             try
             {
-                var app = new RssReader.App.App();
-                app.InitializeComponent();
-                app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
                 var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
                 var window = new RssReader.App.MainWindow(viewModel);
                 var article = new ArticleRowViewModel(
@@ -3283,17 +3274,12 @@ public sealed class MainWindowViewModelTests
                 StringAssert.Contains(articleViewer.CurrentDocument, "https://example.test/inline.png");
                 Assert.IsFalse(articleViewer.CurrentDocument.Contains("https://example.test/feed-image.png", StringComparison.Ordinal));
                 window.Close();
-                app.Shutdown();
             }
             catch (Exception exception)
             {
                 failure = exception;
             }
         });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
         Assert.IsNull(failure, failure?.ToString());
     }
 

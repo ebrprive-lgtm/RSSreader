@@ -29,7 +29,8 @@ public sealed record ProfilePreferences(
     bool RefreshFeedsWhenOpened = true,
     int AutoRefreshIntervalMinutes = 0,
     bool ShowRawFeedButton = false,
-    bool LimitArticleWidth = true)
+    bool LimitArticleWidth = true,
+    bool HideFollowedCatalogFeeds = false)
 {
     public const int MinimumFolderArticleLimitPerFeed = 1;
     public const int MaximumFolderArticleLimitPerFeed = 100;

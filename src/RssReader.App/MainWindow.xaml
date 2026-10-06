@@ -377,6 +377,36 @@
                         Height="28"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center"
+                        Margin="0,0,38,0"
+                        Content="&#xE738;"
+                        FontFamily="Segoe MDL2 Assets"
+                        FontSize="14"
+                        Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Command="{Binding DataContext.UnfollowFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        CommandParameter="{Binding}"
+                        AutomationProperties.Name="{Binding Label, StringFormat='Unfollow {0}'}"
+                        ToolTip="Unfollow feed">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
+                            <Setter Property="Opacity" Value="0" />
+                            <Setter Property="IsHitTestVisible" Value="False" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                    <Setter Property="Opacity" Value="1" />
+                                    <Setter Property="IsHitTestVisible" Value="True" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                    <Setter Property="Opacity" Value="1" />
+                                    <Setter Property="IsHitTestVisible" Value="True" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Width="28"
+                        Height="28"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
                         Margin="0,0,6,0"
                         Content="&#xE8D2;"
                         FontFamily="Segoe MDL2 Assets"
@@ -960,16 +990,42 @@
                          AutomationProperties.Name="Search articles"
                          ToolTip="Search your saved feed articles"
                          Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                         Visibility="{Binding IsArticleListVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                         Visibility="{Binding IsArticleSearchBoxVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </DockPanel>
 
             <Grid Grid.Row="1">
                 <Grid Visibility="{Binding IsArticleListVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <DockPanel Margin="0,0,0,12" LastChildFill="False">
+                    <Grid Grid.Row="0"
+                          MaxWidth="560"
+                          HorizontalAlignment="Left"
+                          Margin="0,0,0,12"
+                          Visibility="{Binding IsSearchRoute, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="SearchViewLabel"
+                                   Text="Search"
+                                   Margin="0,0,10,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="13"
+                                   AutomationProperties.Name="Search label" />
+                        <TextBox x:Name="SearchViewSearchBox"
+                                 Grid.Column="1"
+                                 Width="400"
+                                 Height="38"
+                                 Padding="11,8"
+                                 VerticalContentAlignment="Center"
+                                 AutomationProperties.Name="Search articles"
+                                 ToolTip="Search your saved feed articles"
+                                 Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <DockPanel Grid.Row="1" Margin="0,0,0,12" LastChildFill="False">
                         <StackPanel DockPanel.Dock="Left"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
@@ -1042,7 +1098,7 @@
                         </StackPanel>
                     </DockPanel>
                     <ListBox x:Name="ArticleRowsList"
-                             Grid.Row="1"
+                             Grid.Row="2"
                              Style="{StaticResource VirtualizedArticleListStyle}"
                              ScrollViewer.VerticalScrollBarVisibility="Hidden"
                              ItemsSource="{Binding ArticleListView}"
@@ -1074,7 +1130,7 @@
                             </ListBox.GroupStyle>
                     </ListBox>
                     <ListBox x:Name="ArticleMagazineList"
-                             Grid.Row="1"
+                             Grid.Row="2"
                              Style="{StaticResource VirtualizedArticleListStyle}"
                              ScrollViewer.VerticalScrollBarVisibility="Hidden"
                              ItemsSource="{Binding ArticleListView}"
@@ -1106,14 +1162,14 @@
                             </ListBox.GroupStyle>
                     </ListBox>
                     <ListBox x:Name="ArticleCardsList"
-                             Grid.Row="1"
+                             Grid.Row="2"
                              Style="{StaticResource DateArticleCardsListStyle}"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ItemsSource="{Binding DateSortedArticleListView}"
                              ItemTemplate="{StaticResource ArticleCardTemplate}">
                     </ListBox>
                     <ListBox x:Name="ArticleFolderCardsList"
-                             Grid.Row="1"
+                             Grid.Row="2"
                              Style="{StaticResource FolderArticleCardsListStyle}"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ItemsSource="{Binding FolderSortedArticleListView}"
@@ -1138,7 +1194,7 @@
                                 </GroupStyle>
                             </ListBox.GroupStyle>
                     </ListBox>
-                    <StackPanel Grid.Row="1"
+                    <StackPanel Grid.Row="2"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center"
                                 Visibility="{Binding IsArticleListEmpty, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -1384,6 +1440,28 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                            <WrapPanel DockPanel.Dock="Right"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsPersonalFeedManagementVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Button Content="Add feed"
+                                        Click="AddPersonalFeed_Click"
+                                        Margin="0,0,6,0"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryActionButtonStyle}"
+                                        AutomationProperties.Name="Add a personal feed" />
+                                <Button Content="Import OPML"
+                                        Click="ImportPersonalOpml_Click"
+                                        Margin="0,0,6,0"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryActionButtonStyle}"
+                                        AutomationProperties.Name="Import personal feeds from OPML" />
+                                <Button Content="Export OPML"
+                                        Click="ExportPersonalOpml_Click"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryActionButtonStyle}"
+                                        AutomationProperties.Name="Export personal feeds to OPML" />
+                            </WrapPanel>
                             <StackPanel>
                                 <TextBlock Text="Browse the feed catalog" FontSize="21" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding CatalogResultsSummary}"
@@ -1438,16 +1516,10 @@
                                           Margin="0,0,12,0"
                                           VerticalAlignment="Center"
                                           IsChecked="{Binding HideFollowedCatalogFeeds}" />
-                                <Button x:Name="ClearSelectedCatalogFeedsButton"
-                                    Content="Clear selection"
-                                    Style="{StaticResource SecondaryActionButtonStyle}"
-                                    Padding="10,5"
-                                    IsEnabled="{Binding HasSelectedCatalogFeeds}"
-                                    Command="{Binding ClearSelectedCatalogFeedsCommand}" />
                                 <Button Content="Clear filters"
                                     Style="{StaticResource SecondaryActionButtonStyle}"
-                                        Padding="10,5"
-                                        Command="{Binding ClearCatalogFiltersCommand}" />
+                                    Padding="10,5"
+                                    Command="{Binding ClearCatalogFiltersCommand}" />
                             </WrapPanel>
                             <TextBlock Grid.Row="2"
                                        Text="{Binding SelectedCatalogCollectionCuratorLabel}"
@@ -2114,19 +2186,6 @@
                     </Grid>
                 </Grid>
 
-                <Grid Visibility="{Binding IsGoToRoute, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <StackPanel MaxWidth="560">
-                        <TextBlock Text="Go to" FontSize="21" FontWeight="SemiBold" />
-                        <TextBox x:Name="GoToSearchBox"
-                                 AutomationProperties.Name="Go to"
-                                 Text="{Binding QuickQuery, UpdateSourceTrigger=PropertyChanged}"
-                                 Margin="0,14,0,12"
-                                 Padding="11,9"
-                                 Height="40"
-                                 VerticalContentAlignment="Center" />
-                        <ItemsControl ItemsSource="{Binding QuickTargets}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
-                    </StackPanel>
-                </Grid>
             </Grid>
         </Grid>
 

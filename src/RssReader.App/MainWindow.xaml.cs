@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         DataContext = viewModel;
         viewModel.FolderSelectionRequested = ShowFolderSelectionAsync;
+        viewModel.ConfirmUnfollowRequested = ConfirmUnfollowAsync;
         viewModel.ConfirmUnfollowAllRequested = ConfirmUnfollowAllAsync;
         viewModel.ConfirmDeleteFolderRequested = ConfirmDeleteFolderAsync;
         if (viewModel.CatalogManagement is { } catalogManagement)
@@ -58,6 +60,16 @@ public partial class MainWindow : Window
         var result = MessageDialogWindow.Show(
             this,
             $"Unfollow {feedCount} {feedLabel} currently shown in this list?",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        return Task.FromResult(result == MessageBoxResult.Yes);
+    }
+
+    private Task<bool> ConfirmUnfollowAsync(string feedName)
+    {
+        var result = MessageDialogWindow.Show(
+            this,
+            $"Unfollow '{feedName}'? If this is your personal feed and no other profile uses it, its cached articles will also be removed.",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         return Task.FromResult(result == MessageBoxResult.Yes);
@@ -455,6 +467,107 @@ public partial class MainWindow : Window
 
         using var stream = dialog.OpenFile();
         await catalogManagement.ImportOpmlAsync(stream);
+    }
+
+    private async void AddPersonalFeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null || !_viewModel.IsPersonalFeedManagementVisible)
+        {
+            return;
+        }
+
+        var dialog = new ProfileFeedEntryWindow { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await _viewModel.AddPersonalFeedAsync(dialog.FeedName, dialog.FeedUrl);
+        }
+        catch (Exception exception)
+        {
+            MessageDialogWindow.Show(
+                this,
+                $"The personal feed could not be added.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async void ImportPersonalOpml_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null || !_viewModel.IsPersonalFeedManagementVisible)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import feeds to your profile",
+            Filter = "OPML files (*.opml;*.xml)|*.opml;*.xml|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = dialog.OpenFile();
+            var result = await _viewModel.ImportPersonalFeedsAsync(stream);
+            MessageDialogWindow.Show(
+                this,
+                $"Added {result.AddedCount} feed(s). Skipped {result.DuplicateCount} duplicate(s) and {result.SkippedCount} invalid or unsupported outline(s).",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception exception)
+        {
+            MessageDialogWindow.Show(
+                this,
+                $"The OPML file could not be imported.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async void ExportPersonalOpml_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null || !_viewModel.IsPersonalFeedManagementVisible)
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export your feeds",
+            Filter = "OPML files (*.opml)|*.opml",
+            DefaultExt = ".opml",
+            AddExtension = true,
+            FileName = "rss-reader-feeds.opml"
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var opml = await _viewModel.ExportPersonalFeedsAsync();
+            await File.WriteAllTextAsync(dialog.FileName, opml, new System.Text.UTF8Encoding(false));
+        }
+        catch (Exception exception)
+        {
+            MessageDialogWindow.Show(
+                this,
+                $"Your feeds could not be exported.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private void AddFeed_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Feed);

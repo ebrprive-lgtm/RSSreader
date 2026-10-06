@@ -31,7 +31,7 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         CancellationToken cancellationToken = default)
     {
         var normalizedFolderName = RequireLabel(folderName, nameof(folderName));
-        var feeds = await catalogStore.GetFeedsAsync(cancellationToken);
+        var feeds = await catalogStore.GetFeedsForProfileAsync(profile.Id, cancellationToken);
         if (feeds.All(feed => feed.Id != feedId))
         {
             throw new ArgumentException("The feed does not exist in the catalog.", nameof(feedId));

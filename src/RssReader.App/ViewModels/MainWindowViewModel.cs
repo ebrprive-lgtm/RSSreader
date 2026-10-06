@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using RssReader.App.Commands;
@@ -27,6 +28,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly CatalogFeedPreviewService? _catalogFeedPreviewService;
     private readonly ReadingService? _readingService;
     private readonly FeedRefreshService? _feedRefreshService;
+    private readonly ProfileFeedService? _profileFeedService;
+    private readonly ProfileService? _profileService;
+    private readonly SemaphoreSlim _profilePreferencesSaveGate = new(1, 1);
     private readonly Dictionary<string, CatalogFeedPreview> _catalogFeedPreviewCache = new(StringComparer.Ordinal);
     private readonly Queue<string> _catalogFeedPreviewCacheOrder = new();
     private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
@@ -38,7 +42,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _activeRoute;
     private string _searchQuery = string.Empty;
     private string _catalogSearchQuery = string.Empty;
-    private string _quickQuery = string.Empty;
     private string _statusMessage = string.Empty;
     private string? _refreshFailureMessage;
     private string[] _failedRefreshFeedIds = [];
@@ -76,14 +79,19 @@ public sealed class MainWindowViewModel : ObservableObject
         ReadingService? readingService,
         FeedRefreshService? feedRefreshService,
         ProfilePreferences? profilePreferences = null,
-        CatalogFeedPreviewService? catalogFeedPreviewService = null)
+        CatalogFeedPreviewService? catalogFeedPreviewService = null,
+        ProfileFeedService? profileFeedService = null,
+        ProfileService? profileService = null)
     {
         ActiveProfile = profile;
         _catalogService = catalogService;
         _catalogFeedPreviewService = catalogFeedPreviewService;
         _readingService = readingService;
         _feedRefreshService = feedRefreshService;
+        _profileFeedService = profileFeedService;
+        _profileService = profileService;
         _profilePreferences = profilePreferences ?? new ProfilePreferences();
+        _hideFollowedCatalogFeeds = _profilePreferences.HideFollowedCatalogFeeds;
         _isCardsView = _profilePreferences.Presentation == ProfileArticlePresentation.Cards;
         _isMagazineView = _profilePreferences.Presentation == ProfileArticlePresentation.Magazine;
         _isSortByDate = _profilePreferences.Sort == ProfileArticleSort.Newest;
@@ -97,8 +105,7 @@ public sealed class MainWindowViewModel : ObservableObject
         [
             new("Today", "Today", "\uE787"),
             new("Follow sources", "Follow sources", "\uE774"),
-            new("Search", "Search", "\uE721"),
-            new("Go to...", "Go to...", "\uE8AD")
+            new("Search", "Search", "\uE721")
         ];
         ReadingLinks =
         [
@@ -124,7 +131,6 @@ public sealed class MainWindowViewModel : ObservableObject
         AdminLinks = profile.IsCatalogMaster
             ? [new SidebarLink("Manage catalog", "Manage catalog", "\uE713")]
             : [];
-        QuickTargets = [];
         CatalogCategories = [];
         CatalogCategoryOptions = [];
         ArticleTopicOptions = [];
@@ -148,8 +154,6 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             CatalogManagement.CatalogRefreshRequested = RefreshCatalogAfterManagementChangeAsync;
         }
-        ApplyQuickFilter();
-
         var now = DateTimeOffset.Now;
         _allArticles = readingService is null ?
         [
@@ -179,9 +183,11 @@ public sealed class MainWindowViewModel : ObservableObject
         ClearArticleTopicCommand = new RelayCommand(ClearArticleTopicFilter);
         RetryCatalogLoadCommand = new AsyncCommand(() => LoadCatalogAsync(CancellationToken.None), () => !IsCatalogLoading);
         FollowSelectedCatalogFeedsCommand = new AsyncCommand(FollowSelectedCatalogFeedsAsync);
-        ClearSelectedCatalogFeedsCommand = new RelayCommand(ClearSelectedCatalogFeeds, () => HasSelectedCatalogFeeds);
         ToggleVisibleCatalogFeedSelectionCommand = new RelayCommand(ToggleVisibleCatalogFeedSelection);
         UnfollowAllCatalogFeedsCommand = new AsyncCommand(UnfollowAllCatalogFeedsAsync);
+        UnfollowFeedCommand = new AsyncCommand<SidebarLink>(
+            UnfollowFeedAsync,
+            link => _readingService is not null && link.IsFeedEntry);
         DeleteFolderCommand = new AsyncCommand<SidebarLink>(
             DeleteFolderAsync,
             link => _readingService is not null && link.IsFolder);
@@ -198,6 +204,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public Profile ActiveProfile { get; }
     public string ActiveProfileName => ActiveProfile.Name;
     public bool IsCatalogMaster => ActiveProfile.IsCatalogMaster;
+    public bool IsPersonalFeedManagementVisible => !IsCatalogMaster && _profileFeedService is not null;
     public bool IsSidebarPinned => _isSidebarPinned;
     public bool IsSidebarExpanded => true;
     public GridLength SidebarColumnWidth => new(IsSidebarPinned ? 286 : 0);
@@ -214,7 +221,6 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICollectionView ArticleListView { get; private set; }
     public ICollectionView FolderSortedArticleListView { get; }
     public ICollectionView DateSortedArticleListView { get; }
-    public ObservableCollection<SidebarLink> QuickTargets { get; }
     public ObservableCollection<CatalogFeedListItem> CatalogFeeds => _catalogFeeds;
     public ObservableCollection<CatalogCategory> CatalogCategories { get; }
     public ObservableCollection<CatalogCategoryOption> CatalogCategoryOptions { get; }
@@ -240,9 +246,9 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand ClearArticleTopicCommand { get; }
     public AsyncCommand RetryCatalogLoadCommand { get; }
     public AsyncCommand FollowSelectedCatalogFeedsCommand { get; }
-    public RelayCommand ClearSelectedCatalogFeedsCommand { get; }
     public RelayCommand ToggleVisibleCatalogFeedSelectionCommand { get; }
     public AsyncCommand UnfollowAllCatalogFeedsCommand { get; }
+    public AsyncCommand<SidebarLink> UnfollowFeedCommand { get; }
     public AsyncCommand<SidebarLink> DeleteFolderCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public RelayCommand RetryFailedFeedsCommand { get; }
@@ -386,7 +392,9 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _hideFollowedCatalogFeeds, value))
             {
+                _profilePreferences = _profilePreferences with { HideFollowedCatalogFeeds = value };
                 RefreshCatalogFeedView();
+                _ = PersistProfilePreferencesAsync();
             }
         }
     }
@@ -472,6 +480,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _readingService is not null && GetVisibleSubscribedCatalogFeeds().Length > 0;
 
     public Func<int, Task<bool>>? ConfirmUnfollowAllRequested { get; set; }
+    public Func<string, Task<bool>>? ConfirmUnfollowRequested { get; set; }
     public Func<string, int, Task<bool>>? ConfirmDeleteFolderRequested { get; set; }
 
     public bool IsCatalogFeedPreviewAvailable => _catalogFeedPreviewService is not null;
@@ -509,6 +518,35 @@ public sealed class MainWindowViewModel : ObservableObject
                 StatusMessage = string.Empty;
             }
         }
+    }
+
+    public async Task<CatalogFeed> AddPersonalFeedAsync(
+        string name,
+        string feedUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var service = _profileFeedService ?? throw new InvalidOperationException("Personal feeds are unavailable.");
+        var feed = await service.AddFeedAsync(ActiveProfile, name, feedUrl, cancellationToken);
+        await LoadProfileReaderDataAsync(cancellationToken);
+        StatusMessage = $"Added {feed.Name} to your feeds. Refresh to load its articles.";
+        return feed;
+    }
+
+    public async Task<ProfileFeedImportSummary> ImportPersonalFeedsAsync(
+        Stream stream,
+        CancellationToken cancellationToken = default)
+    {
+        var service = _profileFeedService ?? throw new InvalidOperationException("Personal feeds are unavailable.");
+        var result = await service.ImportOpmlAsync(ActiveProfile, stream, cancellationToken);
+        await LoadProfileReaderDataAsync(cancellationToken);
+        StatusMessage = $"Imported {result.AddedCount} feed(s); {result.DuplicateCount} duplicate(s), {result.SkippedCount} skipped.";
+        return result;
+    }
+
+    public Task<string> ExportPersonalFeedsAsync(CancellationToken cancellationToken = default)
+    {
+        var service = _profileFeedService ?? throw new InvalidOperationException("Personal feeds are unavailable.");
+        return service.ExportOpmlAsync(ActiveProfile.Id, cancellationToken);
     }
 
     private Task RefreshCatalogAfterManagementChangeAsync(CancellationToken cancellationToken) =>
@@ -627,7 +665,10 @@ public sealed class MainWindowViewModel : ObservableObject
     public void ApplyPreferences(ProfilePreferences preferences)
     {
         ArgumentNullException.ThrowIfNull(preferences);
-        _profilePreferences = preferences;
+        _profilePreferences = preferences with
+        {
+            HideFollowedCatalogFeeds = _hideFollowedCatalogFeeds
+        };
         _folderArticlesPerFeedLimit = preferences.FolderArticleLimitPerFeed;
         OnPropertyChanged(nameof(RefreshFeedsWhenOpened));
         OnPropertyChanged(nameof(AutoRefreshIntervalMinutes));
@@ -661,7 +702,7 @@ public sealed class MainWindowViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(WorkspaceTitle));
                 OnPropertyChanged(nameof(IsSearchRoute));
-                OnPropertyChanged(nameof(IsGoToRoute));
+                OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
                 OnPropertyChanged(nameof(IsArticleListVisible));
                 OnPropertyChanged(nameof(IsCatalogBrowserVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
@@ -703,18 +744,6 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public bool IsArticleTopicFilterActive => SelectedArticleTopic?.Term is not null;
-
-    public string QuickQuery
-    {
-        get => _quickQuery;
-        set
-        {
-            if (SetProperty(ref _quickQuery, value))
-            {
-                ApplyQuickFilter();
-            }
-        }
-    }
 
     public string StatusMessage
     {
@@ -869,6 +898,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _selectedArticle, value))
             {
                 OnPropertyChanged(nameof(IsArticleListVisible));
+                OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsReadingViewVisible));
                 OnPropertyChanged(nameof(IsRawFeedButtonVisible));
@@ -892,12 +922,12 @@ public sealed class MainWindowViewModel : ObservableObject
     };
 
     public bool IsSearchRoute => ActiveRoute == "Search";
-    public bool IsGoToRoute => ActiveRoute == "Go to...";
     public bool RefreshFeedsWhenOpened => _profilePreferences.RefreshFeedsWhenOpened;
     public int AutoRefreshIntervalMinutes => _profilePreferences.AutoRefreshIntervalMinutes;
     public bool LimitArticleWidth => _profilePreferences.LimitArticleWidth;
     public bool IsArticleCountVisible => IsArticleListVisible;
-    public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible && !IsGoToRoute;
+    public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible;
+    public bool IsArticleSearchBoxVisible => IsArticleListVisible && !IsSearchRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
     public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
     public bool HasSelectedArticleFeed => SelectedArticle?.FeedId is not null;
@@ -972,7 +1002,6 @@ public sealed class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CanFollowSelectedCatalogFeeds));
             OnPropertyChanged(nameof(FollowSelectedCatalogFeedsLabel));
             OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
-            ClearSelectedCatalogFeedsCommand.NotifyCanExecuteChanged();
         }
 
         if (e.PropertyName == nameof(CatalogFeedListItem.IsSubscribed))
@@ -1006,14 +1035,6 @@ public sealed class MainWindowViewModel : ObservableObject
             : new[] { "News", "Technology", "Gaming", "Culture" }
                 .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
                 .ToArray();
-    }
-
-    private void ClearSelectedCatalogFeeds()
-    {
-        foreach (var feed in CatalogFeeds.Where(feed => feed.IsSelectedForFollow))
-        {
-            feed.IsSelectedForFollow = false;
-        }
     }
 
     private void ToggleVisibleCatalogFeedSelection()
@@ -1126,6 +1147,35 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private async Task UnfollowFeedAsync(SidebarLink feedLink)
+    {
+        if (_readingService is null ||
+            ConfirmUnfollowRequested is null ||
+            !feedLink.IsFeedEntry ||
+            !feedLink.Route.StartsWith("feed:", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!await ConfirmUnfollowRequested(feedLink.Label))
+            {
+                return;
+            }
+
+            var feedId = feedLink.Route["feed:".Length..];
+            await _readingService.UnsubscribeAsync(ActiveProfile, feedId);
+            _pendingInitialRefreshFeedIds.Remove(feedId);
+            await LoadProfileReaderDataAsync(CancellationToken.None);
+            StatusMessage = $"Unfollowed {feedLink.Label}.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+    }
+
     private async Task DeleteFolderAsync(SidebarLink folderLink)
     {
         if (_readingService is null || ConfirmDeleteFolderRequested is null || !folderLink.IsFolder)
@@ -1191,6 +1241,28 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(option => option.CategoryId is null);
         SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(option => option.CollectionId is null);
         HideFollowedCatalogFeeds = false;
+    }
+
+    private async Task PersistProfilePreferencesAsync()
+    {
+        if (_profileService is null)
+        {
+            return;
+        }
+
+        await _profilePreferencesSaveGate.WaitAsync();
+        try
+        {
+            await _profileService.SavePreferencesAsync(ActiveProfile.Id, _profilePreferences);
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not save the Hide followed preference: {exception.Message}";
+        }
+        finally
+        {
+            _profilePreferencesSaveGate.Release();
+        }
     }
 
     public async Task<CatalogFeedPreview> LoadCatalogFeedPreviewAsync(
@@ -1446,7 +1518,6 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         UpdateSelectedLinks();
-        ApplyQuickFilter();
         ApplyArticleFilters();
     }
 
@@ -1918,27 +1989,6 @@ public sealed class MainWindowViewModel : ObservableObject
             link.Route.StartsWith("folder:", StringComparison.Ordinal))?.Route ?? "Today",
         _ => "Today"
     };
-
-    private void ApplyQuickFilter()
-    {
-        var query = QuickQuery.Trim();
-        var routes = PrimaryLinks
-            .Concat(ReadingLinks)
-            .Concat(FeedLinks)
-            .Concat(TagLinks)
-            .Concat(AdminLinks)
-            .Where(link => link.Route is not "Search" and not "Go to...");
-        if (!string.IsNullOrEmpty(query))
-        {
-            routes = routes.Where(link => link.Label.Contains(query, StringComparison.OrdinalIgnoreCase));
-        }
-
-        QuickTargets.Clear();
-        foreach (var route in routes)
-        {
-            QuickTargets.Add(route);
-        }
-    }
 
     private sealed class BulkObservableCollection<T> : ObservableCollection<T>
     {

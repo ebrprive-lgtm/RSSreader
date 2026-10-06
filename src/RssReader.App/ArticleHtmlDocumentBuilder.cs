@@ -9,7 +9,7 @@ internal static class ArticleHtmlDocumentBuilder
         :root { color-scheme: light; }
         html, body { margin: 0; padding: 0; background: #fff; }
         body { color: #202923; font: 16px/1.65 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
-        main { padding: 12px 12px 24px; }
+        main { box-sizing: border-box; width: 100%; padding: 12px 12px 24px; }
         img { max-width: 100%; height: auto; vertical-align: middle; }
         img.reader-centered-image { display: block; margin: 16px auto; }
         a.reader-centered-image-link { clear: both; display: block; text-align: center; }
@@ -39,8 +39,8 @@ internal static class ArticleHtmlDocumentBuilder
         bodyFragment = PreserveCenteredImageAlignment(bodyFragment);
         var sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl);
         var widthLimitStyle = limitArticleWidth
-            ? "main { box-sizing: border-box; width: 100%; max-width: 900px; margin: 0 auto; }"
-            : string.Empty;
+            ? "main { max-width: 900px; margin: 0 auto; }"
+            : "main { max-width: none; margin: 0; }";
 
         return $"""
             <!doctype html>
