@@ -20,6 +20,10 @@ public sealed record ArticleTopicOption(string? Term, string? Scheme, string Nam
 public sealed class MainWindowViewModel : ObservableObject
 {
     private const int MaximumCachedCatalogFeedPreviews = 20;
+    private const int MaximumNavigationHistoryEntries = 100;
+    public const double DefaultSidebarWidth = 286;
+    public const double MinimumSidebarWidth = 220;
+    public const double MaximumSidebarWidth = 480;
     private readonly List<ArticleRowViewModel> _allArticles;
     private readonly BulkObservableCollection<CatalogFeedListItem> _catalogFeeds = [];
     private readonly BulkObservableCollection<SidebarLink> _feedLinks = [];
@@ -32,6 +36,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ProfileService? _profileService;
     private readonly SemaphoreSlim _profilePreferencesSaveGate = new(1, 1);
     private readonly Dictionary<string, CatalogFeedPreview> _catalogFeedPreviewCache = new(StringComparer.Ordinal);
+    private readonly LinkedList<NavigationHistoryEntry> _navigationHistory = new();
     private readonly Queue<string> _catalogFeedPreviewCacheOrder = new();
     private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _expandedSidebarFolders = new(StringComparer.OrdinalIgnoreCase);
@@ -58,6 +63,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isMagazineView;
     private bool _isSortByDate;
     private bool _hideFollowedCatalogFeeds;
+    private double _sidebarWidth = DefaultSidebarWidth;
     private bool _isCatalogLoading;
     private bool _isCatalogLoaded;
     private bool _hasAppliedStartPage;
@@ -84,6 +90,7 @@ public sealed class MainWindowViewModel : ObservableObject
         ProfileService? profileService = null)
     {
         ActiveProfile = profile;
+        _hasAppliedStartPage = profile.IsCatalogMaster;
         _catalogService = catalogService;
         _catalogFeedPreviewService = catalogFeedPreviewService;
         _readingService = readingService;
@@ -166,20 +173,23 @@ public sealed class MainWindowViewModel : ObservableObject
         VisibleArticles = _visibleArticles;
         FolderSortedArticleListView = CreateArticleListView(sortByDate: false);
         DateSortedArticleListView = CreateArticleListView(sortByDate: true);
-        ArticleListView = CreateArticleListView(sortByDate: false);
+        ArticleListView = CreateArticleListView(sortByDate: _isSortByDate);
 
-        NavigateCommand = new RelayCommand<SidebarLink>(NavigateTo);
+        NavigateCommand = new RelayCommand<SidebarLink>(link => NavigateTo(link));
         ActivateSidebarLinkCommand = new RelayCommand<SidebarLink>(ActivateSidebarLink);
         SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
         PreviousArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(-1), () => CanNavigateToAdjacentArticle(-1));
         NextArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(1), () => CanNavigateToAdjacentArticle(1));
         NavigateToSelectedArticleFeedCommand = new RelayCommand(NavigateToSelectedArticleFeed);
-        BackToListCommand = new RelayCommand(() => SelectedArticle = null);
+        BackCommand = new RelayCommand(GoBack, () => CanGoBack);
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
         ToggleReadCommand = new RelayCommand(ToggleRead);
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
+        ClearSearchQueryCommand = new RelayCommand(
+            () => SearchQuery = string.Empty,
+            () => HasSearchQuery);
         ClearArticleTopicCommand = new RelayCommand(ClearArticleTopicFilter);
         RetryCatalogLoadCommand = new AsyncCommand(() => LoadCatalogAsync(CancellationToken.None), () => !IsCatalogLoading);
         FollowSelectedCatalogFeedsCommand = new AsyncCommand(FollowSelectedCatalogFeedsAsync);
@@ -191,10 +201,10 @@ public sealed class MainWindowViewModel : ObservableObject
         DeleteFolderCommand = new AsyncCommand<SidebarLink>(
             DeleteFolderAsync,
             link => _readingService is not null && link.IsFolder);
-        RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsRefreshing && !IsCatalogMaster);
+        RefreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsRefreshing);
         RetryFailedFeedsCommand = new RelayCommand(
             () => _ = RetryFailedFeedsAsync(),
-            () => !IsRefreshing && HasFailedRefreshFeeds);
+            () => !IsRefreshing && HasVisibleFailedRefreshFeeds);
         ToggleSubscriptionCommand = new AsyncCommand<CatalogFeedListItem>(ToggleSubscriptionAsync);
 
         UpdateSelectedLinks();
@@ -204,11 +214,22 @@ public sealed class MainWindowViewModel : ObservableObject
     public Profile ActiveProfile { get; }
     public string ActiveProfileName => ActiveProfile.Name;
     public bool IsCatalogMaster => ActiveProfile.IsCatalogMaster;
-    public bool IsPersonalFeedManagementVisible => !IsCatalogMaster && _profileFeedService is not null;
+    public bool IsPersonalFeedManagementVisible => _profileFeedService is not null;
     public bool IsSidebarPinned => _isSidebarPinned;
     public bool IsSidebarExpanded => true;
-    public GridLength SidebarColumnWidth => new(IsSidebarPinned ? 286 : 0);
-    public double SidebarPanelWidth => 286;
+    public GridLength SidebarColumnWidth
+    {
+        get => new(IsSidebarPinned ? _sidebarWidth : 0);
+        set
+        {
+            if (IsSidebarPinned && value.IsAbsolute)
+            {
+                SetSidebarPanelWidth(value.Value);
+            }
+        }
+    }
+    public double SidebarPanelWidth => _sidebarWidth;
+    public double SidebarColumnMinWidth => IsSidebarPinned ? MinimumSidebarWidth : 0;
     public int SidebarColumnSpan => IsSidebarPinned ? 1 : 2;
     public Thickness SidebarHeaderMargin => IsSidebarPinned ? new Thickness(0) : new Thickness(42, 0, 0, 0);
 
@@ -237,12 +258,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand PreviousArticleCommand { get; }
     public RelayCommand NextArticleCommand { get; }
     public RelayCommand NavigateToSelectedArticleFeedCommand { get; }
-    public RelayCommand BackToListCommand { get; }
+    public RelayCommand BackCommand { get; }
     public RelayCommand ToggleSavedCommand { get; }
     public RelayCommand ToggleReadCommand { get; }
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand ClearCatalogFiltersCommand { get; }
+    public RelayCommand ClearSearchQueryCommand { get; }
     public RelayCommand ClearArticleTopicCommand { get; }
     public AsyncCommand RetryCatalogLoadCommand { get; }
     public AsyncCommand FollowSelectedCatalogFeedsCommand { get; }
@@ -501,7 +523,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         try
         {
-            if (_readingService is not null && !IsCatalogMaster)
+            if (_readingService is not null)
             {
                 await LoadProfileReaderDataAsync(cancellationToken);
             }
@@ -665,6 +687,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public void ApplyPreferences(ProfilePreferences preferences)
     {
         ArgumentNullException.ThrowIfNull(preferences);
+        var destinationRoute = GetStartPageRoute(preferences.StartPage);
+        if (SelectedArticle is null &&
+            !string.Equals(ActiveRoute, destinationRoute, StringComparison.Ordinal))
+        {
+            RecordCurrentNavigationState();
+        }
+
         _profilePreferences = preferences with
         {
             HideFollowedCatalogFeeds = _hideFollowedCatalogFeeds
@@ -719,10 +748,13 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _searchQuery, value))
             {
+                OnPropertyChanged(nameof(HasSearchQuery));
+                ClearSearchQueryCommand.NotifyCanExecuteChanged();
                 ApplyArticleFilters();
             }
         }
     }
+    public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
 
     public ArticleTopicOption? SelectedArticleTopic
     {
@@ -759,12 +791,31 @@ public sealed class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _refreshFailureMessage, value))
             {
                 OnPropertyChanged(nameof(HasRefreshFailure));
+                NotifyRefreshFailureContextChanged();
             }
         }
     }
 
     public bool HasRefreshFailure => !string.IsNullOrWhiteSpace(RefreshFailureMessage);
     public bool HasFailedRefreshFeeds => _failedRefreshFeedIds.Length > 0;
+    public string? VisibleRefreshFailureMessage
+    {
+        get
+        {
+            var relevantFailedFeedIds = GetRelevantFailedRefreshFeedIds();
+            if (relevantFailedFeedIds.Length == 0)
+            {
+                return _failedRefreshFeedIds.Length == 0 ? RefreshFailureMessage : null;
+            }
+
+            var failures = relevantFailedFeedIds
+                .Select(feedId => _feedRefreshStates.TryGetValue(feedId, out var state) ? state.LastFailure : null)
+                .Where(message => !string.IsNullOrWhiteSpace(message));
+            return string.Join(" ", failures);
+        }
+    }
+    public bool HasVisibleRefreshFailure => !string.IsNullOrWhiteSpace(VisibleRefreshFailureMessage);
+    public bool HasVisibleFailedRefreshFeeds => GetRelevantFailedRefreshFeedIds().Length > 0;
 
     public bool IsRefreshing
     {
@@ -863,7 +914,6 @@ public sealed class MainWindowViewModel : ObservableObject
             if (sortByDate)
             {
                 articleListView.SortDescriptions.Add(new SortDescription(nameof(ArticleRowViewModel.PublishedAt), ListSortDirection.Descending));
-                articleListView.SortDescriptions.Add(new SortDescription(nameof(ArticleRowViewModel.Folder), ListSortDirection.Ascending));
             }
             else
             {
@@ -905,6 +955,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(HasSelectedArticleFeed));
                 OnPropertyChanged(nameof(SelectedArticleRefreshStatusMessage));
                 OnPropertyChanged(nameof(HasSelectedArticleRefreshState));
+                NotifyRefreshFailureContextChanged();
                 PreviousArticleCommand.NotifyCanExecuteChanged();
                 NextArticleCommand.NotifyCanExecuteChanged();
             }
@@ -929,6 +980,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible;
     public bool IsArticleSearchBoxVisible => IsArticleListVisible && !IsSearchRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
+    public bool CanGoBack => _navigationHistory.Count > 0;
     public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
     public bool HasSelectedArticleFeed => SelectedArticle?.FeedId is not null;
     public string? SelectedArticleRefreshStatusMessage
@@ -1021,10 +1073,19 @@ public sealed class MainWindowViewModel : ObservableObject
             .Where(feed => feed.IsSubscribed)
             .ToArray();
 
-    private string[] GetSuggestedFolders()
+    private string[] GetSuggestedFolders(IEnumerable<string?> relatedCategoryNames)
     {
-        var suggestions = CatalogFeeds
-            .Select(item => item.CategoryName)
+        var categoryNames = new List<string?>();
+        if (SelectedCatalogCategory?.CategoryId is { } selectedCategoryId &&
+            CatalogCategories.FirstOrDefault(category => category.Id == selectedCategoryId) is { } selectedCategory)
+        {
+            categoryNames.Add(selectedCategory.Name);
+        }
+
+        categoryNames.AddRange(relatedCategoryNames);
+        categoryNames.AddRange(CatalogFeeds.Select(item => item.CategoryName));
+
+        var suggestions = categoryNames
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Select(name => name!.Trim())
             .Where(name => !FolderNames.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -1061,7 +1122,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             var folderName = await FolderSelectionRequested(
                 FolderNames.ToArray(),
-                GetSuggestedFolders(),
+                GetSuggestedFolders(selectedFeeds.Select(feed => feed.CategoryName)),
                 CreateFolderFromPickerAsync);
             if (string.IsNullOrWhiteSpace(folderName))
             {
@@ -1312,8 +1373,13 @@ public sealed class MainWindowViewModel : ObservableObject
         _catalogFeedPreviewCache[feedId] = preview;
     }
 
-    private void NavigateTo(SidebarLink link)
+    private void NavigateTo(SidebarLink link, bool recordHistory = true)
     {
+        if (recordHistory && (ActiveRoute != link.Route || SelectedArticle is not null))
+        {
+            RecordCurrentNavigationState();
+        }
+
         SelectedArticle = null;
         ActiveRoute = link.Route;
         UpdateSelectedLinks();
@@ -1322,6 +1388,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void ActivateSidebarLink(SidebarLink link)
     {
+        if (ActiveRoute != link.Route || SelectedArticle is not null)
+        {
+            RecordCurrentNavigationState();
+        }
+
         if (link.IsFolder)
         {
             link.IsExpanded = !link.IsExpanded;
@@ -1335,13 +1406,133 @@ public sealed class MainWindowViewModel : ObservableObject
             }
         }
 
-        NavigateTo(link);
+        NavigateTo(link, recordHistory: false);
     }
 
     private void OpenArticle(ArticleRowViewModel article)
     {
+        if (!IsSameArticle(SelectedArticle, article))
+        {
+            RecordCurrentNavigationState();
+        }
+
         article.IsRead = true;
         SelectedArticle = article;
+    }
+
+    private static bool IsSameArticle(ArticleRowViewModel? current, ArticleRowViewModel target) =>
+        ReferenceEquals(current, target) ||
+        (current?.ArticleId is { } currentId &&
+         string.Equals(currentId, target.ArticleId, StringComparison.Ordinal));
+
+    private void RecordCurrentNavigationState()
+    {
+        _navigationHistory.AddLast(new NavigationHistoryEntry(
+            ActiveRoute,
+            SelectedArticle?.ArticleId,
+            SelectedArticle,
+            SearchQuery,
+            SelectedArticleTopic?.Term,
+            SelectedArticleTopic?.Scheme,
+            UnreadOnly,
+            SavedOnly,
+            IsCardsView,
+            IsMagazineView,
+            IsSortByDate,
+            CatalogSearchQuery,
+            SelectedCatalogCategory?.CategoryId,
+            SelectedCatalogCollection?.CollectionId,
+            HideFollowedCatalogFeeds,
+            _expandedSidebarFolders.OrderBy(folder => folder, StringComparer.OrdinalIgnoreCase).ToArray()));
+
+        if (_navigationHistory.Count > MaximumNavigationHistoryEntries)
+        {
+            _navigationHistory.RemoveFirst();
+        }
+
+        NotifyNavigationHistoryChanged();
+    }
+
+    private void GoBack()
+    {
+        if (_navigationHistory.Last is not { } previous)
+        {
+            return;
+        }
+
+        _navigationHistory.RemoveLast();
+        NotifyNavigationHistoryChanged();
+        RestoreNavigationState(previous.Value);
+    }
+
+    private void RestoreNavigationState(NavigationHistoryEntry state)
+    {
+        var previousRoute = ActiveRoute;
+        var route = IsNavigationRouteAvailable(state.ActiveRoute) ? state.ActiveRoute : "All";
+        SelectedArticle = null;
+        ActiveRoute = route;
+        SearchQuery = state.SearchQuery;
+        UnreadOnly = state.UnreadOnly;
+        SavedOnly = state.SavedOnly;
+        IsSortByDate = state.IsSortByDate;
+        IsSortByFolder = !state.IsSortByDate;
+        SetArticleViewModeIfSelected(true, state.IsCardsView, state.IsMagazineView);
+        CatalogSearchQuery = state.CatalogSearchQuery;
+        SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(
+            option => option.CategoryId == state.SelectedCatalogCategoryId) ??
+            CatalogCategoryOptions.FirstOrDefault(option => option.CategoryId is null);
+        SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(
+            option => option.CollectionId == state.SelectedCatalogCollectionId) ??
+            CatalogCollectionOptions.FirstOrDefault(option => option.CollectionId is null);
+        HideFollowedCatalogFeeds = state.HideFollowedCatalogFeeds;
+
+        _expandedSidebarFolders.Clear();
+        foreach (var folder in state.ExpandedFolderNames)
+        {
+            _expandedSidebarFolders.Add(folder);
+        }
+
+        foreach (var folderLink in FeedLinks.Where(link => link.IsFolder))
+        {
+            folderLink.IsExpanded = _expandedSidebarFolders.Contains(folderLink.Label);
+        }
+
+        ApplyArticleFilters();
+        SelectedArticleTopic = state.SelectedArticleTopicTerm is null
+            ? ArticleTopicOptions.FirstOrDefault(option => option.Term is null)
+            : ArticleTopicOptions.FirstOrDefault(option =>
+                string.Equals(option.Term, state.SelectedArticleTopicTerm, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(option.Scheme, state.SelectedArticleTopicScheme, StringComparison.OrdinalIgnoreCase))
+              ?? ArticleTopicOptions.FirstOrDefault(option => option.Term is null);
+        UpdateSelectedLinks();
+
+        var selectedArticle = state.SelectedArticleId is null
+            ? state.SelectedArticleReference
+            : _allArticles.FirstOrDefault(article => article.ArticleId == state.SelectedArticleId);
+        if (selectedArticle is not null && VisibleArticles.Contains(selectedArticle))
+        {
+            SelectedArticle = selectedArticle;
+        }
+
+        if (!string.Equals(previousRoute, route, StringComparison.Ordinal))
+        {
+            _ = RefreshRouteFeedsAsync(route);
+        }
+    }
+
+    private bool IsNavigationRouteAvailable(string route) =>
+        string.Equals(route, "All", StringComparison.Ordinal) ||
+        PrimaryLinks
+            .Concat(ReadingLinks)
+            .Concat(FeedLinks)
+            .Concat(TagLinks)
+            .Concat(AdminLinks)
+            .Any(link => string.Equals(link.Route, route, StringComparison.Ordinal));
+
+    private void NotifyNavigationHistoryChanged()
+    {
+        OnPropertyChanged(nameof(CanGoBack));
+        BackCommand.NotifyCanExecuteChanged();
     }
 
     private void NavigateToSelectedArticleFeed()
@@ -1362,7 +1553,6 @@ public sealed class MainWindowViewModel : ObservableObject
     private ArticleRowViewModel[] GetArticleNavigationSequence() => IsSortByDate
         ? VisibleArticles
             .OrderByDescending(article => article.PublishedAt)
-            .ThenBy(article => article.Folder, StringComparer.OrdinalIgnoreCase)
             .ToArray()
         : VisibleArticles
             .OrderBy(article => article.Folder, StringComparer.OrdinalIgnoreCase)
@@ -1556,7 +1746,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private async Task RetryFailedFeedsAsync()
     {
         var refreshService = _feedRefreshService;
-        var failedFeedIds = _failedRefreshFeedIds.ToArray();
+        var failedFeedIds = GetRelevantFailedRefreshFeedIds();
         if (refreshService is null || failedFeedIds.Length == 0)
         {
             return;
@@ -1567,7 +1757,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private async Task RefreshRouteFeedsAsync(string route)
     {
-        if (_feedRefreshService is null || IsCatalogMaster || IsRefreshing)
+        if (_feedRefreshService is null || IsRefreshing)
         {
             return;
         }
@@ -1650,6 +1840,40 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         _failedRefreshFeedIds = feedIds.ToArray();
         OnPropertyChanged(nameof(HasFailedRefreshFeeds));
+        NotifyRefreshFailureContextChanged();
+    }
+
+    private string[] GetRelevantFailedRefreshFeedIds()
+    {
+        IEnumerable<string> displayedFeedIds;
+        if (SelectedArticle is { } selectedArticle)
+        {
+            displayedFeedIds = selectedArticle.FeedId is { } selectedFeedId
+                ? [selectedFeedId]
+                : [];
+        }
+        else if (IsArticleListVisible)
+        {
+            displayedFeedIds = VisibleArticles
+                .Select(article => article.FeedId)
+                .OfType<string>();
+        }
+        else
+        {
+            displayedFeedIds = [];
+        }
+
+        var displayedFeedIdSet = displayedFeedIds.ToHashSet(StringComparer.Ordinal);
+        return _failedRefreshFeedIds
+            .Where(displayedFeedIdSet.Contains)
+            .ToArray();
+    }
+
+    private void NotifyRefreshFailureContextChanged()
+    {
+        OnPropertyChanged(nameof(VisibleRefreshFailureMessage));
+        OnPropertyChanged(nameof(HasVisibleRefreshFailure));
+        OnPropertyChanged(nameof(HasVisibleFailedRefreshFeeds));
         RetryFailedFeedsCommand.NotifyCanExecuteChanged();
     }
 
@@ -1676,7 +1900,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
                 var folderName = await FolderSelectionRequested(
                     FolderNames.ToArray(),
-                    GetSuggestedFolders(),
+                    GetSuggestedFolders([feed.CategoryName]),
                     CreateFolderFromPickerAsync);
                 if (string.IsNullOrWhiteSpace(folderName))
                 {
@@ -1815,7 +2039,22 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSidebarPinned));
         OnPropertyChanged(nameof(SidebarColumnWidth));
         OnPropertyChanged(nameof(SidebarColumnSpan));
+        OnPropertyChanged(nameof(SidebarColumnMinWidth));
         OnPropertyChanged(nameof(SidebarHeaderMargin));
+    }
+
+    public void SetSidebarPanelWidth(double width)
+    {
+        if (!double.IsFinite(width))
+        {
+            return;
+        }
+
+        var constrainedWidth = Math.Clamp(width, MinimumSidebarWidth, MaximumSidebarWidth);
+        if (SetProperty(ref _sidebarWidth, constrainedWidth, nameof(SidebarPanelWidth)))
+        {
+            OnPropertyChanged(nameof(SidebarColumnWidth));
+        }
     }
 
     private void UpdateSelectedLinks()
@@ -1909,6 +2148,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IsArticleListEmpty));
         OnPropertyChanged(nameof(ArticleListEmptyMessage));
+        NotifyRefreshFailureContextChanged();
         PreviousArticleCommand.NotifyCanExecuteChanged();
         NextArticleCommand.NotifyCanExecuteChanged();
     }
@@ -1982,13 +2222,33 @@ public sealed class MainWindowViewModel : ObservableObject
     private void ClearArticleTopicFilter() =>
         SelectedArticleTopic = ArticleTopicOptions.FirstOrDefault(option => option.Term is null);
 
-    private string GetStartPageRoute() => _profilePreferences.StartPage switch
+    private string GetStartPageRoute() => GetStartPageRoute(_profilePreferences.StartPage);
+
+    private string GetStartPageRoute(ProfileStartPage startPage) => startPage switch
     {
         ProfileStartPage.All => "All",
         ProfileStartPage.FirstFolder => FeedLinks.FirstOrDefault(link =>
             link.Route.StartsWith("folder:", StringComparison.Ordinal))?.Route ?? "Today",
         _ => "Today"
     };
+
+    private sealed record NavigationHistoryEntry(
+        string ActiveRoute,
+        string? SelectedArticleId,
+        ArticleRowViewModel? SelectedArticleReference,
+        string SearchQuery,
+        string? SelectedArticleTopicTerm,
+        string? SelectedArticleTopicScheme,
+        bool UnreadOnly,
+        bool SavedOnly,
+        bool IsCardsView,
+        bool IsMagazineView,
+        bool IsSortByDate,
+        string CatalogSearchQuery,
+        string? SelectedCatalogCategoryId,
+        string? SelectedCatalogCollectionId,
+        bool HideFollowedCatalogFeeds,
+        string[] ExpandedFolderNames);
 
     private sealed class BulkObservableCollection<T> : ObservableCollection<T>
     {

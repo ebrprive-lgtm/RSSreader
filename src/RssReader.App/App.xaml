@@ -16,6 +16,7 @@
         <SolidColorBrush x:Key="ContentBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="NeutralHoverBrush" Color="#E8EEEB" />
         <SolidColorBrush x:Key="NeutralPressedBrush" Color="#DCE4DF" />
+        <SolidColorBrush x:Key="WindowFrameBrush" Color="#B8C4BE" />
         <SolidColorBrush x:Key="ControlBorderBrush" Color="#D8DFDB" />
         <SolidColorBrush x:Key="SeparatorBrush" Color="#E3E7E5" />
         <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#3B5D53" />
@@ -702,4 +703,3 @@
         </Style>
     </Application.Resources>
 </Application>
-

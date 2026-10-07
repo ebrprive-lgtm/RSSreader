@@ -97,17 +97,18 @@ public sealed class ProfileFeedServiceTests
     }
 
     [TestMethod]
-    public async Task CatalogMasterCannotAddProfileOwnedFeeds()
+    public async Task CatalogMasterCanAddProfileOwnedFeeds()
     {
         using var database = new TemporaryDatabase();
         var (_, catalog, reader) = await CreateStoresAsync(database.Path);
         var master = Profile.CreateCatalogMaster();
         var service = new ProfileFeedService(catalog, reader);
 
-        await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(() =>
-            service.AddFeedAsync(master, "Private feed", "https://example.com/feed.xml"));
+        var feed = await service.AddFeedAsync(master, "Private feed", "https://example.com/feed.xml");
 
         Assert.AreEqual(0, (await catalog.GetFeedsAsync()).Count);
+        Assert.AreEqual(feed.Id, (await catalog.GetFeedsForProfileAsync(master.Id)).Single().Id);
+        Assert.AreEqual(feed.Id, (await reader.GetSubscriptionsAsync(master.Id)).Single().FeedId);
     }
 
     [TestMethod]

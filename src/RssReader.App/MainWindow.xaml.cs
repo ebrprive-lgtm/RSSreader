@@ -1,5 +1,6 @@
 ﻿using Microsoft.Win32;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -17,6 +18,7 @@ namespace RssReader.App;
 public partial class MainWindow : Window
 {
     private readonly DispatcherTimer _autoRefreshTimer = new(DispatcherPriority.Background);
+    private readonly WindowPlacementStore _windowPlacementStore;
     private MainWindowViewModel? _viewModel;
     private ArticleRowViewModel? _articleToRestoreFocus;
     private string? _articleRouteWhenOpened;
@@ -27,10 +29,17 @@ public partial class MainWindow : Window
     }
 
     public MainWindow(MainWindowViewModel viewModel)
+        : this(viewModel, new WindowPlacementStore())
+    {
+    }
+
+    internal MainWindow(MainWindowViewModel viewModel, WindowPlacementStore windowPlacementStore)
     {
         InitializeComponent();
+        _windowPlacementStore = windowPlacementStore;
         _viewModel = viewModel;
         DataContext = viewModel;
+        RestoreWindowPlacement(viewModel);
         viewModel.FolderSelectionRequested = ShowFolderSelectionAsync;
         viewModel.ConfirmUnfollowRequested = ConfirmUnfollowAsync;
         viewModel.ConfirmUnfollowAllRequested = ConfirmUnfollowAllAsync;
@@ -44,6 +53,7 @@ public partial class MainWindow : Window
         SelectedArticleHtmlViewer.ExternalLinkRequested += ArticleHtmlViewer_ExternalLinkRequested;
         UpdateSelectedArticleContent();
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
+        Closing += (_, _) => SaveWindowPlacement();
         Closed += (_, _) =>
         {
             _autoRefreshTimer.Stop();
@@ -52,6 +62,79 @@ public partial class MainWindow : Window
         };
         UpdateSidebarPresentation();
         ConfigureAutoRefreshTimer();
+    }
+
+    private void RestoreWindowPlacement(MainWindowViewModel viewModel)
+    {
+        var placement = _windowPlacementStore.Load();
+        if (placement is null)
+        {
+            return;
+        }
+
+        viewModel.SetSidebarPanelWidth(placement.SidebarWidth ?? MainWindowViewModel.DefaultSidebarWidth);
+        var visibleArea = new Rect(
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
+        if (!placement.TryGetVisibleBounds(visibleArea, MinWidth, MinHeight, out var bounds))
+        {
+            return;
+        }
+
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
+        if (placement.IsMaximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void SaveWindowPlacement()
+    {
+        var bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, Width, Height)
+            : RestoreBounds;
+        if (bounds.IsEmpty ||
+            !double.IsFinite(bounds.Left) ||
+            !double.IsFinite(bounds.Top) ||
+            !double.IsFinite(bounds.Width) ||
+            !double.IsFinite(bounds.Height))
+        {
+            return;
+        }
+
+        try
+        {
+            _windowPlacementStore.Save(new WindowPlacement(
+                bounds.Left,
+                bounds.Top,
+                bounds.Width,
+                bounds.Height,
+                WindowState == WindowState.Maximized,
+                _viewModel?.SidebarPanelWidth ?? MainWindowViewModel.DefaultSidebarWidth));
+        }
+        catch (IOException exception)
+        {
+            ShowWindowPlacementSaveError(exception);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ShowWindowPlacementSaveError(exception);
+        }
+    }
+
+    private void ShowWindowPlacementSaveError(Exception exception)
+    {
+        Trace.TraceError($"Could not save main-window placement: {exception}");
+        MessageDialogWindow.Show(
+            this,
+            $"The main window position and size could not be saved.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     private Task<bool> ConfirmUnfollowAllAsync(int feedCount)
@@ -105,6 +188,33 @@ public partial class MainWindow : Window
     private void RestoreWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Normal;
 
     private void CloseWindow_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        var isMaximized = WindowState == WindowState.Maximized;
+        WindowResizeFrame.CornerRadius = new CornerRadius(isMaximized ? 0 : 18);
+        MainWindowSurface.Margin = isMaximized ? new Thickness(0) : new Thickness(6);
+        MainWindowSurface.CornerRadius = new CornerRadius(isMaximized ? 0 : 18);
+        MainWindowSurface.BorderThickness = isMaximized ? new Thickness(0) : new Thickness(1);
+        UpdateShellGridClip();
+    }
+
+    private void ShellGrid_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateShellGridClip();
+
+    private void UpdateShellGridClip()
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            ShellGrid.Clip = null;
+            return;
+        }
+
+        const double contentCornerRadius = 17;
+        ShellGrid.Clip = new RectangleGeometry(
+            new Rect(0, 0, ShellGrid.ActualWidth, ShellGrid.ActualHeight),
+            contentCornerRadius,
+            contentCornerRadius);
+    }
 
     private async void ManageFeedTags_Click(object sender, RoutedEventArgs e)
     {
@@ -177,7 +287,8 @@ public partial class MainWindow : Window
             article?.Summary,
             article?.Link,
             article?.FeedUrl,
-            _viewModel?.LimitArticleWidth ?? true);
+            _viewModel?.LimitArticleWidth ?? true,
+            article?.CardImageUrl);
     }
 
     private void RestoreArticleListFocus(ArticleRowViewModel article)
@@ -224,7 +335,7 @@ public partial class MainWindow : Window
     private void ConfigureAutoRefreshTimer()
     {
         _autoRefreshTimer.Stop();
-        if (_viewModel is null || _viewModel.IsCatalogMaster || _viewModel.AutoRefreshIntervalMinutes <= 0)
+        if (_viewModel is null || _viewModel.AutoRefreshIntervalMinutes <= 0)
         {
             return;
         }
@@ -371,6 +482,24 @@ public partial class MainWindow : Window
             menu.PlacementTarget = button;
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;
+        }
+    }
+
+    private void CopyCatalogFeedCheckError_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { DataContext: TextBlock errorText } ||
+            string.IsNullOrEmpty(errorText.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(errorText.Text);
+        }
+        catch (ExternalException exception)
+        {
+            Trace.TraceError($"Could not copy the catalog feed-check error to the clipboard: {exception}");
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Xml;
 using System.Xml.Linq;
 using RssReader.Domain;
@@ -255,8 +256,44 @@ public sealed class SyndicationFeedDownloaderTests
                 StringAssert.Contains(items[1].Content, "<p>XHTML body with <strong>emphasis</strong>.</p>");
         }
 
-        [TestMethod]
-        public async Task Download_ConvertsHtmlSummaryToReadableText()
+    [TestMethod]
+    public async Task Download_AtomEntryWithRichHtmlContentParsesContentAndLinks()
+    {
+                const string xml = """
+                    <feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+                      <title>Sample Atom feed</title>
+                      <entry>
+                        <title>Atom article with rich HTML</title>
+                        <updated>2026-10-06T19:25:03Z</updated>
+                        <id>https://example.test/articles/atom-html</id>
+                        <content type="html">&lt;figure&gt;&lt;img src="https://images.example.test/lead.jpg?format=jpeg" alt="Lead image"&gt;&lt;figcaption&gt;Example image caption&lt;/figcaption&gt;&lt;/figure&gt;&lt;ul&gt;&lt;li&gt;First summary point.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Read a &lt;a target="_blank" href="https://example.test/related"&gt;related article&lt;/a&gt; for more details.&lt;/p&gt;</content>
+                        <published>2026-10-06T19:25:03Z</published>
+                        <summary type="text">A short article summary.</summary>
+                        <author><name>Example Author</name><email>author@example.test</email></author>
+                        <link href="https://example.test/articles/atom-html"></link>
+                        <category term="Example topic" scheme="https://example.test/topics"></category>
+                        <media:thumbnail url="https://images.example.test/lead.jpg?format=jpeg"></media:thumbnail>
+                      </entry>
+                    </feed>
+                    """;
+                using var client = CreateClient(xml);
+                var downloader = new SyndicationFeedDownloader(client);
+
+                var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+                Assert.AreEqual("Atom article with rich HTML", item.Title);
+                Assert.AreEqual("https://example.test/articles/atom-html", item.Link);
+                Assert.AreEqual("Example Author", item.Author);
+                Assert.AreEqual(1, item.Categories!.Count);
+                StringAssert.Contains(item.Content, "https://example.test/related");
+                StringAssert.Contains(item.Content, "<p>");
+                Assert.AreEqual(
+                    "https://images.example.test/lead.jpg?format=jpeg",
+                    item.ImageUrl);
+    }
+
+                [TestMethod]
+                public async Task Download_ConvertsHtmlSummaryToReadableText()
         {
                 const string xml = """
                         <rss version="2.0">
@@ -381,6 +418,102 @@ public sealed class SyndicationFeedDownloaderTests
             () => downloader.DownloadAsync(CreateFeed()));
 
         StringAssert.Contains(failure.Message, "offline");
+    }
+
+    [TestMethod]
+    public async Task Download_HttpFailureIncludesBoundedDiagnosticsAndRedactsSecrets()
+    {
+        const string bodyTail = "body-tail-must-not-appear";
+        const string requestSecret = "request-secret-value";
+        const string finalSecret = "final-secret-value";
+        const string locationSecret = "location-secret-value";
+        const string headerSecret = "header-secret-value";
+        var body = new string('x', 4_096) + bodyTail;
+        using var finalRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://redirect.example.test/feed?access_token={finalSecret}");
+        finalRequest.Headers.TryAddWithoutValidation("X-Access-Token", headerSecret);
+        using var response = new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            ReasonPhrase = "Feed access denied",
+            Version = HttpVersion.Version20,
+            RequestMessage = finalRequest,
+            Content = new StringContent(body)
+        };
+        response.Headers.Add("X-Request-Id", "request-123");
+        response.Headers.TryAddWithoutValidation("Set-Cookie", "session=cookie-secret-value");
+        response.Headers.Location = new Uri($"/blocked?token={locationSecret}", UriKind.Relative);
+        using var client = new HttpClient(new StaticResponseHandler(response));
+        var downloader = new SyndicationFeedDownloader(client);
+        var feed = CreateFeed() with
+        {
+            FeedUrl = $"https://example.test/rss?api_key={requestSecret}"
+        };
+
+        var failure = await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            () => downloader.DownloadAsync(feed));
+
+        Assert.AreEqual(HttpStatusCode.Forbidden, failure.StatusCode);
+        StringAssert.Contains(failure.Message, "HTTP 403 (Forbidden)");
+        StringAssert.Contains(failure.Message, "Reason phrase: Feed access denied");
+        StringAssert.Contains(failure.Message, "Original URI: https://example.test/rss?api_key=[redacted]");
+        StringAssert.Contains(failure.Message, "Final URI: https://redirect.example.test/feed?access_token=[redacted]");
+        StringAssert.Contains(failure.Message, "HTTP version: 2.0");
+        StringAssert.Contains(failure.Message, "X-Access-Token: [redacted]");
+        StringAssert.Contains(failure.Message, "X-Request-ID: request-123");
+        StringAssert.Contains(failure.Message, "Location: /blocked?token=[redacted]");
+        StringAssert.Contains(failure.Message, "[truncated after 4096 bytes]");
+        Assert.IsFalse(failure.Message.Contains(bodyTail, StringComparison.Ordinal));
+        Assert.IsFalse(failure.Message.Contains(requestSecret, StringComparison.Ordinal));
+        Assert.IsFalse(failure.Message.Contains(finalSecret, StringComparison.Ordinal));
+        Assert.IsFalse(failure.Message.Contains(locationSecret, StringComparison.Ordinal));
+        Assert.IsFalse(failure.Message.Contains(headerSecret, StringComparison.Ordinal));
+        Assert.IsFalse(failure.Message.Contains("cookie-secret-value", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task Download_HttpFailureExplainsAndSummarizesBrowserVerificationChallenge()
+    {
+        const string challengeBody =
+            "<!DOCTYPE html><title>Checking your browser...</title><noscript>Javascript required</noscript>" +
+            "<script src=\"/__challenge/probes.js\"></script><script>X-Hashcash-Solution</script>";
+        using var response = new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent(challengeBody)
+        };
+        using var client = new HttpClient(new StaticResponseHandler(response));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var failure = await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            () => downloader.DownloadAsync(CreateFeed()));
+
+        StringAssert.Contains(failure.Message, "browser-verification/anti-bot page");
+        StringAssert.Contains(failure.Message, "does not execute JavaScript or complete browser challenges");
+        StringAssert.Contains(failure.Message, "Checking your browser");
+        StringAssert.Contains(failure.Message, "Response body excerpt:");
+        Assert.IsFalse(failure.Message.Contains("X-Hashcash-Solution", StringComparison.Ordinal));
+        Assert.IsFalse(failure.Message.Contains("/__challenge/probes.js", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task Download_TransportFailureIncludesUriAndInnerExceptionDetails()
+    {
+        using var client = new HttpClient(new DelegateResponseHandler((_, _) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException(
+                "The host could not be reached.",
+                new SocketException((int)SocketError.HostNotFound)))));
+        var downloader = new SyndicationFeedDownloader(client);
+        var feed = CreateFeed() with { FeedUrl = "https://example.test/rss?key=private-value" };
+
+        var failure = await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            () => downloader.DownloadAsync(feed));
+
+        Assert.IsNull(failure.StatusCode);
+        StringAssert.Contains(failure.Message, "did not receive an HTTP response");
+        StringAssert.Contains(failure.Message, "https://example.test/rss?key=[redacted]");
+        StringAssert.Contains(failure.Message, "The host could not be reached.");
+        StringAssert.Contains(failure.Message, "SocketException:");
+        Assert.IsFalse(failure.Message.Contains("private-value", StringComparison.Ordinal));
     }
 
     [TestMethod]

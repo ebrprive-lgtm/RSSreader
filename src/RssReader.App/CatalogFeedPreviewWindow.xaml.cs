@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Runtime.InteropServices;
 using RssReader.App.ViewModels;
 
 namespace RssReader.App;
@@ -30,7 +31,6 @@ public partial class CatalogFeedPreviewWindow : Window
         if (checkFeed is not null)
         {
             CheckFeedButton.Visibility = Visibility.Visible;
-            ClosePreviewButton.Visibility = Visibility.Collapsed;
         }
 
         FeedDescriptionText.Text = feed.Description ?? string.Empty;
@@ -69,6 +69,23 @@ public partial class CatalogFeedPreviewWindow : Window
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void CopyErrorMessage_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(ErrorMessageText.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(ErrorMessageText.Text);
+        }
+        catch (ExternalException exception)
+        {
+            System.Diagnostics.Trace.TraceError($"Could not copy the feed preview error to the clipboard: {exception}");
+        }
+    }
 
     private async void CheckFeedButton_Click(object sender, RoutedEventArgs e)
     {

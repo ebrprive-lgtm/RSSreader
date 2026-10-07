@@ -589,8 +589,13 @@ public sealed class CatalogManagementViewModel : ObservableObject
         feed.IsHealthCheckInProgress = true;
         try
         {
-            await _catalogService.CheckFeedHealthAsync(_actor, feed.Id);
+            var result = await _catalogService.CheckFeedHealthAsync(_actor, feed.Id);
             await RefreshAsync();
+            if (!result.IsSuccessful)
+            {
+                ErrorMessage = $"Could not check feed '{feed.Name}':{Environment.NewLine}" +
+                    (result.ErrorMessage ?? "The feed check failed without additional diagnostic details.");
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

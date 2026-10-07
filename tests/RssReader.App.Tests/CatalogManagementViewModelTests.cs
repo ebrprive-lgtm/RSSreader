@@ -502,6 +502,22 @@ public sealed class CatalogManagementViewModelTests
         StringAssert.StartsWith(checkedItem.HealthCheckDisplay, "Feed valid - checked ");
     }
 
+    [TestMethod]
+    public async Task FailedFeedHealthCheckDisplaysDiagnosticDetails()
+    {
+        var store = new MemoryCatalogStore();
+        var actor = Profile.CreateCatalogMaster();
+        var catalogService = new CatalogService(store, new TestFeedDownloader(_ => true));
+        await catalogService.AddFeedAsync(actor, "Unavailable", "https://example.com/feed.xml", null, null);
+        var viewModel = new CatalogManagementViewModel(actor, catalogService);
+        await viewModel.InitializeAsync();
+
+        await viewModel.CheckFeedHealthCommand.ExecuteAsync(viewModel.Feeds.Single());
+
+        StringAssert.Contains(viewModel.ErrorMessage, "Could not check feed 'Unavailable'");
+        StringAssert.Contains(viewModel.ErrorMessage, "Feed check failed.");
+    }
+
     private sealed class MemoryCatalogStore : ICatalogStore
     {
         private readonly List<CatalogFeed> _feeds = [];

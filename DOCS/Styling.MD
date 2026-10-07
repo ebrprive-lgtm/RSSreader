@@ -15,6 +15,7 @@ This guide records the shared visual language for the WPF reader. Prefer the sha
 | `ContentBrush` | `#FFFFFF` | Main reading and dialog content |
 | `NeutralHoverBrush` | `#E8EEEB` | Hover state for neutral controls |
 | `NeutralPressedBrush` | `#DCE4DF` | Pressed state for neutral controls |
+| `WindowFrameBrush` | `#B8C4BE` | Contrasting outline around the main application window |
 | `ControlBorderBrush` | `#D8DFDB` | Shared subtle control and frame borders |
 | `SeparatorBrush` | `#E3E7E5` | Light separators between content sections and rows |
 | `PrimaryHoverBrush` | `#3B5D53` | Hover state for primary actions |
@@ -41,17 +42,24 @@ Use `Segoe MDL2 Assets` for the existing icon glyphs. Pair icons with clear text
 ## Layout and Shape
 
 - Keep operational views dense, aligned, and easy to scan; favor whitespace through consistent margins rather than decorative cards.
+- Article cards are an intentional content-surface exception: use a restrained 10-12 px corner radius and subtle separator, without heavy shadows.
+- Keep article-card hover and keyboard-focus feedback visible but restrained; distinguish publisher-topic and profile feed-tag chips, and preserve a consistent `UniformToFill` image crop.
+- Keep the title-only article list focused on the headline, with publisher and age as compact metadata; show folder labels and folder groups only in folder-sort mode, and keep date-sort mode as one global newest-first list.
+- Keep the unsaved read-later bookmark hidden until its row is hovered or keyboard-focused; saved bookmarks remain visible.
 - Use the existing 286 px navigation sidebar and restrained content margins in the main window.
+- The navigation sidebar can be resized between 220 px and 480 px using its splitter; persist the chosen width with main-window placement.
 - Use compact control heights around 32-38 px; keep icon buttons on stable square dimensions.
-- Use small corner radii: 3-5 px for controls and 5-7 px for dialogs or framed surfaces. Avoid pill-shaped controls.
+- Use small corner radii: 3-5 px for controls and 5-7 px for dialogs. The main reader window is an exception with an 18 px radius.
 - Dialog boxes use a visible, subtle border around the surface, using `ControlBorderBrush` and a 5-7 px corner radius.
 - Align counts and secondary values to the right while preserving space for the primary label.
 
 ## Window Chrome
 
 - Application windows and dialog popups must not use the default Windows title bar; use application-owned window chrome instead.
+- The main reader window uses an interactive resize frame and 18 px rounded corners. Keep its outer corners transparent by clipping the inner window content to the matching rounded geometry; preserve a hit-testable frame along resize edges and use square, edge-to-edge framing when maximized.
+- Persist the main reader window's normal bounds and maximized state under the local application-data directory, and clamp restored bounds to the current virtual desktop.
 - Dialog popups must have no native title bar or window-title text. In-content headings remain part of the dialog layout. Provide a visible X close button in the top-right corner of each dialog popup.
-- The Catalog Master feed-preview popup is the sole exception to the top-right X action: keep its Delete and Check Feed (validation) buttons in that action area. It still follows the no-default-title-bar and no-title-text rules.
+- The Catalog Master feed-preview popup keeps its Delete and Check Feed actions in the top-right action area, followed by a Close (X) button that only dismisses the preview. It still follows the no-default-title-bar and no-title-text rules.
 - These rules apply to application-owned windows and popups. Operating-system-owned file pickers retain system chrome.
 
 ## Controls and States

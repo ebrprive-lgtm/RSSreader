@@ -22,6 +22,12 @@ internal static class ArticleHtmlDocumentBuilder
         pre { background: #f1f4f2; border-radius: 3px; overflow-wrap: anywhere; padding: 10px; white-space: pre-wrap; }
         code, kbd, samp { font-family: Consolas, monospace; }
         hr { border: 0; border-top: 1px solid #dfe6e1; margin: 1.5em 0; }
+        .reader-feed-preview { max-width: 760px; margin: 0 auto; }
+        .reader-feed-preview-image { margin: 0 0 20px; }
+        .reader-feed-preview-image img { width: 100%; max-height: 360px; object-fit: cover; border-radius: 12px; }
+        .reader-feed-preview-summary { font-size: 1.12em; }
+        .reader-feed-preview-note { background: #f1f4f2; border-left: 3px solid #86a58e; border-radius: 4px; color: #4d5a52; margin-top: 22px; padding: 12px 16px; }
+        .reader-feed-preview-link { font-weight: 600; }
         """;
 
     public static string Build(
@@ -29,18 +35,25 @@ internal static class ArticleHtmlDocumentBuilder
         string? summary,
         string? articleUrl,
         string? feedUrl,
-        bool limitArticleWidth = true)
+        bool limitArticleWidth = true,
+        string? imageUrl = null)
     {
         var baseUrl = GetWebUrl(articleUrl) ?? GetWebUrl(feedUrl);
+        var isFeedPreview = IsFeedPreview(content, summary);
         var bodyFragment = string.IsNullOrWhiteSpace(content)
             ? $"<p>{EncodePlainText(summary)}</p>"
             : content;
         bodyFragment = RemoveDuplicateLeadingImage(bodyFragment, baseUrl);
         bodyFragment = PreserveCenteredImageAlignment(bodyFragment);
-        var sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl);
         var widthLimitStyle = limitArticleWidth
             ? "main { max-width: 900px; margin: 0 auto; }"
             : "main { max-width: none; margin: 0; }";
+
+        var sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl);
+        if (isFeedPreview)
+        {
+            sanitizedFragment = BuildFeedPreview(sanitizedFragment, imageUrl, articleUrl, baseUrl);
+        }
 
         return $"""
             <!doctype html>
@@ -56,10 +69,109 @@ internal static class ArticleHtmlDocumentBuilder
             """;
     }
 
+    internal static string? FindFirstWebImageUrl(
+        string? content,
+        string? articleUrl,
+        string? feedUrl)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        var baseUrl = GetWebUrl(articleUrl) ?? GetWebUrl(feedUrl);
+        var document = new HtmlDocument();
+        document.LoadHtml(content);
+        var images = document.DocumentNode.SelectNodes("//img[@src or @srcset]");
+        if (images is null)
+        {
+            return null;
+        }
+
+        foreach (var image in images)
+        {
+            foreach (var source in GetImageSources(image, baseUrl))
+            {
+                if (Uri.TryCreate(source, UriKind.Absolute, out var imageUri) && IsWebUri(imageUri))
+                {
+                    return imageUri.AbsoluteUri;
+                }
+            }
+        }
+
+        return null;
+    }
+
     private static string EncodePlainText(string? text) =>
         WebUtility.HtmlEncode(text ?? string.Empty)
             .Replace("\r\n", "<br>", StringComparison.Ordinal)
             .Replace("\n", "<br>", StringComparison.Ordinal);
+
+    private static bool IsFeedPreview(string? content, string? summary)
+    {
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return true;
+        }
+
+        var document = new HtmlDocument();
+        document.LoadHtml(content);
+        if (document.DocumentNode.SelectSingleNode("//img|//audio|//video|//table|//blockquote|//pre") is not null)
+        {
+            return false;
+        }
+
+        var contentText = NormalizeText(document.DocumentNode.InnerText);
+        return contentText.Length > 0 &&
+            string.Equals(contentText, NormalizeText(summary), StringComparison.Ordinal);
+    }
+
+    private static string BuildFeedPreview(
+        string sanitizedContent,
+        string? imageUrl,
+        string? articleUrl,
+        string? baseUrl)
+    {
+        var document = new HtmlDocument();
+        document.LoadHtml(sanitizedContent);
+        var hasInlineImage = document.DocumentNode.SelectSingleNode("//img") is not null;
+        var resolvedImageUrl = hasInlineImage || string.IsNullOrWhiteSpace(imageUrl)
+            ? null
+            : GetWebUrl(NormalizeImageSource(imageUrl, baseUrl));
+        var image = resolvedImageUrl is null
+            ? string.Empty
+            : $"""
+                <figure class="reader-feed-preview-image">
+                  <img src="{WebUtility.HtmlEncode(resolvedImageUrl)}" alt="Article image">
+                </figure>
+                """;
+        var articleUri = GetWebUrl(articleUrl);
+        var link = articleUri is null
+            ? string.Empty
+            : $"""
+                <p><a class="reader-feed-preview-link" href="{WebUtility.HtmlEncode(articleUri)}">Open article on the publisher's site</a></p>
+                """;
+
+        return $"""
+            <section class="reader-feed-preview">
+              {image}
+              <div class="reader-feed-preview-summary">{sanitizedContent}</div>
+              <aside class="reader-feed-preview-note">
+                <p><strong>Feed preview</strong></p>
+                <p>This feed provides a short preview. The publisher may have more to read.</p>
+                {link}
+              </aside>
+            </section>
+            """;
+    }
+
+    private static string NormalizeText(string text) =>
+        string.Join(' ', WebUtility.HtmlDecode(text).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private static string? GetWebUrl(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) && IsWebUri(uri)

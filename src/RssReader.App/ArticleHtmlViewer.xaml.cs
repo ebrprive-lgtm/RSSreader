@@ -57,10 +57,11 @@ public partial class ArticleHtmlViewer : UserControl
         string? summary,
         string? articleUrl,
         string? feedUrl,
-        bool limitArticleWidth = true)
+        bool limitArticleWidth = true,
+        string? imageUrl = null)
     {
         _fallbackText = summary;
-        _document = ArticleHtmlDocumentBuilder.Build(content, summary, articleUrl, feedUrl, limitArticleWidth);
+        _document = ArticleHtmlDocumentBuilder.Build(content, summary, articleUrl, feedUrl, limitArticleWidth, imageUrl);
         if (_isInitialized)
         {
             _resizeRedrawTimer.Stop();

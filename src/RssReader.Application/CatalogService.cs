@@ -19,7 +19,10 @@ public sealed record FeedImportSummary(
     int AddedCount,
     int SkippedCount,
     IReadOnlyList<FeedDuplicateCandidate> DuplicateCandidates);
-public sealed record CatalogFeedHealthCheckResult(bool IsSuccessful, DateTimeOffset CheckedAt);
+public sealed record CatalogFeedHealthCheckResult(
+    bool IsSuccessful,
+    DateTimeOffset CheckedAt,
+    string? ErrorMessage = null);
 
 public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDownloader = null)
 {
@@ -176,6 +179,7 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
             ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
 
         var isSuccessful = false;
+        string? errorMessage = null;
         try
         {
             await feedDownloader.DownloadAsync(feed, cancellationToken);
@@ -185,9 +189,9 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // A failed check is recorded as feed status rather than aborting catalog maintenance.
+            errorMessage = exception.ToString();
         }
 
         var checkedAt = DateTimeOffset.UtcNow;
@@ -196,7 +200,7 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
             LastHealthCheckedAt = checkedAt,
             LastHealthCheckSucceeded = isSuccessful
         }, cancellationToken);
-        return new CatalogFeedHealthCheckResult(isSuccessful, checkedAt);
+        return new CatalogFeedHealthCheckResult(isSuccessful, checkedAt, errorMessage);
     }
 
     public async Task<FeedImportSummary> ImportFeedsAsync(

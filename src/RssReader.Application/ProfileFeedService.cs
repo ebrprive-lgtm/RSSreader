@@ -15,7 +15,7 @@ public sealed class ProfileFeedService(ICatalogStore catalogStore, IReaderStore 
         string feedUrl,
         CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
+        ArgumentNullException.ThrowIfNull(profile);
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("A feed name is required.", nameof(name));
@@ -57,7 +57,7 @@ public sealed class ProfileFeedService(ICatalogStore catalogStore, IReaderStore 
         Stream stream,
         CancellationToken cancellationToken = default)
     {
-        EnsureRegularProfile(profile);
+        ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(stream);
         var parsed = OpmlFeedParser.Parse(stream);
         var accessibleFeeds = await catalogStore.GetFeedsForProfileAsync(profile.Id, cancellationToken);
@@ -168,15 +168,6 @@ public sealed class ProfileFeedService(ICatalogStore catalogStore, IReaderStore 
         if (!folders.Contains(folderName, StringComparer.OrdinalIgnoreCase))
         {
             await readerStore.AddFolderAsync(profileId, folderName, cancellationToken);
-        }
-    }
-
-    private static void EnsureRegularProfile(Profile profile)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        if (profile.IsCatalogMaster)
-        {
-            throw new UnauthorizedAccessException("Personal feeds are available only to regular profiles.");
         }
     }
 

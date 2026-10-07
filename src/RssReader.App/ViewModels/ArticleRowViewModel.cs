@@ -25,27 +25,35 @@ public sealed class ArticleRowViewModel(
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
 
-    public string Title { get; } = title;
-    public string Source { get; } = source;
+    public string Title { get; } = FeedTextEncodingRepair.Repair(title);
+    public string Source { get; } = FeedTextEncodingRepair.Repair(source);
     public DateTimeOffset PublishedAt { get; } = publishedAt;
-    public string Folder { get; } = folder;
-    public IReadOnlyList<string> Tags { get; } = tags;
+    public string Folder { get; } = FeedTextEncodingRepair.Repair(folder);
+    public IReadOnlyList<string> Tags { get; } = tags.Select(FeedTextEncodingRepair.Repair).ToArray();
     public string FeedTagSummary { get; } = FormatFeedTagSummary(tags);
+    public string FullFeedTagSummary { get; } = FormatFeedTagSummary(tags, int.MaxValue);
+    public IReadOnlyList<string> FeedTagChipLabels { get; } = FormatChipLabels(GetFeedTagNames(tags));
     public bool HasFeedTags => !string.IsNullOrEmpty(FeedTagSummary);
-    public IReadOnlyList<ArticleCategory> Topics { get; } = topics ?? [];
-    public string TopicSummary { get; } = FormatTopicSummary(topics ?? []);
-    public string FullTopicSummary { get; } = FormatTopicSummary(topics ?? [], int.MaxValue);
+    public IReadOnlyList<ArticleCategory> Topics { get; } = NormalizeTopics(topics ?? []);
+    public string TopicSummary { get; } = FormatTopicSummary(NormalizeTopics(topics ?? []));
+    public string FullTopicSummary { get; } = FormatTopicSummary(NormalizeTopics(topics ?? []), int.MaxValue);
+    public IReadOnlyList<string> TopicChipLabels { get; } = FormatChipLabels(GetTopicNames(NormalizeTopics(topics ?? [])));
     public bool HasTopics => !string.IsNullOrEmpty(TopicSummary);
-    public string Summary { get; } = summary;
+    public string Summary { get; } = FeedTextEncodingRepair.Repair(summary);
     public string? ArticleId { get; } = articleId;
     public string? FeedId { get; } = feedId;
     public string? Link { get; } = link;
     public string? Content { get; } = content;
     public string? ImageUrl { get; } = imageUrl;
+    public string? CardImageUrl { get; } = string.IsNullOrWhiteSpace(imageUrl)
+        ? ArticleHtmlDocumentBuilder.FindFirstWebImageUrl(content, link, feedUrl)
+        : imageUrl;
     public string? ExternalId { get; } = externalId;
     public string? FeedUrl { get; } = feedUrl;
     public string? WebsiteUrl { get; } = websiteUrl;
-    public string? Author { get; } = string.IsNullOrWhiteSpace(author) ? null : author.Trim();
+    public string? Author { get; } = string.IsNullOrWhiteSpace(author)
+        ? null
+        : FeedTextEncodingRepair.Repair(author.Trim());
     public bool HasAuthor => !string.IsNullOrWhiteSpace(Author);
     public string ReadLaterAutomationName => IsSaved ? "Remove from read later" : "Add to read later";
     public string SourceInitials
@@ -92,28 +100,53 @@ public sealed class ArticleRowViewModel(
 
     private static string FormatTopicSummary(IReadOnlyList<ArticleCategory> topics, int maximumNames = 3)
     {
-        var names = topics
-            .Select(topic => string.IsNullOrWhiteSpace(topic.Label) ? topic.Term.Trim() : topic.Label.Trim())
-            .Where(name => name.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var names = GetTopicNames(topics);
         var visibleNames = names.Take(maximumNames).ToArray();
         return names.Length > maximumNames
             ? $"{string.Join(" / ", visibleNames)} +{names.Length - maximumNames}"
             : string.Join(" / ", visibleNames);
     }
 
-    private static string FormatFeedTagSummary(IReadOnlyList<string> tags)
-    {
-        var names = tags
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Select(tag => tag.Trim())
+    private static string[] GetTopicNames(IReadOnlyList<ArticleCategory> topics) =>
+        topics
+            .Select(topic => string.IsNullOrWhiteSpace(topic.Label) ? topic.Term.Trim() : topic.Label.Trim())
+            .Where(name => name.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var visibleNames = names.Take(3).ToArray();
-        return names.Length > 3
-            ? $"{string.Join(" / ", visibleNames)} +{names.Length - 3}"
+
+    private static IReadOnlyList<ArticleCategory> NormalizeTopics(IReadOnlyList<ArticleCategory> topics) =>
+        topics.Select(topic => topic with
+        {
+            Term = FeedTextEncodingRepair.Repair(topic.Term),
+            Label = topic.Label is null ? null : FeedTextEncodingRepair.Repair(topic.Label)
+        }).ToArray();
+
+    private static string FormatFeedTagSummary(IReadOnlyList<string> tags, int maximumNames = 3)
+    {
+        var names = GetFeedTagNames(tags);
+        var visibleNames = names.Take(maximumNames).ToArray();
+        return names.Length > maximumNames
+            ? $"{string.Join(" / ", visibleNames)} +{names.Length - maximumNames}"
             : string.Join(" / ", visibleNames);
+    }
+
+    private static string[] GetFeedTagNames(IReadOnlyList<string> tags) =>
+        tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => FeedTextEncodingRepair.Repair(tag.Trim()))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<string> FormatChipLabels(string[] names)
+    {
+        const int visibleLimit = 2;
+        var labels = names.Take(visibleLimit).ToList();
+        if (names.Length > visibleLimit)
+        {
+            labels.Add($"+{names.Length - visibleLimit}");
+        }
+
+        return labels;
     }
 
     public bool IsRead

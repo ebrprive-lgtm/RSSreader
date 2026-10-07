@@ -140,6 +140,7 @@ public sealed class CatalogServiceTests
         var persistedSuccess = (await store.GetFeedsAsync()).Single();
 
         Assert.IsTrue(successfulCheck.IsSuccessful);
+        Assert.IsNull(successfulCheck.ErrorMessage);
         Assert.AreEqual(successfulCheck.CheckedAt, persistedSuccess.LastHealthCheckedAt);
         Assert.AreEqual(true, persistedSuccess.LastHealthCheckSucceeded);
 
@@ -149,6 +150,7 @@ public sealed class CatalogServiceTests
         var persistedFailure = (await store.GetFeedsAsync()).Single();
 
         Assert.IsFalse(failedCheck.IsSuccessful);
+        StringAssert.Contains(failedCheck.ErrorMessage, "offline");
         Assert.AreEqual(failedCheck.CheckedAt, persistedFailure.LastHealthCheckedAt);
         Assert.AreEqual(false, persistedFailure.LastHealthCheckSucceeded);
         await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(() =>
