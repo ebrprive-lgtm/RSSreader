@@ -46,6 +46,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     private CatalogCollection? _selectedCollection;
     private string? _editingFeedId;
     private string? _editingCategoryId;
+    private string? _editingCollectionId;
 
     public CatalogManagementViewModel(
         Profile actor,
@@ -60,6 +61,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
         LoadStarterPackCommand = new AsyncCommand(LoadStarterPackAsync);
         DeleteFeedCommand = new AsyncCommand<CatalogFeedListItem>(DeleteFeedAsync);
         ClearFiltersCommand = new RelayCommand(ClearFilters);
+        DismissImportMessageCommand = new RelayCommand(() => ImportMessage = string.Empty);
         AddCategoryCommand = new AsyncCommand(AddCategoryAsync);
         MergeCategoryCommand = new AsyncCommand(MergeCategoryIntoExistingAsync);
         DeleteCategoryCommand = new AsyncCommand<CatalogCategory>(DeleteCategoryAsync);
@@ -96,6 +98,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public AsyncCommand LoadStarterPackCommand { get; }
     public AsyncCommand<CatalogFeedListItem> DeleteFeedCommand { get; }
     public RelayCommand ClearFiltersCommand { get; }
+    public RelayCommand DismissImportMessageCommand { get; }
     public AsyncCommand AddCategoryCommand { get; }
     public AsyncCommand MergeCategoryCommand { get; }
     public AsyncCommand<CatalogCategory> DeleteCategoryCommand { get; }
@@ -237,8 +240,16 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public string ImportMessage
     {
         get => _importMessage;
-        private set => SetProperty(ref _importMessage, value);
+        private set
+        {
+            if (SetProperty(ref _importMessage, value))
+            {
+                OnPropertyChanged(nameof(HasImportMessage));
+            }
+        }
     }
+
+    public bool HasImportMessage => !string.IsNullOrWhiteSpace(ImportMessage);
 
     public CatalogCategory? SelectedCategory
     {
@@ -263,6 +274,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
         ErrorMessage = string.Empty;
         _editingFeedId = null;
         _editingCategoryId = null;
+        _editingCollectionId = null;
         FeedName = string.Empty;
         FeedUrl = string.Empty;
         FeedWebsiteUrl = string.Empty;
@@ -277,6 +289,8 @@ public sealed class CatalogManagementViewModel : ObservableObject
     {
         ErrorMessage = string.Empty;
         _editingFeedId = feed.Id;
+        _editingCategoryId = null;
+        _editingCollectionId = null;
         FeedName = feed.Name;
         FeedUrl = feed.FeedUrl;
         FeedWebsiteUrl = feed.WebsiteUrl ?? string.Empty;
@@ -289,7 +303,18 @@ public sealed class CatalogManagementViewModel : ObservableObject
         ErrorMessage = string.Empty;
         _editingFeedId = null;
         _editingCategoryId = category.Id;
+        _editingCollectionId = null;
         CategoryName = category.Name;
+        NotifyMergeCategoryProperties();
+    }
+
+    public void PrepareCollectionEdit(CatalogCollection collection)
+    {
+        ErrorMessage = string.Empty;
+        _editingFeedId = null;
+        _editingCategoryId = null;
+        _editingCollectionId = collection.Id;
+        CollectionName = collection.Name;
         NotifyMergeCategoryProperties();
     }
 
@@ -307,6 +332,21 @@ public sealed class CatalogManagementViewModel : ObservableObject
             ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
         var items = await _catalogFeedPreviewService.GetPreviewItemsAsync(feed, cancellationToken);
         return new CatalogFeedPreview(feedItem.Name, feedItem.CategoryName, feedItem.Description, items);
+    }
+
+    public async Task<string> GetRawFeedXmlAsync(
+        CatalogFeedListItem feedItem,
+        CancellationToken cancellationToken = default)
+    {
+        if (_catalogFeedPreviewService is null)
+        {
+            throw new InvalidOperationException("Raw feed XML is unavailable.");
+        }
+
+        var feed = (await _catalogService.GetFeedsAsync(cancellationToken))
+            .FirstOrDefault(candidate => candidate.Id == feedItem.Id)
+            ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
+        return await _catalogFeedPreviewService.GetRawFeedXmlAsync(feed, cancellationToken);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default) =>
@@ -333,6 +373,8 @@ public sealed class CatalogManagementViewModel : ObservableObject
     {
         var selectedCategoryId = SelectedCategoryFilter?.CategoryId;
         var selectedCollectionId = SelectedCollectionFilter?.CollectionId;
+        var selectedFeedId = SelectedFeed?.Id;
+        var selectedManagementCollectionId = SelectedCollection?.Id;
         var categories = await _catalogService.GetCategoriesAsync(cancellationToken);
         var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
         var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
@@ -417,6 +459,8 @@ public sealed class CatalogManagementViewModel : ObservableObject
             Collections.Add(collection);
         }
 
+        SelectedFeed = Feeds.FirstOrDefault(feed => feed.Id == selectedFeedId);
+        SelectedCollection = Collections.FirstOrDefault(collection => collection.Id == selectedManagementCollectionId);
         VisibleFeeds = CreateVisibleFeedView(Feeds);
         OnPropertyChanged(nameof(Feeds));
         OnPropertyChanged(nameof(VisibleFeeds));
@@ -685,7 +729,16 @@ public sealed class CatalogManagementViewModel : ObservableObject
         ErrorMessage = string.Empty;
         try
         {
-            await _catalogService.AddCollectionAsync(_actor, CollectionName);
+            if (_editingCollectionId is { } collectionId)
+            {
+                await _catalogService.UpdateCollectionAsync(_actor, collectionId, CollectionName);
+                _editingCollectionId = null;
+            }
+            else
+            {
+                await _catalogService.AddCollectionAsync(_actor, CollectionName);
+            }
+
             CollectionName = string.Empty;
             await RefreshAsync();
         }
@@ -720,8 +773,9 @@ public sealed class CatalogManagementViewModel : ObservableObject
             return;
         }
 
-        ErrorMessage = string.Empty;
-        await _catalogService.AddFeedToCollectionAsync(_actor, SelectedCollection.Id, SelectedFeed.Id);
+        var collectionIds = GetCollectionIdsForFeed(SelectedFeed.Id).ToHashSet(StringComparer.Ordinal);
+        collectionIds.Add(SelectedCollection.Id);
+        await UpdateFeedCollectionsAsync(SelectedFeed.Id, collectionIds);
     }
 
     private async Task RemoveFeedFromCollectionAsync()
@@ -732,7 +786,120 @@ public sealed class CatalogManagementViewModel : ObservableObject
             return;
         }
 
-        ErrorMessage = string.Empty;
-        await _catalogService.RemoveFeedFromCollectionAsync(_actor, SelectedCollection.Id, SelectedFeed.Id);
+        var collectionIds = GetCollectionIdsForFeed(SelectedFeed.Id).ToHashSet(StringComparer.Ordinal);
+        collectionIds.Remove(SelectedCollection.Id);
+        await UpdateFeedCollectionsAsync(SelectedFeed.Id, collectionIds);
     }
+
+    public IReadOnlySet<string> GetCollectionIdsForFeed(string feedId) =>
+        CollectionFilterOptions
+            .Where(option => option.CollectionId is not null && option.FeedIds.Contains(feedId))
+            .Select(option => option.CollectionId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+    public IReadOnlySet<string> GetFeedIdsForCollection(string collectionId) =>
+        CollectionFilterOptions
+            .FirstOrDefault(option => option.CollectionId == collectionId)?
+            .FeedIds
+            .ToHashSet(StringComparer.Ordinal)
+        ?? new HashSet<string>(StringComparer.Ordinal);
+
+    public async Task<bool> UpdateFeedCollectionsAsync(
+        string feedId,
+        IReadOnlyCollection<string> collectionIds)
+    {
+        ErrorMessage = string.Empty;
+        if (Feeds.All(feed => feed.Id != feedId))
+        {
+            ErrorMessage = "That feed no longer exists in the catalog.";
+            return false;
+        }
+
+        var requestedCollectionIds = collectionIds.ToHashSet(StringComparer.Ordinal);
+        if (requestedCollectionIds.Any(id => Collections.All(collection => collection.Id != id)))
+        {
+            ErrorMessage = "One or more selected collections no longer exist.";
+            return false;
+        }
+
+        var changes = Collections
+            .Select(collection => new CollectionMembershipChange(
+                collection.Id,
+                feedId,
+                requestedCollectionIds.Contains(collection.Id)))
+            .Where(change => GetCollectionIdsForFeed(feedId).Contains(change.CollectionId) != change.IsMember)
+            .ToArray();
+        return await ApplyCollectionMembershipChangesAsync(changes);
+    }
+
+    public async Task<bool> UpdateCollectionFeedsAsync(
+        string collectionId,
+        IReadOnlyCollection<string> feedIds)
+    {
+        ErrorMessage = string.Empty;
+        if (Collections.All(collection => collection.Id != collectionId))
+        {
+            ErrorMessage = "That collection no longer exists.";
+            return false;
+        }
+
+        var requestedFeedIds = feedIds.ToHashSet(StringComparer.Ordinal);
+        if (requestedFeedIds.Any(id => Feeds.All(feed => feed.Id != id)))
+        {
+            ErrorMessage = "One or more selected feeds no longer exist in the catalog.";
+            return false;
+        }
+
+        var currentFeedIds = GetFeedIdsForCollection(collectionId);
+        var changes = Feeds
+            .Select(feed => new CollectionMembershipChange(
+                collectionId,
+                feed.Id,
+                requestedFeedIds.Contains(feed.Id)))
+            .Where(change => currentFeedIds.Contains(change.FeedId) != change.IsMember)
+            .ToArray();
+        return await ApplyCollectionMembershipChangesAsync(changes);
+    }
+
+    private async Task<bool> ApplyCollectionMembershipChangesAsync(
+        IReadOnlyCollection<CollectionMembershipChange> changes)
+    {
+        try
+        {
+            foreach (var change in changes)
+            {
+                if (change.IsMember)
+                {
+                    await _catalogService.AddFeedToCollectionAsync(_actor, change.CollectionId, change.FeedId);
+                }
+                else
+                {
+                    await _catalogService.RemoveFeedFromCollectionAsync(_actor, change.CollectionId, change.FeedId);
+                }
+            }
+        }
+        catch (ArgumentException exception)
+        {
+            ErrorMessage = $"Could not update collection memberships: {exception.Message}";
+            await RefreshAsync();
+            return false;
+        }
+        catch (InvalidOperationException exception)
+        {
+            ErrorMessage = $"Could not update collection memberships: {exception.Message}";
+            await RefreshAsync();
+            return false;
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ErrorMessage = $"Could not update collection memberships: {exception.Message}";
+            await RefreshAsync();
+            return false;
+        }
+
+        await RefreshAsync();
+        return true;
+    }
+
+    private sealed record CollectionMembershipChange(string CollectionId, string FeedId, bool IsMember);
 }

@@ -7,6 +7,11 @@ public interface IFeedDownloader
     Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(CatalogFeed feed, CancellationToken cancellationToken = default);
 }
 
+public interface IRawFeedXmlDownloader
+{
+    Task<string> DownloadRawFeedXmlAsync(CatalogFeed feed, CancellationToken cancellationToken = default);
+}
+
 public interface IRawFeedContentDownloader
 {
     Task<string> DownloadRawArticleContentAsync(

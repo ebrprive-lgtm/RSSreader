@@ -12,7 +12,10 @@ using RssReader.Domain;
 
 namespace RssReader.Infrastructure;
 
-public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDownloader, IRawFeedContentDownloader
+public sealed class SyndicationFeedDownloader(HttpClient httpClient) :
+    IFeedDownloader,
+    IRawFeedContentDownloader,
+    IRawFeedXmlDownloader
 {
     private const int MaximumFeedCharacters = 5_000_000;
     private const int MaximumItems = 500;
@@ -37,6 +40,7 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
         }
 
         using var response = await SendFeedRequestAsync(uri, cancellationToken).ConfigureAwait(false);
+        var feedBaseUri = response.RequestMessage?.RequestUri ?? uri;
 
         if (response.Content.Headers.ContentLength is > MaximumFeedCharacters)
         {
@@ -59,7 +63,7 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
             .Select(item => new DownloadedFeedItem(
                 item.Id,
                 item.Title?.Text ?? string.Empty,
-                item.Links.FirstOrDefault()?.Uri?.AbsoluteUri,
+                ResolveLink(item.Links.FirstOrDefault()?.Uri, feedBaseUri),
                 item.PublishDate != DateTimeOffset.MinValue
                     ? item.PublishDate
                     : item.LastUpdatedTime != DateTimeOffset.MinValue
@@ -67,10 +71,26 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
                         : null,
                 HtmlTextParser.ToPlainText(item.Summary?.Text),
                 GetArticleContent(item) ?? GetTextContent(item.Summary),
-                FindImageUrl(item, uri),
+                FindImageUrl(item, feedBaseUri),
                 GetCategories(item),
                 GetAuthor(item)))
             .ToArray();
+    }
+
+    private static string? ResolveLink(Uri? link, Uri baseUri)
+    {
+        var resolved = ResolveUri(link, baseUri);
+        return resolved?.AbsoluteUri ?? link?.OriginalString;
+    }
+
+    private static Uri? ResolveUri(Uri? uri, Uri baseUri)
+    {
+        if (uri is null || uri.IsAbsoluteUri)
+        {
+            return uri;
+        }
+
+        return Uri.TryCreate(baseUri, uri.OriginalString, out var resolved) ? resolved : null;
     }
 
     private static string? GetAuthor(SyndicationItem item)
@@ -153,6 +173,11 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
 
         return content.ToString();
     }
+
+    public Task<string> DownloadRawFeedXmlAsync(
+        CatalogFeed feed,
+        CancellationToken cancellationToken = default) =>
+        DownloadRawContentAsync(feed, cancellationToken);
 
     private async Task<HttpResponseMessage> SendFeedRequestAsync(
         Uri uri,
@@ -533,14 +558,19 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) : IFeedDown
 
     private static string? FindImageUrl(SyndicationItem item, Uri feedUri)
     {
-        var baseUri = item.Links.FirstOrDefault(link =>
-                string.Equals(link.RelationshipType, "alternate", StringComparison.OrdinalIgnoreCase) && IsWebUri(link.Uri))?.Uri
-            ?? item.Links.FirstOrDefault(link =>
-                !string.Equals(link.RelationshipType, "enclosure", StringComparison.OrdinalIgnoreCase) && IsWebUri(link.Uri))?.Uri
+        var baseUri = item.Links
+                .Where(link => string.Equals(link.RelationshipType, "alternate", StringComparison.OrdinalIgnoreCase))
+                .Select(link => ResolveUri(link.Uri, feedUri))
+                .FirstOrDefault(IsWebUri)
+            ?? item.Links
+                .Where(link => !string.Equals(link.RelationshipType, "enclosure", StringComparison.OrdinalIgnoreCase))
+                .Select(link => ResolveUri(link.Uri, feedUri))
+                .FirstOrDefault(IsWebUri)
             ?? feedUri;
         var imageEnclosure = item.Links.FirstOrDefault(link =>
             string.Equals(link.RelationshipType, "enclosure", StringComparison.OrdinalIgnoreCase) &&
             link.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true)?.Uri;
+        imageEnclosure = ResolveUri(imageEnclosure, baseUri);
         if (IsWebUri(imageEnclosure))
         {
             return imageEnclosure!.AbsoluteUri;

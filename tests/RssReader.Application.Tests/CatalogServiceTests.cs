@@ -197,6 +197,29 @@ public sealed class CatalogServiceTests
     }
 
     [TestMethod]
+    public async Task CatalogMasterCanRenameCollectionAndPreservesMemberships()
+    {
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        var actor = Profile.CreateCatalogMaster();
+        var collection = await service.AddCollectionAsync(actor, "Gaming");
+        await service.AddCollectionAsync(actor, "News");
+        var feed = new CatalogFeed("pc-game-feed", "PC games", "https://example.com/games.xml", null, null);
+        await store.AddFeedAsync(feed);
+        await service.AddFeedToCollectionAsync(actor, collection.Id, feed.Id);
+
+        var renamed = await service.UpdateCollectionAsync(actor, collection.Id, " PC Gaming ");
+
+        Assert.AreEqual(collection.Id, renamed.Id);
+        Assert.AreEqual("PC Gaming", renamed.Name);
+        Assert.AreEqual(feed.Id, (await store.GetCollectionFeedIdsAsync(collection.Id)).Single());
+        await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+            () => service.UpdateCollectionAsync(actor, collection.Id, "news"));
+        await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(
+            () => service.UpdateCollectionAsync(Profile.CreateRegular("Reader"), collection.Id, "Reading"));
+    }
+
+    [TestMethod]
     public async Task AddFeedRejectsNonHttpUrls()
     {
         var service = new CatalogService(new MemoryCatalogStore());
@@ -342,6 +365,17 @@ public sealed class CatalogServiceTests
         public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default)
         {
             _collections.Add(collection);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default)
+        {
+            var index = _collections.FindIndex(item => item.Id == collection.Id);
+            if (index >= 0)
+            {
+                _collections[index] = collection;
+            }
+
             return Task.CompletedTask;
         }
 

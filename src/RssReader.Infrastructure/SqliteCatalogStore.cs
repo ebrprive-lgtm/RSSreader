@@ -441,6 +441,12 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
         ("$id", collection.Id),
         ("$name", collection.Name));
 
+    public Task UpdateCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) => ExecuteAsync(
+        "UPDATE CatalogCollections SET Name = $name WHERE Id = $id;",
+        cancellationToken,
+        ("$id", collection.Id),
+        ("$name", collection.Name));
+
     public Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default) => ExecuteAsync(
         "DELETE FROM CatalogCollections WHERE Id = $id;",
         cancellationToken,

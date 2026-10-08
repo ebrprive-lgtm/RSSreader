@@ -33,6 +33,7 @@ public interface ICatalogStore
     Task MergeCategoriesAsync(string sourceCategoryId, string targetCategoryId, CancellationToken cancellationToken = default);
     Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default);
     Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default);
+    Task UpdateCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default);
     Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default);
     Task AddFeedToCollectionAsync(string collectionId, string feedId, CancellationToken cancellationToken = default);
     Task RemoveFeedFromCollectionAsync(string collectionId, string feedId, CancellationToken cancellationToken = default);

@@ -7,20 +7,25 @@ namespace RssReader.App;
 public partial class CatalogFeedPreviewWindow : Window
 {
     private readonly Func<CancellationToken, Task<CatalogFeedPreview>> _loadPreview;
+    private readonly Func<CancellationToken, Task<string>>? _loadRawFeedXml;
     private readonly Func<Task>? _deleteFeed;
     private readonly Func<Task>? _checkFeed;
     private readonly CancellationTokenSource _cancellation = new();
+    private readonly string _feedUrl;
 
     public CatalogFeedPreviewWindow(
         CatalogFeedListItem feed,
         Func<CancellationToken, Task<CatalogFeedPreview>> loadPreview,
         Func<Task>? deleteFeed = null,
-        Func<Task>? checkFeed = null)
+        Func<Task>? checkFeed = null,
+        Func<CancellationToken, Task<string>>? loadRawFeedXml = null)
     {
         InitializeComponent();
         _loadPreview = loadPreview;
+        _loadRawFeedXml = loadRawFeedXml;
         _deleteFeed = deleteFeed;
         _checkFeed = checkFeed;
+        _feedUrl = feed.FeedUrl;
         FeedNameText.Text = feed.Name;
         FeedCategoryText.Text = feed.CategoryName ?? "Uncategorized";
         if (deleteFeed is not null)
@@ -55,6 +60,7 @@ public partial class CatalogFeedPreviewWindow : Window
         {
             ErrorMessageText.Text = $"Could not load feed preview: {exception.Message}";
             ErrorMessageText.Visibility = Visibility.Visible;
+            ShowRawXmlButton.Visibility = _loadRawFeedXml is null ? Visibility.Collapsed : Visibility.Visible;
         }
         finally
         {
@@ -69,6 +75,34 @@ public partial class CatalogFeedPreviewWindow : Window
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private async void ShowRawXmlButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_loadRawFeedXml is null)
+        {
+            return;
+        }
+
+        ShowRawXmlButton.IsEnabled = false;
+        try
+        {
+            var rawXml = await _loadRawFeedXml(_cancellation.Token);
+            var dialog = new RawFeedWindow(_feedUrl, rawXml) { Owner = this };
+            dialog.Show();
+        }
+        catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ErrorMessageText.Text += $"{Environment.NewLine}{Environment.NewLine}Could not load feed XML: {exception.Message}";
+            ErrorMessageText.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            ShowRawXmlButton.IsEnabled = true;
+        }
+    }
 
     private void CopyErrorMessage_Click(object sender, RoutedEventArgs e)
     {

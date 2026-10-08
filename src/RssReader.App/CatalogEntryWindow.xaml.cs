@@ -19,12 +19,13 @@ public partial class CatalogEntryWindow : Window
         CatalogManagementViewModel catalogManagement,
         CatalogEntryKind entryKind,
         bool isEditingFeed = false,
-        bool isEditingCategory = false)
+        bool isEditingCategory = false,
+        bool isEditingCollection = false)
     {
         InitializeComponent();
         _catalogManagement = catalogManagement;
         _entryKind = entryKind;
-        if (!isEditingFeed && !isEditingCategory)
+        if (!isEditingFeed && !isEditingCategory && !isEditingCollection)
         {
             _catalogManagement.ResetEntryForm();
         }
@@ -35,6 +36,8 @@ public partial class CatalogEntryWindow : Window
             ? ("Edit feed", "Save changes")
             : isEditingCategory && entryKind == CatalogEntryKind.Category
                 ? ("Rename category", "Save changes")
+                : isEditingCollection && entryKind == CatalogEntryKind.Collection
+                    ? ("Rename collection", "Save changes")
             : entryKind switch
         {
             CatalogEntryKind.Feed => ("Add feed", "Add feed"),
@@ -60,6 +63,11 @@ public partial class CatalogEntryWindow : Window
         if (isEditingCategory)
         {
             CategoryNameBox.Text = catalogManagement.CategoryName;
+        }
+
+        if (isEditingCollection)
+        {
+            CollectionNameBox.Text = catalogManagement.CollectionName;
         }
     }
 

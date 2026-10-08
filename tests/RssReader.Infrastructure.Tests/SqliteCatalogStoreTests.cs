@@ -30,6 +30,7 @@ public sealed class SqliteCatalogStoreTests
         await store.UpdateFeedAsync(feed with { Description = "Updated description" });
         await store.AddCollectionAsync(collection);
         await store.AddFeedToCollectionAsync(collection.Id, feed.Id);
+        await store.UpdateCollectionAsync(collection with { Name = "PC Gaming" });
 
         var reloadedStore = new SqliteCatalogStore(database.Path);
         var loadedFeed = (await reloadedStore.GetFeedsAsync()).Single();
@@ -42,6 +43,7 @@ public sealed class SqliteCatalogStoreTests
         Assert.AreEqual(lastCheckedAt, loadedFeed.LastHealthCheckedAt);
         Assert.AreEqual(true, loadedFeed.LastHealthCheckSucceeded);
         Assert.AreEqual("Updated description", loadedFeed.Description);
+        Assert.AreEqual("PC Gaming", loadedCollection.Name);
         Assert.AreEqual(feed.Id, members.Single());
         Assert.AreEqual(feed.Id, membersByCollection[loadedCollection.Id].Single());
     }

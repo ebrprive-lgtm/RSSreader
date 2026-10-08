@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Xml;
 using System.Xml.Linq;
+using RssReader.Application;
 using RssReader.Domain;
 using RssReader.Infrastructure;
 
@@ -37,6 +38,35 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("RSS headline", items[0].Title);
         Assert.AreEqual("https://example.test/story", items[0].Link);
         Assert.AreEqual("Feed summary", items[0].Summary);
+    }
+
+    [TestMethod]
+    public async Task Download_ResolvesRelativeItemLinksAgainstTheFinalFeedUrl()
+    {
+        const string xml = """
+            <rss version="2.0"><channel><title>Sample feed</title>
+              <item><title>Root-relative link</title><link>/article/1</link></item>
+              <item><title>Path-relative link</title><link>article/2</link></item>
+            </channel></rss>
+            """;
+        var finalFeedUri = new Uri("https://cdn.example.test/feeds/current.xml");
+        using var client = new HttpClient(new DelegateResponseHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                RequestMessage = new HttpRequestMessage(HttpMethod.Get, finalFeedUri),
+                Content = new StringContent(xml)
+            })));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var items = await downloader.DownloadAsync(CreateFeed());
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                "https://cdn.example.test/article/1",
+                "https://cdn.example.test/feeds/article/2"
+            },
+            items.Select(item => item.Link).ToArray());
     }
 
     [TestMethod]
@@ -136,6 +166,18 @@ public sealed class SyndicationFeedDownloaderTests
         var downloader = new SyndicationFeedDownloader(client);
 
         var rawContent = await downloader.DownloadRawContentAsync(CreateFeed());
+
+        Assert.AreEqual(xml, rawContent);
+    }
+
+    [TestMethod]
+    public async Task DownloadRawFeedXmlPreservesInvalidCharactersForDiagnostics()
+    {
+        const string xml = "<rss><channel><title>Malformed\u001fFeed</title></channel></rss>";
+        using var client = CreateClient(xml);
+        IRawFeedXmlDownloader downloader = new SyndicationFeedDownloader(client);
+
+        var rawContent = await downloader.DownloadRawFeedXmlAsync(CreateFeed());
 
         Assert.AreEqual(xml, rawContent);
     }

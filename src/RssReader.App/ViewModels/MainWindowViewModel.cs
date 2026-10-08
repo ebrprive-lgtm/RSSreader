@@ -1357,6 +1357,26 @@ public sealed class MainWindowViewModel : ObservableObject
         return preview;
     }
 
+    public Task<string> LoadCatalogFeedRawXmlAsync(
+        CatalogFeedListItem feed,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        if (_catalogFeedPreviewService is null)
+        {
+            throw new InvalidOperationException("Raw feed XML is unavailable.");
+        }
+
+        var catalogFeed = new CatalogFeed(
+            feed.Id,
+            feed.Name,
+            feed.FeedUrl,
+            feed.Description,
+            feed.CategoryId,
+            feed.WebsiteUrl);
+        return _catalogFeedPreviewService.GetRawFeedXmlAsync(catalogFeed, cancellationToken);
+    }
+
     private void CacheCatalogFeedPreview(string feedId, CatalogFeedPreview preview)
     {
         if (!_catalogFeedPreviewCache.ContainsKey(feedId))

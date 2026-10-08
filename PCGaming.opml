@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opml version="2.0">
+  <head>
+    <title>PC Gaming - News, Hardware, Mods and Industry</title>
+    <dateCreated>Wed, 07 Oct 2026 00:00:00 GMT</dateCreated>
+    <ownerName>RSS Reader community starter list</ownerName>
+  </head>
+  <body>
+    <outline text="01 - PC Gaming News and Reviews" title="01 - PC Gaming News and Reviews">
+      <outline type="rss" text="PC Gamer" title="PC Gamer" xmlUrl="https://www.pcgamer.com/rss/" htmlUrl="https://www.pcgamer.com/" description="PC-focused game news, reviews, guides and features." />
+      <outline type="rss" text="Rock Paper Shotgun" title="Rock Paper Shotgun" xmlUrl="https://www.rockpapershotgun.com/feed/" htmlUrl="https://www.rockpapershotgun.com/" description="PC-focused games journalism, reviews and features." />
+      <outline type="rss" text="PCGamesN" title="PCGamesN" xmlUrl="https://www.pcgamesn.com/mainrss.xml" htmlUrl="https://www.pcgamesn.com/" description="PC games news, reviews, guides and hardware coverage." />
+      <outline type="rss" text="DSOGaming" title="DSOGaming" xmlUrl="https://www.dsogaming.com/feed/" htmlUrl="https://www.dsogaming.com/" description="PC game releases, performance, graphics and mod coverage." />
+      <outline type="rss" text="Eurogamer" title="Eurogamer" xmlUrl="https://www.eurogamer.net/feed" htmlUrl="https://www.eurogamer.net/" description="Multi-platform games coverage, including PC." />
+      <outline type="rss" text="IGN - Articles" title="IGN - Articles" xmlUrl="https://feeds.ign.com/ign/all" htmlUrl="https://www.ign.com/" description="Multi-platform gaming coverage; the feed also includes non-PC articles." />
+      <outline type="rss" text="GameSpot - All Content" title="GameSpot - All Content" xmlUrl="https://www.gamespot.com/feeds/mashup/" htmlUrl="https://www.gamespot.com/" description="Multi-platform gaming news, reviews and features." />
+      <outline type="rss" text="Polygon" title="Polygon" xmlUrl="https://www.polygon.com/rss/index.xml" htmlUrl="https://www.polygon.com/" description="Multi-platform games coverage, including PC." />
+      <outline type="rss" text="The Verge - Gaming" title="The Verge - Gaming" xmlUrl="https://www.theverge.com/rss/games/index.xml" htmlUrl="https://www.theverge.com/games" description="Gaming news, culture and technology; not PC-exclusive." />
+      <outline type="rss" text="The Guardian - Games" title="The Guardian - Games" xmlUrl="https://www.theguardian.com/games/rss" htmlUrl="https://www.theguardian.com/games" description="Games news, reviews and analysis across platforms." />
+      <outline type="rss" text="VGC - News" title="VGC - News" xmlUrl="https://www.videogameschronicle.com/category/news/feed/" htmlUrl="https://www.videogameschronicle.com/" description="Multi-platform games industry and release news, including PC." />
+      <outline type="rss" text="GamesRadar+" title="GamesRadar+" xmlUrl="https://www.gamesradar.com/feeds.xml" htmlUrl="https://www.gamesradar.com/" description="Multi-platform games news, reviews and features." />
+    </outline>
+    <outline text="02 - PC Hardware and Performance" title="02 - PC Hardware and Performance">
+      <outline type="rss" text="Tom's Hardware" title="Tom's Hardware" xmlUrl="https://www.tomshardware.com/feeds/all" htmlUrl="https://www.tomshardware.com/" description="PC hardware, components, gaming performance and technology." />
+      <outline type="rss" text="TechPowerUp - News" title="TechPowerUp - News" xmlUrl="https://www.techpowerup.com/rss/news" htmlUrl="https://www.techpowerup.com/" description="Graphics cards, PC hardware and gaming technology." />
+      <outline type="rss" text="TechSpot - All Stories" title="TechSpot - All Stories" xmlUrl="https://www.techspot.com/backend.xml" htmlUrl="https://www.techspot.com/" description="PC hardware and technology news, reviews and analysis." />
+      <outline type="rss" text="NVIDIA Blog" title="NVIDIA Blog" xmlUrl="https://blogs.nvidia.com/feed/" htmlUrl="https://blogs.nvidia.com/" description="Official graphics, gaming technology and company updates." />
+      <outline type="rss" text="NVIDIA Newsroom" title="NVIDIA Newsroom" xmlUrl="https://nvidianews.nvidia.com/rss.xml" htmlUrl="https://nvidianews.nvidia.com/" description="Official NVIDIA product and company announcements." />
+      <outline type="rss" text="NVIDIA Technical Blog" title="NVIDIA Technical Blog" xmlUrl="https://developer.nvidia.com/blog/feed" htmlUrl="https://developer.nvidia.com/blog" description="GPU, graphics and developer technology articles." />
+    </outline>
+    <outline text="03 - Linux Gaming, Steam Deck and Handheld PCs" title="03 - Linux Gaming, Steam Deck and Handheld PCs">
+      <outline type="rss" text="GamingOnLinux" title="GamingOnLinux" xmlUrl="https://www.gamingonlinux.com/article_rss.php" htmlUrl="https://www.gamingonlinux.com/" description="Linux gaming, Steam Deck, Proton and open-source gaming." />
+      <outline type="rss" text="Boiling Steam" title="Boiling Steam" xmlUrl="https://boilingsteam.com/feed/" htmlUrl="https://boilingsteam.com/" description="Linux PC gaming, Steam Deck and handheld PC coverage." />
+    </outline>
+    <outline text="04 - Modding and Community Releases" title="04 - Modding and Community Releases">
+      <outline type="rss" text="ModDB - News" title="ModDB - News" xmlUrl="https://rss.moddb.com/news/feed/rss.xml" htmlUrl="https://www.moddb.com/news" description="Modding community news and project updates." />
+      <outline type="rss" text="ModDB - New Files and Releases" title="ModDB - New Files and Releases" xmlUrl="https://rss.moddb.com/downloads/feed/rss.xml" htmlUrl="https://www.moddb.com/downloads" description="New mods, game files and community releases." />
+    </outline>
+    <outline text="05 - Game Development and Industry" title="05 - Game Development and Industry">
+      <outline type="rss" text="GamesIndustry.biz" title="GamesIndustry.biz" xmlUrl="https://www.gamesindustry.biz/feed" htmlUrl="https://www.gamesindustry.biz/" description="Business, policy and employment news from the games industry." />
+      <outline type="rss" text="Game Developer" title="Game Developer" xmlUrl="https://www.gamedeveloper.com/rss.xml" htmlUrl="https://www.gamedeveloper.com/" description="Game development craft, tools, studios and industry coverage." />
+    </outline>
+    <outline text="06 - PC Esports" title="06 - PC Esports">
+      <outline type="rss" text="HLTV - Counter-Strike" title="HLTV - Counter-Strike" xmlUrl="https://www.hltv.org/rss/news" htmlUrl="https://www.hltv.org/" description="Counter-Strike esports news, events and teams." />
+    </outline>
+    <outline text="07 - PC Platforms and Services" title="07 - PC Platforms and Services">
+      <outline type="rss" text="Xbox Wire - PC and Game Pass Updates" title="Xbox Wire - PC and Game Pass Updates" xmlUrl="https://news.xbox.com/en-us/feed/" htmlUrl="https://news.xbox.com/en-us/" description="Official Xbox announcements; includes PC games and PC Game Pass, but also console coverage." />
+    </outline>
+  </body>
+</opml>

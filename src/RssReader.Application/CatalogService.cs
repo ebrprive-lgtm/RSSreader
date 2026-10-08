@@ -396,6 +396,28 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
         return collection;
     }
 
+    public async Task<CatalogCollection> UpdateCollectionAsync(
+        Profile actor,
+        string collectionId,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureCatalogMaster(actor);
+        var normalizedName = RequireName(name, "collection");
+        var collections = await store.GetCollectionsAsync(cancellationToken);
+        var existingCollection = collections.FirstOrDefault(collection => collection.Id == collectionId)
+            ?? throw new InvalidOperationException("That collection no longer exists.");
+        if (collections.Any(collection => collection.Id != collectionId &&
+            string.Equals(collection.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("That collection already exists.");
+        }
+
+        var updatedCollection = existingCollection with { Name = normalizedName };
+        await store.UpdateCollectionAsync(updatedCollection, cancellationToken);
+        return updatedCollection;
+    }
+
     public async Task DeleteFeedAsync(Profile actor, string feedId, CancellationToken cancellationToken = default)
     {
         EnsureCatalogMaster(actor);

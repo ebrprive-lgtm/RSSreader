@@ -27,6 +27,51 @@ public sealed class MainWindowViewModelTests
     public TestContext TestContext { get; set; } = null!;
 
     [TestMethod]
+    public void CollectionMembershipPickerSearchesBulkSelectsAndAddsCollections()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var window = new CatalogMembershipPickerWindow(
+                "Collections for source",
+                "Choose collections for this source.",
+                [
+                    new CatalogMembershipPickerItem("gaming", "PC Gaming", "12 feeds", isSelected: false),
+                    new CatalogMembershipPickerItem("news", "Daily News", "8 feeds", isSelected: true)
+                ]);
+            window.Show();
+            window.UpdateLayout();
+
+            var searchBox = (TextBox)window.FindName("SearchBox")!;
+            var membershipList = (ListBox)window.FindName("MembershipList")!;
+            searchBox.Text = "gaming";
+            window.UpdateLayout();
+            Assert.AreEqual(1, membershipList.Items.Count);
+            ((Button)window.FindName("SelectShownButton")!).RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent));
+
+            CollectionAssert.AreEquivalent(new[] { "gaming", "news" }, window.SelectedIds.ToArray());
+            ((Button)window.FindName("ClearShownButton")!).RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent));
+            CollectionAssert.AreEqual(new[] { "news" }, window.SelectedIds.ToArray());
+            Assert.AreEqual("1 selected · 1 shown", ((TextBlock)window.FindName("SelectionSummary")!).Text);
+            window.Close();
+
+            var createWindow = new CatalogMembershipPickerWindow(
+                "Collections for source",
+                "Choose collections for this source.",
+                [],
+                _ => Task.FromResult<CatalogMembershipPickerItem?>(
+                    new CatalogMembershipPickerItem("new-collection", "New collection", "0 feeds", false)));
+            createWindow.Show();
+            createWindow.UpdateLayout();
+            ((Button)createWindow.FindName("CreateCollectionButton")!).RaiseEvent(
+                new RoutedEventArgs(Button.ClickEvent));
+            CollectionAssert.AreEqual(new[] { "new-collection" }, createWindow.SelectedIds.ToArray());
+            createWindow.Close();
+        });
+    }
+
+    [TestMethod]
     public void ReadLaterAutomationNameTracksSavedState()
     {
         var article = new ArticleRowViewModel(
@@ -177,6 +222,58 @@ public sealed class MainWindowViewModelTests
                 Assert.IsFalse(preview.IsVisible);
                 var styleFailures = VerifyAdditionalCustomChrome();
                 Assert.AreEqual(0, styleFailures.Count, string.Join(Environment.NewLine, styleFailures));
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
+    public void FeedPreviewShowsRawXmlOnlyAfterLoadFailure()
+    {
+        Exception? failure = null;
+        WpfTestHost.Run(() =>
+        {
+            try
+            {
+                const string rawXml = "<rss><channel><title>Feed XML</title></channel></rss>";
+                var feed = new CatalogFeedListItem(
+                    "invalid-preview",
+                    "Invalid preview",
+                    "https://example.com/invalid.xml",
+                    null,
+                    "Technology");
+                var failedPreview = new CatalogFeedPreviewWindow(
+                    feed,
+                    _ => Task.FromException<CatalogFeedPreview>(new InvalidDataException("Invalid XML character.")),
+                    loadRawFeedXml: _ => Task.FromResult(rawXml));
+                failedPreview.Show();
+                failedPreview.UpdateLayout();
+
+                var showXmlButton = (Button)failedPreview.FindName("ShowRawXmlButton")!;
+                Assert.AreEqual(Visibility.Visible, showXmlButton.Visibility);
+                showXmlButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, showXmlButton));
+                var rawWindow = System.Windows.Application.Current.Windows
+                    .OfType<RawFeedWindow>()
+                    .Single();
+                Assert.AreEqual(feed.FeedUrl, ((TextBlock)rawWindow.FindName("FeedSourceText")!).Text);
+                Assert.AreEqual(Visibility.Visible, ((Button)rawWindow.FindName("CopyXmlButton")!).Visibility);
+                rawWindow.Close();
+                failedPreview.Close();
+
+                var successfulPreview = new CatalogFeedPreviewWindow(
+                    feed,
+                    _ => Task.FromResult(new CatalogFeedPreview(feed.Name, feed.CategoryName, null, [])),
+                    loadRawFeedXml: _ => Task.FromResult(rawXml));
+                successfulPreview.Show();
+                successfulPreview.UpdateLayout();
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    ((Button)successfulPreview.FindName("ShowRawXmlButton")!).Visibility);
+                successfulPreview.Close();
             }
             catch (Exception exception)
             {
@@ -753,6 +850,21 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual("Feed URL", AutomationProperties.GetName((TextBox)window.FindName("FeedUrlBox")!));
                 Assert.AreEqual("Feed category", AutomationProperties.GetName((ComboBox)window.FindName("FeedCategoryBox")!));
             });
+        var collectionToRename = new CatalogCollection("collection-pc", "PC Gaming");
+        catalogManagement.Collections.Add(collectionToRename);
+        catalogManagement.PrepareCollectionEdit(collectionToRename);
+        ShowAndCloseModal(
+            new CatalogEntryWindow(
+                catalogManagement,
+                CatalogEntryKind.Collection,
+                isEditingCollection: true),
+            "Close dialog",
+            inspect: window =>
+            {
+                Assert.AreEqual("Rename collection", ((TextBlock)window.FindName("DialogHeading")!).Text);
+                Assert.AreEqual("PC Gaming", ((TextBox)window.FindName("CollectionNameBox")!).Text);
+                Assert.AreEqual("Save changes", ((Button)window.FindName("SubmitButton")!).Content);
+            });
 
         var standardPreview = new CatalogFeedPreviewWindow(
             new CatalogFeedListItem("feed", "Example feed", "https://example.com/feed.xml", null, "Comics"),
@@ -1255,6 +1367,11 @@ public sealed class MainWindowViewModelTests
                 var catalogMasterWindow = CreateTestMainWindow(catalogMasterViewModel);
                 catalogMasterWindow.Show();
                 catalogMasterWindow.UpdateLayout();
+                var catalogImportReport = (Grid)catalogMasterWindow.FindName("CatalogImportReport");
+                var dismissImportReportButton = (Button)catalogMasterWindow.FindName("DismissCatalogImportReportButton");
+                Assert.AreEqual(Visibility.Collapsed, catalogImportReport.Visibility);
+                Assert.AreEqual("Dismiss import report", AutomationProperties.GetName(dismissImportReportButton));
+                Assert.AreSame(catalogManagement.DismissImportMessageCommand, dismissImportReportButton.Command);
                 Assert.AreEqual(1, catalogManagement.VisibleFeedCount);
                 ((TabControl)catalogMasterWindow.FindName("CatalogManagementTabs")).SelectedIndex = 0;
                 catalogMasterWindow.UpdateLayout();
@@ -1274,7 +1391,7 @@ public sealed class MainWindowViewModelTests
                     ?? throw new AssertFailedException("The Catalog Master feed row was not created.");
                 var managementActions = FindVisualChildren<Button>(managedFeedContainer).ToArray();
                 CollectionAssert.AreEquivalent(
-                    new[] { "Preview feed", "Edit feed", "Check feed", "Remove feed" },
+                    new[] { "Preview feed", "Edit feed", "Choose collections for feed", "Check feed", "Remove feed" },
                     managementActions.Select(button => AutomationProperties.GetName(button)).ToArray());
                 var managedTitle = FindVisualChildren<TextBlock>(managedFeedContainer).Single(text => text.Text == managedFeed.Name);
                 Assert.AreEqual(14, managedTitle.FontSize);
@@ -1301,6 +1418,38 @@ public sealed class MainWindowViewModelTests
                 renameButton.Focus();
                 catalogMasterWindow.UpdateLayout();
                 Assert.AreEqual(1, renameButton.Opacity);
+                var renameCollectionButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .Single(button => AutomationProperties.GetName(button) == "Rename collection");
+                var manageCollectionFeedsButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .Single(button => AutomationProperties.GetName(button) == "Manage feeds in collection");
+                var removeCollectionButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .Single(button => AutomationProperties.GetName(button) == "Remove collection");
+                Assert.AreEqual(0, manageCollectionFeedsButton.Opacity);
+                Assert.AreEqual(0, renameCollectionButton.Opacity);
+                Assert.AreEqual(0, removeCollectionButton.Opacity);
+                manageCollectionFeedsButton.Focus();
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(1, manageCollectionFeedsButton.Opacity);
+                renameCollectionButton.Focus();
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(1, renameCollectionButton.Opacity);
+                var collectionRenameDialogShown = false;
+                var closeCollectionRenameDialogTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(50)
+                };
+                closeCollectionRenameDialogTimer.Tick += (_, _) =>
+                {
+                    closeCollectionRenameDialogTimer.Stop();
+                    var dialog = System.Windows.Application.Current.Windows.OfType<CatalogEntryWindow>().Single();
+                    Assert.AreEqual("Rename collection", ((TextBlock)dialog.FindName("DialogHeading")!).Text);
+                    Assert.AreEqual("Editor's picks", ((TextBox)dialog.FindName("CollectionNameBox")!).Text);
+                    dialog.DialogResult = false;
+                    collectionRenameDialogShown = true;
+                };
+                closeCollectionRenameDialogTimer.Start();
+                renameCollectionButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, renameCollectionButton));
+                Assert.IsTrue(collectionRenameDialogShown);
                 catalogMasterWindow.Close();
             }
             catch (Exception exception)
@@ -1892,6 +2041,30 @@ public sealed class MainWindowViewModelTests
         downloader.DownloadHandler = null;
         var recoveredPreview = await viewModel.LoadCatalogFeedPreviewAsync(feed, forceRefresh: true);
         Assert.IsNotNull(recoveredPreview);
+    }
+
+    [TestMethod]
+    public async Task CatalogPreviewCanLoadRawFeedXmlOnDemand()
+    {
+        const string rawXml = "<rss><channel><title>Malformed\u001fFeed</title></channel></rss>";
+        var downloader = new RecordingFeedDownloader { RawFeedXmlToReturn = rawXml };
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Preview Reader"),
+            null,
+            null,
+            null,
+            catalogFeedPreviewService: new CatalogFeedPreviewService(downloader));
+        var feed = new CatalogFeedListItem(
+            "raw-preview-feed",
+            "Raw preview",
+            "https://example.com/feed.xml",
+            null,
+            null);
+
+        var result = await viewModel.LoadCatalogFeedRawXmlAsync(feed);
+
+        Assert.AreEqual(rawXml, result);
+        CollectionAssert.AreEqual(new[] { feed.Id }, downloader.RequestedRawXmlFeedIds.ToArray());
     }
 
     [TestMethod]
@@ -4180,11 +4353,15 @@ public sealed class MainWindowViewModelTests
         Assert.IsTrue(task.IsCompleted, "WebView2 initialization did not finish within 15 seconds.");
     }
 
-    private sealed class RecordingFeedDownloader : IFeedDownloader, IRawFeedContentDownloader
+    private sealed class RecordingFeedDownloader : IFeedDownloader, IRawFeedContentDownloader, IRawFeedXmlDownloader
     {
         public System.Collections.Concurrent.ConcurrentQueue<string> RequestedFeedIds { get; } = new();
 
+        public System.Collections.Concurrent.ConcurrentQueue<string> RequestedRawXmlFeedIds { get; } = new();
+
         public HashSet<string> FailingFeedIds { get; } = [];
+
+        public string RawFeedXmlToReturn { get; set; } = "<rss />";
 
         public IReadOnlyList<DownloadedFeedItem>? ItemsToReturn { get; set; }
 
@@ -4225,6 +4402,14 @@ public sealed class MainWindowViewModelTests
             string title,
             CancellationToken cancellationToken = default) =>
             Task.FromResult($"<item><guid>{externalId}</guid><title>{title}</title></item>");
+
+        public Task<string> DownloadRawFeedXmlAsync(
+            CatalogFeed feed,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedRawXmlFeedIds.Enqueue(feed.Id);
+            return Task.FromResult(RawFeedXmlToReturn);
+        }
     }
 }
 

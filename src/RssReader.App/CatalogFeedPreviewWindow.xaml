@@ -180,22 +180,38 @@
                        Foreground="{StaticResource MutedTextBrush}"
                        Visibility="Collapsed" />
         </Grid>
-        <ScrollViewer Grid.Row="4"
-                      Margin="0,10,0,0"
-                      MaxHeight="160"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <TextBlock x:Name="ErrorMessageText"
-                       Foreground="{StaticResource DestructiveBrush}"
-                       TextWrapping="Wrap"
-                       Visibility="Collapsed">
-                <TextBlock.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="Copy" Click="CopyErrorMessage_Click" />
-                    </ContextMenu>
-                </TextBlock.ContextMenu>
-            </TextBlock>
-        </ScrollViewer>
+        <Grid Grid.Row="4" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ScrollViewer MaxHeight="160"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <TextBlock x:Name="ErrorMessageText"
+                           Foreground="{StaticResource DestructiveBrush}"
+                           TextWrapping="Wrap"
+                           Visibility="Collapsed">
+                    <TextBlock.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Copy" Click="CopyErrorMessage_Click" />
+                        </ContextMenu>
+                    </TextBlock.ContextMenu>
+                </TextBlock>
+            </ScrollViewer>
+            <Button x:Name="ShowRawXmlButton"
+                    Grid.Column="1"
+                    Content="View XML"
+                    MinWidth="88"
+                    Padding="10,7"
+                    Margin="12,0,0,0"
+                    VerticalAlignment="Bottom"
+                    Style="{StaticResource SecondaryActionButtonStyle}"
+                    AutomationProperties.Name="View feed XML"
+                    ToolTip="Open the raw XML returned by the feed"
+                    Visibility="Collapsed"
+                    Click="ShowRawXmlButton_Click" />
+        </Grid>
     </Grid>
     </Border>
 </Window>

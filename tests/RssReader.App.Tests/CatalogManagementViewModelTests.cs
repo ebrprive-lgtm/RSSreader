@@ -76,6 +76,33 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task ImportReportCanBeDismissedAndNotifiesVisibilityChange()
+    {
+        var viewModel = new CatalogManagementViewModel(
+            Profile.CreateCatalogMaster(),
+            new CatalogService(new MemoryCatalogStore()));
+        var hasImportMessageNotified = false;
+        viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(viewModel.HasImportMessage))
+            {
+                hasImportMessageNotified = true;
+            }
+        };
+        const string opml = "<opml version=\"2.0\"><body><outline text=\"Example\" xmlUrl=\"https://example.com/feed.xml\" /></body></opml>";
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(opml));
+
+        await viewModel.ImportOpmlAsync(stream);
+
+        Assert.IsTrue(viewModel.HasImportMessage);
+        Assert.IsTrue(hasImportMessageNotified);
+        viewModel.DismissImportMessageCommand.Execute(null);
+
+        Assert.AreEqual(string.Empty, viewModel.ImportMessage);
+        Assert.IsFalse(viewModel.HasImportMessage);
+    }
+
+    [TestMethod]
     public async Task StarterPackAddsCuratedFeedsAndSkipsThemWhenRepeated()
     {
         var viewModel = new CatalogManagementViewModel(
@@ -119,6 +146,50 @@ public sealed class CatalogManagementViewModelTests
         await viewModel.RemoveFeedFromCollectionCommand.ExecuteAsync();
 
         Assert.AreEqual(0, store.CollectionFeedIds.Count);
+    }
+
+    [TestMethod]
+    public async Task CollectionMembershipCanBeManagedFromFeedsOrCollectionsAndRefreshesCounts()
+    {
+        var actor = Profile.CreateCatalogMaster();
+        var service = new CatalogService(new MemoryCatalogStore());
+        var firstFeed = await service.AddFeedAsync(
+            actor,
+            "First source",
+            "https://example.com/first.xml",
+            null,
+            null);
+        var secondFeed = await service.AddFeedAsync(
+            actor,
+            "Second source",
+            "https://example.com/second.xml",
+            null,
+            null);
+        var firstCollection = await service.AddCollectionAsync(actor, "Daily briefing");
+        var secondCollection = await service.AddCollectionAsync(actor, "PC gaming");
+        var viewModel = new CatalogManagementViewModel(actor, service);
+        await viewModel.InitializeAsync();
+
+        Assert.IsTrue(await viewModel.UpdateFeedCollectionsAsync(
+            firstFeed.Id,
+            [firstCollection.Id, secondCollection.Id]));
+        CollectionAssert.AreEquivalent(
+            new[] { firstCollection.Id, secondCollection.Id },
+            viewModel.GetCollectionIdsForFeed(firstFeed.Id).ToArray());
+        Assert.AreEqual(1, viewModel.CollectionFilterOptions.Single(option =>
+            option.CollectionId == firstCollection.Id).FeedIds.Count);
+
+        Assert.IsTrue(await viewModel.UpdateCollectionFeedsAsync(firstCollection.Id, [secondFeed.Id]));
+
+        CollectionAssert.AreEquivalent(
+            new[] { secondCollection.Id },
+            viewModel.GetCollectionIdsForFeed(firstFeed.Id).ToArray());
+        CollectionAssert.AreEquivalent(
+            new[] { firstCollection.Id },
+            viewModel.GetCollectionIdsForFeed(secondFeed.Id).ToArray());
+        Assert.AreEqual(1, viewModel.CollectionFilterOptions.Single(option =>
+            option.CollectionId == firstCollection.Id).FeedIds.Count);
+        Assert.AreEqual(string.Empty, viewModel.ErrorMessage);
     }
 
     [TestMethod]
@@ -267,6 +338,29 @@ public sealed class CatalogManagementViewModelTests
         Assert.AreEqual(category.Id, viewModel.Categories.Single().Id);
         Assert.AreEqual("Comics and cartoons", viewModel.Categories.Single().Name);
         Assert.AreEqual("Comics and cartoons", viewModel.Feeds.Single().CategoryName);
+    }
+
+    [TestMethod]
+    public async Task CatalogMasterCanRenameCollectionWithoutLosingFeedMemberships()
+    {
+        var store = new MemoryCatalogStore();
+        var actor = Profile.CreateCatalogMaster();
+        var collection = new CatalogCollection("collection-games", "Games");
+        var feed = new CatalogFeed("pc-game-feed", "PC games", "https://example.com/games.xml", null, null);
+        await store.AddCollectionAsync(collection);
+        await store.AddFeedAsync(feed);
+        await store.AddFeedToCollectionAsync(collection.Id, feed.Id);
+        var viewModel = new CatalogManagementViewModel(actor, new CatalogService(store));
+        await viewModel.InitializeAsync();
+
+        viewModel.PrepareCollectionEdit(viewModel.Collections.Single());
+        viewModel.CollectionName = "PC Gaming";
+        await viewModel.AddCollectionCommand.ExecuteAsync();
+
+        Assert.AreEqual(collection.Id, viewModel.Collections.Single().Id);
+        Assert.AreEqual("PC Gaming", viewModel.Collections.Single().Name);
+        CollectionAssert.AreEqual(new[] { feed.Id }, store.CollectionFeedIds.ToArray());
+        Assert.AreEqual(string.Empty, viewModel.ErrorMessage);
     }
 
     [TestMethod]
@@ -598,6 +692,17 @@ public sealed class CatalogManagementViewModelTests
         public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default)
         {
             _collections.Add(collection);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default)
+        {
+            var index = _collections.FindIndex(item => item.Id == collection.Id);
+            if (index >= 0)
+            {
+                _collections[index] = collection;
+            }
+
             return Task.CompletedTask;
         }
 
