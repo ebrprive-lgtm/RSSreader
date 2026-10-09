@@ -5,16 +5,22 @@ using RssReader.Domain;
 
 namespace RssReader.Infrastructure;
 
-public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
+public sealed class SqliteCatalogStore : ICatalogStore
 {
-    private readonly string _connectionString = new SqliteConnectionStringBuilder
+    private readonly string _databasePath;
+    private readonly SqliteConnectionFactory _connections;
+    private readonly SqliteCatalogTaxonomyStore _taxonomy;
+
+    public SqliteCatalogStore(string databasePath)
     {
-        DataSource = databasePath
-    }.ToString();
+        _databasePath = databasePath;
+        _connections = new SqliteConnectionFactory(databasePath);
+        _taxonomy = new SqliteCatalogTaxonomyStore(_connections);
+    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        var directory = Path.GetDirectoryName(databasePath);
+        var directory = Path.GetDirectoryName(_databasePath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
@@ -258,79 +264,20 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
             reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
             reader.IsDBNull(7) ? null : reader.GetInt64(7) == 1);
 
-    public async Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default)
-    {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name FROM CatalogCategories ORDER BY Name COLLATE NOCASE;";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var categories = new List<CatalogCategory>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            categories.Add(new CatalogCategory(reader.GetString(0), reader.GetString(1)));
-        }
+    public Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default) =>
+        _taxonomy.GetCategoriesAsync(cancellationToken);
 
-        return categories;
-    }
+    public Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default) =>
+        _taxonomy.GetCollectionsAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default)
-    {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name FROM CatalogCollections ORDER BY Name COLLATE NOCASE;";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var collections = new List<CatalogCollection>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            collections.Add(new CatalogCollection(reader.GetString(0), reader.GetString(1)));
-        }
-
-        return collections;
-    }
-
-    public async Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(
+    public Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(
         string collectionId,
-        CancellationToken cancellationToken = default)
-    {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT FeedId FROM CatalogCollectionFeeds WHERE CollectionId = $collectionId;";
-        command.Parameters.AddWithValue("$collectionId", collectionId);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var feedIds = new List<string>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            feedIds.Add(reader.GetString(0));
-        }
+        CancellationToken cancellationToken = default) =>
+        _taxonomy.GetCollectionFeedIdsAsync(collectionId, cancellationToken);
 
-        return feedIds;
-    }
-
-    public async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetCollectionFeedIdsByCollectionAsync(
-        CancellationToken cancellationToken = default)
-    {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT CollectionId, FeedId FROM CatalogCollectionFeeds ORDER BY CollectionId;";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var feedIdsByCollection = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var collectionId = reader.GetString(0);
-            if (!feedIdsByCollection.TryGetValue(collectionId, out var feedIds))
-            {
-                feedIds = [];
-                feedIdsByCollection.Add(collectionId, feedIds);
-            }
-
-            feedIds.Add(reader.GetString(1));
-        }
-
-        return feedIdsByCollection.ToDictionary(
-            pair => pair.Key,
-            pair => (IReadOnlyList<string>)pair.Value,
-            StringComparer.Ordinal);
-    }
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetCollectionFeedIdsByCollectionAsync(
+        CancellationToken cancellationToken = default) =>
+        _taxonomy.GetCollectionFeedIdsByCollectionAsync(cancellationToken);
 
     public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => ExecuteAsync(
         """
@@ -374,125 +321,48 @@ public sealed class SqliteCatalogStore(string databasePath) : ICatalogStore
         cancellationToken,
         ("$id", feedId));
 
-    public Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "INSERT INTO CatalogCategories (Id, Name) VALUES ($id, $name);",
-        cancellationToken,
-        ("$id", category.Id),
-        ("$name", category.Name));
+    public Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) =>
+        _taxonomy.AddCategoryAsync(category, cancellationToken);
 
-    public Task UpdateCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "UPDATE CatalogCategories SET Name = $name WHERE Id = $id;",
-        cancellationToken,
-        ("$id", category.Id),
-        ("$name", category.Name));
+    public Task UpdateCategoryAsync(CatalogCategory category, CancellationToken cancellationToken = default) =>
+        _taxonomy.UpdateCategoryAsync(category, cancellationToken);
 
-    public async Task MergeCategoriesAsync(
+    public Task MergeCategoriesAsync(
         string sourceCategoryId,
         string targetCategoryId,
-        CancellationToken cancellationToken = default)
-    {
-        if (string.Equals(sourceCategoryId, targetCategoryId, StringComparison.Ordinal))
-        {
-            throw new ArgumentException("Source and target categories must be different.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _taxonomy.MergeCategoriesAsync(sourceCategoryId, targetCategoryId, cancellationToken);
 
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var transaction = connection.BeginTransaction();
-        await using (var verify = connection.CreateCommand())
-        {
-            verify.Transaction = transaction;
-            verify.CommandText = "SELECT COUNT(*) FROM CatalogCategories WHERE Id IN ($sourceId, $targetId);";
-            verify.Parameters.AddWithValue("$sourceId", sourceCategoryId);
-            verify.Parameters.AddWithValue("$targetId", targetCategoryId);
-            if (Convert.ToInt64(await verify.ExecuteScalarAsync(cancellationToken)) != 2)
-            {
-                throw new InvalidOperationException("The source or target category no longer exists.");
-            }
-        }
+    public Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default) =>
+        _taxonomy.DeleteCategoryAsync(categoryId, cancellationToken);
 
-        await using (var moveFeeds = connection.CreateCommand())
-        {
-            moveFeeds.Transaction = transaction;
-            moveFeeds.CommandText = "UPDATE CatalogFeeds SET CategoryId = $targetId WHERE CategoryId = $sourceId;";
-            moveFeeds.Parameters.AddWithValue("$sourceId", sourceCategoryId);
-            moveFeeds.Parameters.AddWithValue("$targetId", targetCategoryId);
-            await moveFeeds.ExecuteNonQueryAsync(cancellationToken);
-        }
+    public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) =>
+        _taxonomy.AddCollectionAsync(collection, cancellationToken);
 
-        await using (var deleteSource = connection.CreateCommand())
-        {
-            deleteSource.Transaction = transaction;
-            deleteSource.CommandText = "DELETE FROM CatalogCategories WHERE Id = $sourceId;";
-            deleteSource.Parameters.AddWithValue("$sourceId", sourceCategoryId);
-            await deleteSource.ExecuteNonQueryAsync(cancellationToken);
-        }
+    public Task UpdateCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) =>
+        _taxonomy.UpdateCollectionAsync(collection, cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
-    }
-
-    public Task DeleteCategoryAsync(string categoryId, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "DELETE FROM CatalogCategories WHERE Id = $id;",
-        cancellationToken,
-        ("$id", categoryId));
-
-    public Task AddCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "INSERT INTO CatalogCollections (Id, Name) VALUES ($id, $name);",
-        cancellationToken,
-        ("$id", collection.Id),
-        ("$name", collection.Name));
-
-    public Task UpdateCollectionAsync(CatalogCollection collection, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "UPDATE CatalogCollections SET Name = $name WHERE Id = $id;",
-        cancellationToken,
-        ("$id", collection.Id),
-        ("$name", collection.Name));
-
-    public Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default) => ExecuteAsync(
-        "DELETE FROM CatalogCollections WHERE Id = $id;",
-        cancellationToken,
-        ("$id", collectionId));
+    public Task DeleteCollectionAsync(string collectionId, CancellationToken cancellationToken = default) =>
+        _taxonomy.DeleteCollectionAsync(collectionId, cancellationToken);
 
     public Task AddFeedToCollectionAsync(
         string collectionId,
         string feedId,
-        CancellationToken cancellationToken = default) => ExecuteAsync(
-        "INSERT OR IGNORE INTO CatalogCollectionFeeds (CollectionId, FeedId) VALUES ($collectionId, $feedId);",
-        cancellationToken,
-        ("$collectionId", collectionId),
-        ("$feedId", feedId));
+        CancellationToken cancellationToken = default) =>
+        _taxonomy.AddFeedToCollectionAsync(collectionId, feedId, cancellationToken);
 
     public Task RemoveFeedFromCollectionAsync(
         string collectionId,
         string feedId,
-        CancellationToken cancellationToken = default) => ExecuteAsync(
-        "DELETE FROM CatalogCollectionFeeds WHERE CollectionId = $collectionId AND FeedId = $feedId;",
-        cancellationToken,
-        ("$collectionId", collectionId),
-        ("$feedId", feedId));
+        CancellationToken cancellationToken = default) =>
+        _taxonomy.RemoveFeedFromCollectionAsync(collectionId, feedId, cancellationToken);
 
-    private async Task<SqliteConnection> OpenConnectionAsync(CancellationToken cancellationToken)
-    {
-        var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = "PRAGMA foreign_keys = ON;";
-        await command.ExecuteNonQueryAsync(cancellationToken);
-        return connection;
-    }
+    private Task<SqliteConnection> OpenConnectionAsync(CancellationToken cancellationToken) =>
+        _connections.OpenConnectionAsync(cancellationToken);
 
     private async Task ExecuteAsync(
         string commandText,
         CancellationToken cancellationToken,
-        params (string Name, object Value)[] parameters)
-    {
-        await using var connection = await OpenConnectionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.CommandText = commandText;
-        foreach (var (name, value) in parameters)
-        {
-            command.Parameters.AddWithValue(name, value);
-        }
-
-        await command.ExecuteNonQueryAsync(cancellationToken);
-    }
+        params (string Name, object Value)[] parameters) =>
+        await _connections.ExecuteAsync(commandText, cancellationToken, parameters);
 }

@@ -1,0 +1,309 @@
+﻿<UserControl x:Class="RssReader.App.SidebarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/MainWindowSharedResources.xaml" />
+                <ResourceDictionary Source="Resources/MainWindowSidebarResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <DataTemplate x:Key="SidebarLinkTemplate">
+                <Grid x:Name="SidebarLinkRoot"
+                    Style="{StaticResource SidebarLinkRootStyle}"
+                    MouseEnter="SidebarLinkRoot_MouseEnter"
+                    MouseLeave="SidebarLinkRoot_MouseLeave">
+                    <Button Style="{StaticResource SidebarButtonStyle}"
+                           Command="{Binding DataContext.ActivateSidebarLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                           CommandParameter="{Binding}">
+                        <Grid Margin="{Binding IndentMargin}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="36" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                       FontSize="9"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="&#xE76C;" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                <Setter Property="Text" Value="&#xE70D;" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Text="{Binding Glyph}"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="13"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsFeedEntry}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Label}"
+                                       FontSize="14"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding Count}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       TextAlignment="Right"
+                                       Visibility="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </Grid>
+                    </Button>
+                    <Button Width="28"
+                            Height="28"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,6,0"
+                            Content="&#xE74D;"
+                            FontFamily="Segoe MDL2 Assets"
+                            FontSize="14"
+                            Foreground="{StaticResource MutedTextBrush}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Command="{Binding DataContext.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            AutomationProperties.Name="Delete folder"
+                            ToolTip="Delete folder">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Opacity" Value="0" />
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="DeleteButtonBorder"
+                                                    Background="{TemplateBinding Background}"
+                                                    CornerRadius="4">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{StaticResource DestructiveWashBrush}" />
+                                                    <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="#F3D1CE" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Setter Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Setter Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Width="28"
+                            Height="28"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,38,0"
+                            Content="&#xE738;"
+                            FontFamily="Segoe MDL2 Assets"
+                            FontSize="14"
+                            Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Command="{Binding DataContext.UnfollowFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            AutomationProperties.Name="{Binding Label, StringFormat='Unfollow {0}'}"
+                            ToolTip="Unfollow feed">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
+                                <Setter Property="Opacity" Value="0" />
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Setter Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Setter Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Width="28"
+                            Height="28"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,6,0"
+                            Content="&#xE8D2;"
+                            FontFamily="Segoe MDL2 Assets"
+                            FontSize="14"
+                            Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Click="ManageFeedTags_Click"
+                            AutomationProperties.Name="{Binding Label, StringFormat='Manage tags for {0}'}"
+                            ToolTip="Manage feed tags">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
+                                <Setter Property="Opacity" Value="0" />
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Setter Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Opacity" Value="1" />
+                                        <Setter Property="IsHitTestVisible" Value="True" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <Border x:Name="SidebarPanel"
+                Width="{Binding SidebarPanelWidth}"
+                HorizontalAlignment="Left"
+                Panel.ZIndex="10"
+                Background="{StaticResource SidebarBrush}"
+                Padding="14,14,12,12"
+                MouseEnter="SidebarPanel_MouseEnter"
+                MouseLeave="SidebarPanel_MouseLeave">
+            <Border.RenderTransform>
+                <TranslateTransform X="-286" />
+            </Border.RenderTransform>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid Margin="{Binding SidebarHeaderMargin}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="34" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="ProfileMenuButton"
+                            Click="ProfileMenuButton_Click"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="8,9"
+                            HorizontalContentAlignment="Stretch"
+                            ToolTip="Profile options">
+                        <Button.ContextMenu>
+                            <ContextMenu x:Name="ProfileContextMenu"
+                                         Background="White"
+                                         BorderBrush="{StaticResource ControlBorderBrush}"
+                                         BorderThickness="1"
+                                         Padding="5">
+                                <MenuItem Header="Preferences" Click="PreferencesMenuItem_Click" Padding="12,8" />
+                                <Separator />
+                                <MenuItem Header="Log Out" Click="LogoutMenuItem_Click" Padding="12,8" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentBrush}">
+                                <TextBlock Text="&#xE77B;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="12"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ActiveProfileName}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2"
+                                       Text="&#xE70D;"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Button x:Name="SidebarPinButton"
+                            Command="{Binding ToggleSidebarCommand}"
+                            Style="{StaticResource SidebarIconButtonStyle}"
+                            ContentTemplate="{StaticResource SidebarIconTemplate}"
+                            ToolTip="Hide sidebar"
+                            AutomationProperties.Name="Hide sidebar" />
+                </Grid>
+                <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding PrimaryLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
+                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="8,12" />
+                        <ItemsControl ItemsSource="{Binding ReadingLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
+                        <TextBlock Text="FEEDS"
+                                   Margin="10,25,0,8"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <ItemsControl ItemsSource="{Binding FeedLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
+                        <TextBlock Text="TAGS"
+                                   Margin="10,23,0,8"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <ItemsControl ItemsSource="{Binding TagLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
+                        <ItemsControl ItemsSource="{Binding AdminLinks}"
+                                      ItemTemplate="{StaticResource SidebarLinkTemplate}"
+                                      Margin="0,16,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+                <TextBlock Grid.Row="2"
+                           Text="RSS READER"
+                           Margin="9,12,0,2"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            </Grid>
+        </Border>
+        <Button x:Name="SidebarPeekButton"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="8,8,0,0"
+                Command="{Binding ToggleSidebarCommand}"
+                Style="{StaticResource SidebarIconButtonStyle}"
+                ContentTemplate="{StaticResource SidebarIconTemplate}"
+                ToolTip="Show sidebar"
+                AutomationProperties.Name="Pin sidebar"
+                Visibility="Collapsed"
+                Panel.ZIndex="20"
+                MouseEnter="SidebarPeekButton_MouseEnter"
+                MouseLeave="SidebarPeekButton_MouseLeave" />
+    </Grid>
+</UserControl>

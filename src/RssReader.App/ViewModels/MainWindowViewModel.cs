@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -19,14 +18,12 @@ public sealed record ArticleTopicOption(string? Term, string? Scheme, string Nam
 
 public sealed class MainWindowViewModel : ObservableObject
 {
-    private const int MaximumCachedCatalogFeedPreviews = 20;
-    private const int MaximumNavigationHistoryEntries = 100;
     public const double DefaultSidebarWidth = 286;
     public const double MinimumSidebarWidth = 220;
     public const double MaximumSidebarWidth = 480;
     private readonly List<ArticleRowViewModel> _allArticles;
-    private readonly BulkObservableCollection<CatalogFeedListItem> _catalogFeeds = [];
-    private readonly BulkObservableCollection<SidebarLink> _feedLinks = [];
+    private readonly CatalogBrowserState _catalogBrowser;
+    private readonly SidebarFeedNavigation _sidebarFeedNavigation;
     private readonly BulkObservableCollection<ArticleRowViewModel> _visibleArticles = [];
     private readonly CatalogService? _catalogService;
     private readonly CatalogFeedPreviewService? _catalogFeedPreviewService;
@@ -35,37 +32,24 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly ProfileFeedService? _profileFeedService;
     private readonly ProfileService? _profileService;
     private readonly SemaphoreSlim _profilePreferencesSaveGate = new(1, 1);
-    private readonly Dictionary<string, CatalogFeedPreview> _catalogFeedPreviewCache = new(StringComparer.Ordinal);
-    private readonly LinkedList<NavigationHistoryEntry> _navigationHistory = new();
-    private readonly Queue<string> _catalogFeedPreviewCacheOrder = new();
+    private readonly CatalogFeedPreviewCache _catalogFeedPreviewCache = new();
+    private readonly ReaderNavigationHistory _navigationHistory = new();
     private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _expandedSidebarFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _subscribedFeedIds = new(StringComparer.Ordinal);
-    private Dictionary<string, ProfileFeedRefreshState> _feedRefreshStates = new(StringComparer.Ordinal);
+    private readonly FeedRefreshStatus _feedRefreshStatus = new();
     private ProfilePreferences _profilePreferences;
-    private Dictionary<string, string[]> _feedIdsByFolder = new(StringComparer.OrdinalIgnoreCase);
     private string _activeRoute;
     private string _searchQuery = string.Empty;
-    private string _catalogSearchQuery = string.Empty;
     private string _statusMessage = string.Empty;
-    private string? _refreshFailureMessage;
-    private string[] _failedRefreshFeedIds = [];
-    private string _catalogLoadErrorMessage = string.Empty;
-    private CatalogCategoryOption? _selectedCatalogCategory;
-    private CatalogCollectionOption? _selectedCatalogCollection;
     private ArticleTopicOption? _selectedArticleTopic;
     private ArticleRowViewModel? _selectedArticle;
     private bool _isSidebarPinned = true;
-    private bool _isRefreshing;
     private bool _unreadOnly;
     private bool _savedOnly;
     private bool _isCardsView = true;
     private bool _isMagazineView;
     private bool _isSortByDate;
-    private bool _hideFollowedCatalogFeeds;
     private double _sidebarWidth = DefaultSidebarWidth;
-    private bool _isCatalogLoading;
-    private bool _isCatalogLoaded;
     private bool _hasAppliedStartPage;
     private bool _hasLoadedInitialReaderData;
     private bool _updatingArticleTopicOptions;
@@ -98,7 +82,12 @@ public sealed class MainWindowViewModel : ObservableObject
         _profileFeedService = profileFeedService;
         _profileService = profileService;
         _profilePreferences = profilePreferences ?? new ProfilePreferences();
-        _hideFollowedCatalogFeeds = _profilePreferences.HideFollowedCatalogFeeds;
+        _catalogBrowser = new CatalogBrowserState(
+            catalogService,
+            readingService is not null,
+            _profilePreferences.HideFollowedCatalogFeeds);
+        _catalogBrowser.PropertyChanged += OnCatalogBrowserPropertyChanged;
+        _sidebarFeedNavigation = new SidebarFeedNavigation(readingService is null);
         _isCardsView = _profilePreferences.Presentation == ProfileArticlePresentation.Cards;
         _isMagazineView = _profilePreferences.Presentation == ProfileArticlePresentation.Magazine;
         _isSortByDate = _profilePreferences.Sort == ProfileArticleSort.Newest;
@@ -119,15 +108,7 @@ public sealed class MainWindowViewModel : ObservableObject
             new("Read later", "Read later", "\uE734"),
             new("Recently read", "Recently read", "\uE823")
         ];
-        FeedLinks = _feedLinks;
-        _feedLinks.ReplaceAll(readingService is null
-            ?
-            [
-                new SidebarLink("All", "All", "\uE8A5", "5"),
-                new SidebarLink("folder:Gaming", "Gaming", string.Empty, "(2)", indentLevel: 1),
-                new SidebarLink("folder:tech", "tech", string.Empty, "(3)", indentLevel: 1)
-            ]
-            : [new SidebarLink("All", "All", "\uE8A5")]);
+        FeedLinks = _sidebarFeedNavigation.FeedLinks;
         TagLinks = readingService is null
             ?
             [
@@ -138,21 +119,7 @@ public sealed class MainWindowViewModel : ObservableObject
         AdminLinks = profile.IsCatalogMaster
             ? [new SidebarLink("Manage catalog", "Manage catalog", "\uE713")]
             : [];
-        CatalogCategories = [];
-        CatalogCategoryOptions = [];
         ArticleTopicOptions = [];
-        var allCategoriesOption = new CatalogCategoryOption(null, $"All categories ({CatalogFeeds.Count})");
-        CatalogCategoryOptions.Add(allCategoriesOption);
-        _selectedCatalogCategory = allCategoriesOption;
-        CatalogCollectionOptions = [];
-        var allCollectionsOption = new CatalogCollectionOption(null, $"All collections ({CatalogFeeds.Count})", new HashSet<string>(StringComparer.Ordinal));
-        CatalogCollectionOptions.Add(allCollectionsOption);
-        _selectedCatalogCollection = allCollectionsOption;
-        CatalogFeedListView = new ListCollectionView(CatalogFeeds);
-        CatalogFeedListView.Filter = IsCatalogFeedVisible;
-        CatalogFeedListView.SortDescriptions.Add(
-            new SortDescription(nameof(CatalogFeedListItem.Name), ListSortDirection.Ascending));
-        CatalogCollections = [];
         FolderNames = [];
         CatalogManagement = profile.IsCatalogMaster && catalogService is not null
             ? new CatalogManagementViewModel(profile, catalogService, catalogFeedPreviewService)
@@ -242,13 +209,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICollectionView ArticleListView { get; private set; }
     public ICollectionView FolderSortedArticleListView { get; }
     public ICollectionView DateSortedArticleListView { get; }
-    public ObservableCollection<CatalogFeedListItem> CatalogFeeds => _catalogFeeds;
-    public ObservableCollection<CatalogCategory> CatalogCategories { get; }
-    public ObservableCollection<CatalogCategoryOption> CatalogCategoryOptions { get; }
-    public ObservableCollection<CatalogCollectionOption> CatalogCollectionOptions { get; }
+    public ObservableCollection<CatalogFeedListItem> CatalogFeeds => _catalogBrowser.CatalogFeeds;
+    public ObservableCollection<CatalogCategory> CatalogCategories => _catalogBrowser.CatalogCategories;
+    public ObservableCollection<CatalogCategoryOption> CatalogCategoryOptions => _catalogBrowser.CatalogCategoryOptions;
+    public ObservableCollection<CatalogCollectionOption> CatalogCollectionOptions => _catalogBrowser.CatalogCollectionOptions;
     public ObservableCollection<ArticleTopicOption> ArticleTopicOptions { get; }
-    public ICollectionView CatalogFeedListView { get; }
-    public ObservableCollection<CatalogCollection> CatalogCollections { get; }
+    public ICollectionView CatalogFeedListView => _catalogBrowser.CatalogFeedListView;
+    public ObservableCollection<CatalogCollection> CatalogCollections => _catalogBrowser.CatalogCollections;
     public ObservableCollection<string> FolderNames { get; }
     public CatalogManagementViewModel? CatalogManagement { get; }
 
@@ -369,137 +336,53 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public string CatalogSearchQuery
     {
-        get => _catalogSearchQuery;
-        set
-        {
-            if (SetProperty(ref _catalogSearchQuery, value ?? string.Empty))
-            {
-                RefreshCatalogFeedView();
-            }
-        }
+        get => _catalogBrowser.CatalogSearchQuery;
+        set => _catalogBrowser.CatalogSearchQuery = value;
     }
 
     public CatalogCategoryOption? SelectedCatalogCategory
     {
-        get => _selectedCatalogCategory;
-        set
-        {
-            if (SetProperty(ref _selectedCatalogCategory, value))
-            {
-                RefreshCatalogFeedView();
-            }
-        }
+        get => _catalogBrowser.SelectedCatalogCategory;
+        set => _catalogBrowser.SelectedCatalogCategory = value;
     }
 
     public CatalogCollectionOption? SelectedCatalogCollection
     {
-        get => _selectedCatalogCollection;
-        set
-        {
-            if (SetProperty(ref _selectedCatalogCollection, value))
-            {
-                OnPropertyChanged(nameof(SelectedCatalogCollectionCuratorLabel));
-                RefreshCatalogFeedView();
-            }
-        }
+        get => _catalogBrowser.SelectedCatalogCollection;
+        set => _catalogBrowser.SelectedCatalogCollection = value;
     }
 
-    public string SelectedCatalogCollectionCuratorLabel =>
-        SelectedCatalogCollection?.CollectionId is null ? string.Empty : "Curated by Catalog Master";
+    public string SelectedCatalogCollectionCuratorLabel => _catalogBrowser.SelectedCatalogCollectionCuratorLabel;
 
     public bool HideFollowedCatalogFeeds
     {
-        get => _hideFollowedCatalogFeeds;
+        get => _catalogBrowser.HideFollowedCatalogFeeds;
         set
         {
-            if (SetProperty(ref _hideFollowedCatalogFeeds, value))
+            if (_catalogBrowser.HideFollowedCatalogFeeds != value)
             {
+                _catalogBrowser.HideFollowedCatalogFeeds = value;
                 _profilePreferences = _profilePreferences with { HideFollowedCatalogFeeds = value };
-                RefreshCatalogFeedView();
                 _ = PersistProfilePreferencesAsync();
             }
         }
     }
 
-    public bool IsCatalogFilterActive =>
-        !string.IsNullOrWhiteSpace(CatalogSearchQuery) ||
-        SelectedCatalogCategory?.CategoryId is not null ||
-        SelectedCatalogCollection?.CollectionId is not null ||
-        HideFollowedCatalogFeeds;
-
-    public bool IsCatalogResultsEmpty =>
-        IsCatalogLoaded && !IsCatalogLoading && !HasCatalogLoadError && CatalogFeedListView.IsEmpty;
-
-    public string CatalogResultsSummary =>
-        !IsCatalogLoaded && IsCatalogLoading ? "Loading feed catalog..." :
-        !IsCatalogLoaded && HasCatalogLoadError ? "Catalog unavailable" :
-        IsCatalogFilterActive
-            ? $"{CatalogFeedListView.Cast<CatalogFeedListItem>().Count()} of {CatalogFeeds.Count} feeds"
-            : $"{CatalogFeeds.Count} feeds";
-
-    public string CatalogResultsEmptyMessage => CatalogFeeds.Count == 0
-        ? "No feeds are available in the catalog yet."
-        : "No feeds match these filters.";
-
-    public bool IsCatalogLoading
-    {
-        get => _isCatalogLoading;
-        private set
-        {
-            if (SetProperty(ref _isCatalogLoading, value))
-            {
-                OnPropertyChanged(nameof(IsCatalogResultsEmpty));
-                OnPropertyChanged(nameof(CatalogResultsSummary));
-            }
-        }
-    }
-
-    public bool IsCatalogLoaded
-    {
-        get => _isCatalogLoaded;
-        private set
-        {
-            if (SetProperty(ref _isCatalogLoaded, value))
-            {
-                OnPropertyChanged(nameof(IsCatalogResultsEmpty));
-                OnPropertyChanged(nameof(CatalogResultsSummary));
-            }
-        }
-    }
-
-    public string CatalogLoadErrorMessage
-    {
-        get => _catalogLoadErrorMessage;
-        private set
-        {
-            if (SetProperty(ref _catalogLoadErrorMessage, value))
-            {
-                OnPropertyChanged(nameof(HasCatalogLoadError));
-                OnPropertyChanged(nameof(IsCatalogResultsEmpty));
-                OnPropertyChanged(nameof(CatalogResultsSummary));
-            }
-        }
-    }
-
-    public bool HasCatalogLoadError => !string.IsNullOrWhiteSpace(CatalogLoadErrorMessage);
-
-    public int SelectedCatalogFeedCount => CatalogFeeds.Count(feed => feed.IsSelectedForFollow);
-    public bool HasSelectedCatalogFeeds => SelectedCatalogFeedCount > 0;
-    public bool CanFollowSelectedCatalogFeeds => _readingService is not null && HasSelectedCatalogFeeds;
-    public string FollowSelectedCatalogFeedsLabel => $"Follow selected ({SelectedCatalogFeedCount})";
-    public bool CanSelectVisibleCatalogFeeds => GetVisibleSelectableCatalogFeeds().Length > 0;
-    public bool? VisibleCatalogFeedSelectionState
-    {
-        get
-        {
-            var selectableFeeds = GetVisibleSelectableCatalogFeeds();
-            var selectedCount = selectableFeeds.Count(feed => feed.IsSelectedForFollow);
-            return selectedCount == 0 ? false :
-                selectedCount == selectableFeeds.Length ? true : null;
-        }
-    }
-    public bool CanUnfollowAllCatalogFeeds =>
-        _readingService is not null && GetVisibleSubscribedCatalogFeeds().Length > 0;
+    public bool IsCatalogFilterActive => _catalogBrowser.IsCatalogFilterActive;
+    public bool IsCatalogResultsEmpty => _catalogBrowser.IsCatalogResultsEmpty;
+    public string CatalogResultsSummary => _catalogBrowser.CatalogResultsSummary;
+    public string CatalogResultsEmptyMessage => _catalogBrowser.CatalogResultsEmptyMessage;
+    public bool IsCatalogLoading => _catalogBrowser.IsCatalogLoading;
+    public bool IsCatalogLoaded => _catalogBrowser.IsCatalogLoaded;
+    public string CatalogLoadErrorMessage => _catalogBrowser.CatalogLoadErrorMessage;
+    public bool HasCatalogLoadError => _catalogBrowser.HasCatalogLoadError;
+    public int SelectedCatalogFeedCount => _catalogBrowser.SelectedCatalogFeedCount;
+    public bool HasSelectedCatalogFeeds => _catalogBrowser.HasSelectedCatalogFeeds;
+    public bool CanFollowSelectedCatalogFeeds => _catalogBrowser.CanFollowSelectedCatalogFeeds;
+    public string FollowSelectedCatalogFeedsLabel => _catalogBrowser.FollowSelectedCatalogFeedsLabel;
+    public bool CanSelectVisibleCatalogFeeds => _catalogBrowser.CanSelectVisibleCatalogFeeds;
+    public bool? VisibleCatalogFeedSelectionState => _catalogBrowser.VisibleCatalogFeedSelectionState;
+    public bool CanUnfollowAllCatalogFeeds => _catalogBrowser.CanUnfollowAllCatalogFeeds;
 
     public Func<int, Task<bool>>? ConfirmUnfollowAllRequested { get; set; }
     public Func<string, Task<bool>>? ConfirmUnfollowRequested { get; set; }
@@ -574,114 +457,13 @@ public sealed class MainWindowViewModel : ObservableObject
     private Task RefreshCatalogAfterManagementChangeAsync(CancellationToken cancellationToken) =>
         LoadCatalogAsync(cancellationToken, initializeCatalogManagement: false);
 
-    private async Task LoadCatalogAsync(CancellationToken cancellationToken, bool initializeCatalogManagement = true)
+    private Task LoadCatalogAsync(CancellationToken cancellationToken, bool initializeCatalogManagement = true)
     {
-        if (_catalogService is null)
-        {
-            return;
-        }
-
-        IsCatalogLoading = true;
-        CatalogLoadErrorMessage = string.Empty;
-        try
-        {
-            var categories = await _catalogService.GetCategoriesAsync(cancellationToken);
-            var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
-            var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
-            var collections = await _catalogService.GetCollectionsAsync(cancellationToken);
-            var collectionFeedIds = await _catalogService.GetCollectionFeedIdsByCollectionAsync(cancellationToken);
-            var selectedCollectionId = _selectedCatalogCollection?.CollectionId;
-            var categoryFeedCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-            foreach (var feed in feeds)
-            {
-                if (feed.CategoryId is { } categoryId)
-                {
-                    categoryFeedCounts[categoryId] = categoryFeedCounts.GetValueOrDefault(categoryId) + 1;
-                }
-            }
-
-            CatalogCategories.Clear();
-            CatalogCategoryOptions.Clear();
-            var allCategoriesOption = new CatalogCategoryOption(null, $"All categories ({feeds.Count})");
-            CatalogCategoryOptions.Add(allCategoriesOption);
-            foreach (var category in categories.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                CatalogCategories.Add(category);
-                var categoryFeedCount = categoryFeedCounts.GetValueOrDefault(category.Id);
-                CatalogCategoryOptions.Add(new CatalogCategoryOption(
-                    category.Id,
-                    $"{category.Name} ({categoryFeedCount})"));
-            }
-
-            SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(option =>
-                option.CategoryId == _selectedCatalogCategory?.CategoryId) ?? allCategoriesOption;
-
-            CatalogCollections.Clear();
-            CatalogCollectionOptions.Clear();
-            var allCollectionsOption = new CatalogCollectionOption(
-                null,
-                $"All collections ({feeds.Count})",
-                new HashSet<string>(StringComparer.Ordinal));
-            CatalogCollectionOptions.Add(allCollectionsOption);
-            foreach (var collection in collections)
-            {
-                CatalogCollections.Add(collection);
-                var feedIdSet = collectionFeedIds.TryGetValue(collection.Id, out var feedIds)
-                    ? feedIds.ToHashSet(StringComparer.Ordinal)
-                    : new HashSet<string>(StringComparer.Ordinal);
-                CatalogCollectionOptions.Add(new CatalogCollectionOption(
-                    collection.Id,
-                    $"{collection.Name} ({feedIdSet.Count})",
-                    feedIdSet));
-            }
-
-            SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(option =>
-                option.CollectionId == selectedCollectionId) ?? allCollectionsOption;
-
-            var catalogFeedItems = new List<CatalogFeedListItem>(feeds.Count);
-            foreach (var feed in feeds)
-            {
-                var catalogFeed = new CatalogFeedListItem(
-                    feed.Id,
-                    feed.Name,
-                    feed.FeedUrl,
-                    feed.Description,
-                    feed.CategoryId is not null && categoryNames.TryGetValue(feed.CategoryId, out var categoryName)
-                        ? categoryName
-                        : null,
-                    feed.CategoryId,
-                    feed.WebsiteUrl);
-                catalogFeed.IsSubscribed = _subscribedFeedIds.Contains(feed.Id);
-                catalogFeed.PropertyChanged += OnCatalogFeedPropertyChanged;
-                catalogFeedItems.Add(catalogFeed);
-            }
-
-            using (CatalogFeedListView.DeferRefresh())
-            {
-                _catalogFeeds.ReplaceAll(catalogFeedItems);
-            }
-
-            NotifyCatalogFeedViewChanged();
-
-            if (initializeCatalogManagement && CatalogManagement is not null)
-            {
-                await CatalogManagement.InitializeAsync(cancellationToken);
-            }
-
-            IsCatalogLoaded = true;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            CatalogLoadErrorMessage = $"Could not load the feed catalog: {exception.Message}";
-        }
-        finally
-        {
-            IsCatalogLoading = false;
-        }
+        var catalogManagement = initializeCatalogManagement ? CatalogManagement : null;
+        return _catalogBrowser.LoadAsync(
+            cancellationToken,
+            _subscribedFeedIds,
+            catalogManagement is null ? null : catalogManagement.InitializeAsync);
     }
 
     public void ApplyPreferences(ProfilePreferences preferences)
@@ -696,7 +478,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         _profilePreferences = preferences with
         {
-            HideFollowedCatalogFeeds = _hideFollowedCatalogFeeds
+            HideFollowedCatalogFeeds = _catalogBrowser.HideFollowedCatalogFeeds
         };
         _folderArticlesPerFeedLimit = preferences.FolderArticleLimitPerFeed;
         OnPropertyChanged(nameof(RefreshFeedsWhenOpened));
@@ -785,11 +567,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public string? RefreshFailureMessage
     {
-        get => _refreshFailureMessage;
+        get => _feedRefreshStatus.FailureMessage;
         private set
         {
-            if (SetProperty(ref _refreshFailureMessage, value))
+            if (_feedRefreshStatus.SetFailureMessage(value))
             {
+                OnPropertyChanged(nameof(RefreshFailureMessage));
                 OnPropertyChanged(nameof(HasRefreshFailure));
                 NotifyRefreshFailureContextChanged();
             }
@@ -797,7 +580,7 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public bool HasRefreshFailure => !string.IsNullOrWhiteSpace(RefreshFailureMessage);
-    public bool HasFailedRefreshFeeds => _failedRefreshFeedIds.Length > 0;
+    public bool HasFailedRefreshFeeds => _feedRefreshStatus.FailedFeedIds.Count > 0;
     public string? VisibleRefreshFailureMessage
     {
         get
@@ -805,11 +588,11 @@ public sealed class MainWindowViewModel : ObservableObject
             var relevantFailedFeedIds = GetRelevantFailedRefreshFeedIds();
             if (relevantFailedFeedIds.Length == 0)
             {
-                return _failedRefreshFeedIds.Length == 0 ? RefreshFailureMessage : null;
+                return _feedRefreshStatus.FailedFeedIds.Count == 0 ? RefreshFailureMessage : null;
             }
 
             var failures = relevantFailedFeedIds
-                .Select(feedId => _feedRefreshStates.TryGetValue(feedId, out var state) ? state.LastFailure : null)
+                .Select(_feedRefreshStatus.GetFailureMessage)
                 .Where(message => !string.IsNullOrWhiteSpace(message));
             return string.Join(" ", failures);
         }
@@ -819,11 +602,12 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public bool IsRefreshing
     {
-        get => _isRefreshing;
+        get => _feedRefreshStatus.IsRefreshing;
         private set
         {
-            if (SetProperty(ref _isRefreshing, value))
+            if (_feedRefreshStatus.SetIsRefreshing(value))
             {
+                OnPropertyChanged(nameof(IsRefreshing));
                 RefreshCommand.NotifyCanExecuteChanged();
                 RetryFailedFeedsCommand.NotifyCanExecuteChanged();
             }
@@ -984,22 +768,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
     public bool HasSelectedArticleFeed => SelectedArticle?.FeedId is not null;
     public string? SelectedArticleRefreshStatusMessage
-    {
-        get
-        {
-            if (SelectedArticle?.FeedId is not { } feedId || !_feedRefreshStates.TryGetValue(feedId, out var state))
-            {
-                return null;
-            }
-
-            var lastAttempt = state.LastAttemptAt.ToLocalTime().ToString("g");
-            var lastSuccess = state.LastSuccessfulAt?.ToLocalTime().ToString("g") ?? "Never";
-            var message = $"Last attempt: {lastAttempt}. Last successful refresh: {lastSuccess}.";
-            return string.IsNullOrWhiteSpace(state.LastFailure)
-                ? message
-                : $"{message} {state.LastFailure}";
-        }
-    }
+        => _feedRefreshStatus.GetSelectedArticleStatusMessage(SelectedArticle?.FeedId);
 
     public bool HasSelectedArticleRefreshState => SelectedArticleRefreshStatusMessage is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
@@ -1016,62 +785,6 @@ public sealed class MainWindowViewModel : ObservableObject
         _ when ActiveRoute.StartsWith("tag:", StringComparison.Ordinal) => "No articles with this feed tag.",
         _ => "No articles in this view."
     };
-
-    private bool IsCatalogFeedVisible(object item)
-    {
-        if (item is not CatalogFeedListItem feed ||
-            (HideFollowedCatalogFeeds && feed.IsSubscribed) ||
-            (SelectedCatalogCategory?.CategoryId is { } categoryId && feed.CategoryId != categoryId) ||
-            (SelectedCatalogCollection?.CollectionId is not null &&
-             !SelectedCatalogCollection.FeedIds.Contains(feed.Id)))
-        {
-            return false;
-        }
-
-        var searchTerms = CatalogSearchQuery.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (searchTerms.Length == 0)
-        {
-            return true;
-        }
-
-        var searchableText = string.Join(" ", new[]
-        {
-            feed.Name,
-            feed.CategoryName,
-            feed.Description,
-            feed.FeedUrl,
-            feed.WebsiteUrl
-        }.Where(value => !string.IsNullOrWhiteSpace(value)));
-        return searchTerms.All(term => searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void OnCatalogFeedPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(CatalogFeedListItem.IsSelectedForFollow))
-        {
-            OnPropertyChanged(nameof(SelectedCatalogFeedCount));
-            OnPropertyChanged(nameof(HasSelectedCatalogFeeds));
-            OnPropertyChanged(nameof(CanFollowSelectedCatalogFeeds));
-            OnPropertyChanged(nameof(FollowSelectedCatalogFeedsLabel));
-            OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
-        }
-
-        if (e.PropertyName == nameof(CatalogFeedListItem.IsSubscribed))
-        {
-            OnPropertyChanged(nameof(CanUnfollowAllCatalogFeeds));
-            OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
-        }
-    }
-
-    private CatalogFeedListItem[] GetVisibleSelectableCatalogFeeds() =>
-        CatalogFeedListView.Cast<CatalogFeedListItem>()
-            .Where(feed => feed.CanSelectForFollow)
-            .ToArray();
-
-    private CatalogFeedListItem[] GetVisibleSubscribedCatalogFeeds() =>
-        CatalogFeedListView.Cast<CatalogFeedListItem>()
-            .Where(feed => feed.IsSubscribed)
-            .ToArray();
 
     private string[] GetSuggestedFolders(IEnumerable<string?> relatedCategoryNames)
     {
@@ -1100,8 +813,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void ToggleVisibleCatalogFeedSelection()
     {
-        var selectableFeeds = GetVisibleSelectableCatalogFeeds();
-        var shouldSelect = VisibleCatalogFeedSelectionState != true;
+        var selectableFeeds = _catalogBrowser.GetVisibleSelectableCatalogFeeds();
+        var shouldSelect = _catalogBrowser.VisibleCatalogFeedSelectionState != true;
         foreach (var feed in selectableFeeds)
         {
             feed.IsSelectedForFollow = shouldSelect;
@@ -1170,7 +883,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         try
         {
-            var visibleFeeds = GetVisibleSubscribedCatalogFeeds();
+            var visibleFeeds = _catalogBrowser.GetVisibleSubscribedCatalogFeeds();
             if (visibleFeeds.Length == 0 || !await ConfirmUnfollowAllRequested(visibleFeeds.Length))
             {
                 return;
@@ -1279,21 +992,9 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private void RefreshCatalogFeedView()
+    private void OnCatalogBrowserPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        CatalogFeedListView.Refresh();
-        NotifyCatalogFeedViewChanged();
-    }
-
-    private void NotifyCatalogFeedViewChanged()
-    {
-        OnPropertyChanged(nameof(IsCatalogFilterActive));
-        OnPropertyChanged(nameof(IsCatalogResultsEmpty));
-        OnPropertyChanged(nameof(CatalogResultsSummary));
-        OnPropertyChanged(nameof(CatalogResultsEmptyMessage));
-        OnPropertyChanged(nameof(CanSelectVisibleCatalogFeeds));
-        OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
-        OnPropertyChanged(nameof(CanUnfollowAllCatalogFeeds));
+        OnPropertyChanged(e.PropertyName);
     }
 
     private void ClearCatalogFilters()
@@ -1353,7 +1054,7 @@ public sealed class MainWindowViewModel : ObservableObject
         var items = await _catalogFeedPreviewService.GetPreviewItemsAsync(catalogFeed, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var preview = new CatalogFeedPreview(feed.Name, feed.CategoryName, feed.Description, items);
-        CacheCatalogFeedPreview(feed.Id, preview);
+        _catalogFeedPreviewCache.Store(feed.Id, preview);
         return preview;
     }
 
@@ -1375,22 +1076,6 @@ public sealed class MainWindowViewModel : ObservableObject
             feed.CategoryId,
             feed.WebsiteUrl);
         return _catalogFeedPreviewService.GetRawFeedXmlAsync(catalogFeed, cancellationToken);
-    }
-
-    private void CacheCatalogFeedPreview(string feedId, CatalogFeedPreview preview)
-    {
-        if (!_catalogFeedPreviewCache.ContainsKey(feedId))
-        {
-            if (_catalogFeedPreviewCache.Count >= MaximumCachedCatalogFeedPreviews)
-            {
-                var oldestFeedId = _catalogFeedPreviewCacheOrder.Dequeue();
-                _catalogFeedPreviewCache.Remove(oldestFeedId);
-            }
-
-            _catalogFeedPreviewCacheOrder.Enqueue(feedId);
-        }
-
-        _catalogFeedPreviewCache[feedId] = preview;
     }
 
     private void NavigateTo(SidebarLink link, bool recordHistory = true)
@@ -1415,15 +1100,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         if (link.IsFolder)
         {
-            link.IsExpanded = !link.IsExpanded;
-            if (link.IsExpanded)
-            {
-                _expandedSidebarFolders.Add(link.Label);
-            }
-            else
-            {
-                _expandedSidebarFolders.Remove(link.Label);
-            }
+            _sidebarFeedNavigation.ToggleFolder(link);
         }
 
         NavigateTo(link, recordHistory: false);
@@ -1447,7 +1124,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void RecordCurrentNavigationState()
     {
-        _navigationHistory.AddLast(new NavigationHistoryEntry(
+        _navigationHistory.Push(new NavigationHistoryEntry(
             ActiveRoute,
             SelectedArticle?.ArticleId,
             SelectedArticle,
@@ -1463,26 +1140,20 @@ public sealed class MainWindowViewModel : ObservableObject
             SelectedCatalogCategory?.CategoryId,
             SelectedCatalogCollection?.CollectionId,
             HideFollowedCatalogFeeds,
-            _expandedSidebarFolders.OrderBy(folder => folder, StringComparer.OrdinalIgnoreCase).ToArray()));
-
-        if (_navigationHistory.Count > MaximumNavigationHistoryEntries)
-        {
-            _navigationHistory.RemoveFirst();
-        }
+            _sidebarFeedNavigation.ExpandedFolderNames.ToArray()));
 
         NotifyNavigationHistoryChanged();
     }
 
     private void GoBack()
     {
-        if (_navigationHistory.Last is not { } previous)
+        if (_navigationHistory.Pop() is not { } previous)
         {
             return;
         }
 
-        _navigationHistory.RemoveLast();
         NotifyNavigationHistoryChanged();
-        RestoreNavigationState(previous.Value);
+        RestoreNavigationState(previous);
     }
 
     private void RestoreNavigationState(NavigationHistoryEntry state)
@@ -1506,16 +1177,7 @@ public sealed class MainWindowViewModel : ObservableObject
             CatalogCollectionOptions.FirstOrDefault(option => option.CollectionId is null);
         HideFollowedCatalogFeeds = state.HideFollowedCatalogFeeds;
 
-        _expandedSidebarFolders.Clear();
-        foreach (var folder in state.ExpandedFolderNames)
-        {
-            _expandedSidebarFolders.Add(folder);
-        }
-
-        foreach (var folderLink in FeedLinks.Where(link => link.IsFolder))
-        {
-            folderLink.IsExpanded = _expandedSidebarFolders.Contains(folderLink.Label);
-        }
+        _sidebarFeedNavigation.RestoreExpandedFolders(state.ExpandedFolderNames);
 
         ApplyArticleFilters();
         SelectedArticleTopic = state.SelectedArticleTopicTerm is null
@@ -1677,13 +1339,7 @@ public sealed class MainWindowViewModel : ObservableObject
             ActiveRoute = "All";
         }
 
-        foreach (var feed in CatalogFeeds)
-        {
-            feed.IsSubscribed = subscriptionsByFeed.ContainsKey(feed.Id);
-        }
-
-        RefreshCatalogFeedView();
-        OnPropertyChanged(nameof(CanUnfollowAllCatalogFeeds));
+        _catalogBrowser.UpdateSubscriptions(_subscribedFeedIds);
 
         _allArticles.Clear();
         foreach (var item in articles)
@@ -1739,7 +1395,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var states = await _readingService.GetFeedRefreshStatesAsync(ActiveProfile.Id, cancellationToken);
-        _feedRefreshStates = states.ToDictionary(state => state.FeedId, StringComparer.Ordinal);
+        _feedRefreshStatus.ReplaceStates(states);
         var failedStates = states.Where(state => !string.IsNullOrWhiteSpace(state.LastFailure)).ToArray();
         SetFailedRefreshFeedIds(failedStates.Select(state => state.FeedId));
         RefreshFailureMessage = failedStates.Length == 0
@@ -1788,7 +1444,7 @@ public sealed class MainWindowViewModel : ObservableObject
             feedIds = [route["feed:".Length..]];
         }
         else if (route.StartsWith("folder:", StringComparison.Ordinal) &&
-                 _feedIdsByFolder.TryGetValue(route["folder:".Length..], out var folderFeedIds))
+                 _sidebarFeedNavigation.FindFolderFeedIds(route["folder:".Length..]) is { } folderFeedIds)
         {
             feedIds = folderFeedIds;
         }
@@ -1858,7 +1514,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void SetFailedRefreshFeedIds(IEnumerable<string> feedIds)
     {
-        _failedRefreshFeedIds = feedIds.ToArray();
+        _feedRefreshStatus.ReplaceFailedFeedIds(feedIds);
         OnPropertyChanged(nameof(HasFailedRefreshFeeds));
         NotifyRefreshFailureContextChanged();
     }
@@ -1884,7 +1540,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var displayedFeedIdSet = displayedFeedIds.ToHashSet(StringComparer.Ordinal);
-        return _failedRefreshFeedIds
+        return _feedRefreshStatus.FailedFeedIds
             .Where(displayedFeedIdSet.Contains)
             .ToArray();
     }
@@ -1978,50 +1634,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private void UpdateFolderNavigation(
         IReadOnlyList<string> folders,
         IReadOnlyList<ProfileSubscription> subscriptions)
-    {
-        _feedIdsByFolder = folders.ToDictionary(
-            folder => folder,
-            folder => subscriptions
-                .Where(subscription => string.Equals(
-                    subscription.FolderName,
-                    folder,
-                    StringComparison.OrdinalIgnoreCase))
-                .Select(subscription => subscription.FeedId)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray(),
-            StringComparer.OrdinalIgnoreCase);
-
-        var feedLinks = new List<SidebarLink> { new("All", "All", "\uE8A5") };
-        _expandedSidebarFolders.IntersectWith(folders);
-        foreach (var folder in folders)
-        {
-            var folderSubscriptions = subscriptions.Where(item =>
-                    string.Equals(item.FolderName, folder, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            var folderLink = new SidebarLink(
-                $"folder:{folder}",
-                folder,
-                string.Empty,
-                $"({folderSubscriptions.Length})",
-                indentLevel: 1,
-                parentFolder: null)
-            {
-                IsExpanded = _expandedSidebarFolders.Contains(folder)
-            };
-            feedLinks.Add(folderLink);
-            foreach (var subscription in folderSubscriptions)
-            {
-                feedLinks.Add(new SidebarLink(
-                    $"feed:{subscription.FeedId}",
-                    subscription.FeedName,
-                    "\uE774",
-                    indentLevel: 2,
-                    parentFolder: folderLink));
-            }
-        }
-
-        _feedLinks.ReplaceAll(feedLinks);
-    }
+        => _sidebarFeedNavigation.Update(folders, subscriptions);
 
     private async void OnArticlePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -2087,84 +1700,17 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void ApplyArticleFilters()
     {
-        IEnumerable<ArticleRowViewModel> articles = _allArticles;
-        if (ActiveRoute == "Read later")
-        {
-            articles = articles.Where(article => article.IsSaved);
-        }
-        else if (ActiveRoute == "Recently read")
-        {
-            articles = articles.Where(article => article.IsRead);
-        }
-        else if (ActiveRoute.StartsWith("folder:", StringComparison.Ordinal))
-        {
-            var folder = ActiveRoute["folder:".Length..];
-            articles = articles.Where(article => string.Equals(article.Folder, folder, StringComparison.OrdinalIgnoreCase));
-        }
-        else if (ActiveRoute.StartsWith("tag:", StringComparison.Ordinal))
-        {
-            var tag = ActiveRoute["tag:".Length..];
-            articles = articles.Where(article => article.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase));
-        }
-        else if (ActiveRoute.StartsWith("feed:", StringComparison.Ordinal))
-        {
-            var feedId = ActiveRoute["feed:".Length..];
-            articles = articles.Where(article => article.FeedId == feedId);
-        }
-
-        if (ActiveRoute == "Today")
-        {
-            var now = DateTimeOffset.UtcNow;
-            var cutoff = now.AddHours(-24);
-            articles = articles.Where(article => article.PublishedAt > cutoff && article.PublishedAt <= now);
-        }
-
-        var query = SearchQuery.Trim();
-        if (ActiveRoute == "Search" && string.IsNullOrEmpty(query))
-        {
-            articles = [];
-        }
-        else if (!string.IsNullOrEmpty(query))
-        {
-            articles = articles.Where(article =>
-                article.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                article.Source.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                article.Summary.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (article.Content?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                (article.Author?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                article.Topics.Any(topic =>
-                    topic.Term.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    (topic.Label?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)));
-        }
-
-        if (UnreadOnly)
-        {
-            articles = articles.Where(article => !article.IsRead);
-        }
-        if (SavedOnly)
-        {
-            articles = articles.Where(article => article.IsSaved);
-        }
-
-        var topicScope = articles.ToArray();
-        UpdateArticleTopicOptions(topicScope);
-        if (SelectedArticleTopic is { Term: { } topicTerm } selectedTopic)
-        {
-            articles = topicScope.Where(article => article.Topics.Any(topic =>
-                string.Equals(topic.Term, topicTerm, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(topic.Scheme, selectedTopic.Scheme, StringComparison.OrdinalIgnoreCase)));
-        }
-
-        if (IsSortByFolder && ActiveRoute.StartsWith("folder:", StringComparison.Ordinal))
-        {
-            articles = articles
-                .GroupBy(article => article.FeedId, StringComparer.Ordinal)
-                .SelectMany(feedArticles => feedArticles
-                    .OrderByDescending(article => article.PublishedAt)
-                    .Take(_folderArticlesPerFeedLimit));
-        }
-
-        _visibleArticles.ReplaceAll(articles);
+        var result = ArticleListFilter.Apply(
+            _allArticles,
+            ActiveRoute,
+            SearchQuery,
+            UnreadOnly,
+            SavedOnly,
+            SelectedArticleTopic,
+            IsSortByFolder,
+            _folderArticlesPerFeedLimit);
+        UpdateArticleTopicOptions(result);
+        _visibleArticles.ReplaceAll(result.VisibleArticles);
 
         OnPropertyChanged(nameof(IsArticleListEmpty));
         OnPropertyChanged(nameof(ArticleListEmptyMessage));
@@ -2173,63 +1719,18 @@ public sealed class MainWindowViewModel : ObservableObject
         NextArticleCommand.NotifyCanExecuteChanged();
     }
 
-    private void UpdateArticleTopicOptions(IReadOnlyList<ArticleRowViewModel> articles)
+    private void UpdateArticleTopicOptions(ArticleListFilterResult result)
     {
-        var previousSelection = _selectedArticleTopic;
-        var topicCounts = new Dictionary<string, (string Term, string? Scheme, string Name, int Count)>(StringComparer.OrdinalIgnoreCase);
-        foreach (var article in articles)
-        {
-            var seenOnArticle = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var topic in article.Topics)
-            {
-                var term = topic.Term.Trim();
-                if (term.Length == 0)
-                {
-                    continue;
-                }
-
-                var scheme = string.IsNullOrWhiteSpace(topic.Scheme) ? null : topic.Scheme.Trim();
-                var identity = $"{term}\0{scheme}";
-                if (!seenOnArticle.Add(identity))
-                {
-                    continue;
-                }
-
-                if (topicCounts.TryGetValue(identity, out var existing))
-                {
-                    topicCounts[identity] = (existing.Term, existing.Scheme, existing.Name, existing.Count + 1);
-                }
-                else
-                {
-                    var name = string.IsNullOrWhiteSpace(topic.Label) ? term : topic.Label.Trim();
-                    topicCounts.Add(identity, (term, scheme, name, 1));
-                }
-            }
-        }
-
-        var options = topicCounts.Values
-            .OrderBy(topic => topic.Name, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(topic => topic.Term, StringComparer.OrdinalIgnoreCase)
-            .Select(topic => new ArticleTopicOption(topic.Term, topic.Scheme, topic.Name, topic.Count))
-            .ToList();
-        var allTopicsOption = new ArticleTopicOption(null, null, "All topics", articles.Count);
-        options.Insert(0, allTopicsOption);
         _updatingArticleTopicOptions = true;
         try
         {
             ArticleTopicOptions.Clear();
-            foreach (var option in options)
+            foreach (var option in result.TopicOptions)
             {
                 ArticleTopicOptions.Add(option);
             }
 
-            var selectedOption = previousSelection?.Term is null
-                ? allTopicsOption
-                : options.FirstOrDefault(option =>
-                    string.Equals(option.Term, previousSelection.Term, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(option.Scheme, previousSelection.Scheme, StringComparison.OrdinalIgnoreCase))
-                  ?? allTopicsOption;
-            _selectedArticleTopic = selectedOption;
+            _selectedArticleTopic = result.SelectedTopic;
             OnPropertyChanged(nameof(SelectedArticleTopic));
             OnPropertyChanged(nameof(IsArticleTopicFilterActive));
         }
@@ -2252,38 +1753,4 @@ public sealed class MainWindowViewModel : ObservableObject
         _ => "Today"
     };
 
-    private sealed record NavigationHistoryEntry(
-        string ActiveRoute,
-        string? SelectedArticleId,
-        ArticleRowViewModel? SelectedArticleReference,
-        string SearchQuery,
-        string? SelectedArticleTopicTerm,
-        string? SelectedArticleTopicScheme,
-        bool UnreadOnly,
-        bool SavedOnly,
-        bool IsCardsView,
-        bool IsMagazineView,
-        bool IsSortByDate,
-        string CatalogSearchQuery,
-        string? SelectedCatalogCategoryId,
-        string? SelectedCatalogCollectionId,
-        bool HideFollowedCatalogFeeds,
-        string[] ExpandedFolderNames);
-
-    private sealed class BulkObservableCollection<T> : ObservableCollection<T>
-    {
-        public void ReplaceAll(IEnumerable<T> items)
-        {
-            CheckReentrancy();
-            Items.Clear();
-            foreach (var item in items)
-            {
-                Items.Add(item);
-            }
-
-            OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
-            OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-        }
-    }
 }

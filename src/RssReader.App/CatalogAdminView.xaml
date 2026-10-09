@@ -1,0 +1,529 @@
+﻿<UserControl x:Class="RssReader.App.CatalogAdminView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/MainWindowSharedResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+                <Grid Visibility="{Binding IsCatalogAdminVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <DockPanel Grid.Row="0" Margin="0,0,0,10" LastChildFill="True">
+                            <Button x:Name="CatalogActionsButton"
+                                    DockPanel.Dock="Right"
+                                    Content="..."
+                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                    MinWidth="38"
+                                    Height="34"
+                                    Margin="8,0,0,0"
+                                    ToolTip="Catalog actions"
+                                    AutomationProperties.Name="Catalog actions"
+                                    Click="CatalogActionsButton_Click">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Import OPML..." Click="ImportOpml_Click" />
+                                        <MenuItem Header="Load starter pack"
+                                                  Command="{Binding PlacementTarget.DataContext.CatalogManagement.LoadStarterPackCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                            <Button DockPanel.Dock="Right"
+                                    Content="Add feed"
+                                    Style="{StaticResource PrimaryActionButtonStyle}"
+                                    Margin="0,0,8,0"
+                                    Padding="10,6"
+                                    Click="AddFeed_Click" />
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Catalog Master" FontSize="21" FontWeight="SemiBold" />
+                                <TextBlock Text="Shared feed catalog" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" />
+                                <ProgressBar x:Name="CatalogManagementLoadProgressBar"
+                                             Height="2"
+                                             Margin="0,6,0,0"
+                                             IsIndeterminate="True"
+                                             Visibility="{Binding IsCatalogLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </StackPanel>
+                        </DockPanel>
+                        <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                            <DockPanel Margin="0,0,0,6"
+                                       Visibility="{Binding HasCatalogLoadError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Button DockPanel.Dock="Right"
+                                        Content="Retry"
+                                    Style="{StaticResource PrimaryActionButtonStyle}"
+                                        Command="{Binding RetryCatalogLoadCommand}"
+                                        Padding="9,5" />
+                                <TextBlock Text="{Binding CatalogLoadErrorMessage}"
+                                           Foreground="{StaticResource DestructiveBrush}"
+                                           Margin="0,0,10,0"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap" />
+                            </DockPanel>
+                            <ScrollViewer MaxHeight="160"
+                                          Margin="0,0,0,6"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <TextBlock x:Name="CatalogFeedCheckErrorText"
+                                           Text="{Binding CatalogManagement.ErrorMessage}"
+                                           Foreground="{StaticResource DestructiveBrush}"
+                                           TextWrapping="Wrap">
+                                    <TextBlock.ContextMenu>
+                                        <ContextMenu DataContext="{Binding PlacementTarget, RelativeSource={RelativeSource Self}}">
+                                            <MenuItem Header="Copy" Click="CopyCatalogFeedCheckError_Click" />
+                                        </ContextMenu>
+                                    </TextBlock.ContextMenu>
+                                </TextBlock>
+                            </ScrollViewer>
+                            <Grid x:Name="CatalogImportReport"
+                                  Margin="0,0,0,6"
+                                  Visibility="{Binding CatalogManagement.HasImportMessage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ScrollViewer Grid.Column="0"
+                                              MaxHeight="112"
+                                              VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled">
+                                    <TextBlock x:Name="CatalogImportReportText"
+                                               Text="{Binding CatalogManagement.ImportMessage}"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               TextWrapping="Wrap" />
+                                </ScrollViewer>
+                                <Button x:Name="DismissCatalogImportReportButton"
+                                        Grid.Column="1"
+                                        Content="×"
+                                        Width="28"
+                                        Height="28"
+                                        MinWidth="0"
+                                        Padding="0"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Top"
+                                        ToolTip="Dismiss import report"
+                                        AutomationProperties.Name="Dismiss import report"
+                                        Style="{StaticResource SecondaryActionButtonStyle}"
+                                        Command="{Binding CatalogManagement.DismissImportMessageCommand}" />
+                            </Grid>
+                        </StackPanel>
+                        <TabControl x:Name="CatalogManagementTabs" Grid.Row="2" DataContext="{Binding}">
+                            <TabItem Header="Feeds" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <Grid Margin="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <TextBox x:Name="CatalogManagementSearchBox"
+                                             Grid.Row="0"
+                                             MinHeight="34"
+                                             Padding="9,5"
+                                             VerticalContentAlignment="Center"
+                                             AutomationProperties.Name="Search catalog feeds"
+                                             ToolTip="Search feed names, descriptions, categories, feed URLs, and publisher websites"
+                                             Text="{Binding CatalogManagement.SearchQuery, UpdateSourceTrigger=PropertyChanged}" />
+                                    <WrapPanel Grid.Row="1" Margin="0,8,0,6" VerticalAlignment="Center">
+                                        <ComboBox x:Name="CatalogManagementCategoryFilter"
+                                                  Width="190"
+                                                  Height="32"
+                                                  Margin="0,0,8,4"
+                                                  AutomationProperties.Name="Filter catalog feeds by category"
+                                                  ItemsSource="{Binding CatalogManagement.CategoryFilterOptions}"
+                                                  DisplayMemberPath="Name"
+                                                  SelectedItem="{Binding CatalogManagement.SelectedCategoryFilter}" />
+                                        <ComboBox x:Name="CatalogManagementCollectionFilter"
+                                                  Width="190"
+                                                  Height="32"
+                                                  Margin="0,0,8,4"
+                                                  AutomationProperties.Name="Filter catalog feeds by collection"
+                                                  ItemsSource="{Binding CatalogManagement.CollectionFilterOptions}"
+                                                  DisplayMemberPath="Name"
+                                                  SelectedItem="{Binding CatalogManagement.SelectedCollectionFilter}" />
+                                        <ComboBox x:Name="CatalogManagementHealthFilter"
+                                                  Width="170"
+                                                  Height="32"
+                                                  Margin="0,0,8,4"
+                                                  AutomationProperties.Name="Filter catalog feeds by health check"
+                                                  ItemsSource="{Binding CatalogManagement.HealthFilterOptions}"
+                                                  DisplayMemberPath="Name"
+                                                  SelectedItem="{Binding CatalogManagement.SelectedHealthFilter}" />
+                                        <CheckBox Content="Metadata gaps only"
+                                                  Margin="0,0,12,4"
+                                                  VerticalAlignment="Center"
+                                                  IsChecked="{Binding CatalogManagement.ShowMetadataGapsOnly}" />
+                                        <Button Content="Clear filters"
+                                            Style="{StaticResource SecondaryActionButtonStyle}"
+                                                Margin="0,0,0,4"
+                                                Padding="9,5"
+                                                Command="{Binding CatalogManagement.ClearFiltersCommand}" />
+                                    </WrapPanel>
+                                    <DockPanel Grid.Row="2" Margin="0,0,0,6">
+                                        <TextBlock Text="{Binding CatalogManagement.FeedResultsSummary}"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding CatalogManagement.MetadataReviewSummary}"
+                                                   Margin="12,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                    </DockPanel>
+                                    <Grid Grid.Row="3">
+                                        <ListBox x:Name="CatalogManagementFeedList"
+                                                 ItemsSource="{Binding DataContext.CatalogManagement.VisibleFeeds, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                 AutomationProperties.Name="Catalog feed management results"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 ScrollViewer.CanContentScroll="True"
+                                                 VirtualizingPanel.IsVirtualizing="True"
+                                                 VirtualizingPanel.VirtualizationMode="Recycling">
+                                            <ListBox.ItemContainerStyle>
+                                                <Style TargetType="ListBoxItem">
+                                                    <Setter Property="Padding" Value="0" />
+                                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                    <Setter Property="BorderThickness" Value="0" />
+                                                    <Setter Property="Background" Value="Transparent" />
+                                                </Style>
+                                            </ListBox.ItemContainerStyle>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border BorderBrush="#B8C5BE" BorderThickness="0,0,0,1" Padding="0,4">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                                                <DockPanel LastChildFill="True">
+                                                                    <TextBlock DockPanel.Dock="Right"
+                                                                               Text="{Binding CategoryName, TargetNullValue=Uncategorized}"
+                                                                               Margin="8,0,0,0"
+                                                                               FontSize="11"
+                                                                               Foreground="{StaticResource AccentBrush}"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                                        <TextBlock Text="{Binding SameNameDisplay}"
+                                                                                   Margin="0,0,8,0"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{StaticResource WarningBrush}"
+                                                                                   Visibility="{Binding HasSameName, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                        <TextBlock Text="&#xE7BA;"
+                                                                                   Margin="0,0,8,0"
+                                                                                   FontFamily="Segoe MDL2 Assets"
+                                                                                   FontSize="13"
+                                                                                   Foreground="{StaticResource WarningBrush}"
+                                                                                   ToolTip="{Binding MetadataReviewDisplay}"
+                                                                                   AutomationProperties.Name="{Binding MetadataReviewDisplay}"
+                                                                                   Visibility="{Binding HasMetadataGaps, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                                                   FontSize="14"
+                                                                                   ToolTip="{Binding HealthCheckDisplay}"
+                                                                                   AutomationProperties.Name="{Binding HealthCheckDisplay}">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Text" Value="&#xE73E;" />
+                                                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding HasHealthCheck}" Value="True">
+                                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding LastHealthCheckSucceeded}" Value="False">
+                                                                                            <Setter Property="Text" Value="&#xE711;" />
+                                                                                            <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+                                                                    </StackPanel>
+                                                                    <TextBlock Text="{Binding Name}"
+                                                                               FontSize="14"
+                                                                               FontWeight="SemiBold"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               ToolTip="{Binding Name}" />
+                                                                </DockPanel>
+                                                                <TextBlock Text="{Binding Description}"
+                                                                           Margin="0,1,8,0"
+                                                                           FontSize="11"
+                                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           ToolTip="{Binding Description}"
+                                                                           AutomationProperties.Name="Catalog feed description"
+                                                                           Visibility="{Binding HasDescription, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                <Grid Margin="0,1,0,0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="2*" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock FontSize="10"
+                                                                               Foreground="{StaticResource MutedTextBrush}"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               ToolTip="{Binding FeedUrl}">
+                                                                        <Hyperlink NavigateUri="{Binding FeedUrl, Mode=OneWay, Converter={StaticResource OptionalUriConverter}}"
+                                                                                   RequestNavigate="SourceLink_RequestNavigate"
+                                                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                                                   TextDecorations="None">
+                                                                            <Run Text="{Binding FeedUrl, Mode=OneWay}" />
+                                                                        </Hyperlink>
+                                                                    </TextBlock>
+                                                                    <TextBlock Grid.Column="1"
+                                                                               FontSize="10"
+                                                                               Foreground="{StaticResource AccentBrush}"
+                                                                               TextAlignment="Right"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               ToolTip="{Binding WebsiteUrl}">
+                                                                        <Hyperlink NavigateUri="{Binding WebsiteUrl, Mode=OneWay, Converter={StaticResource OptionalUriConverter}}"
+                                                                                   RequestNavigate="SourceLink_RequestNavigate"
+                                                                                   Foreground="{StaticResource AccentBrush}"
+                                                                                   TextDecorations="None">
+                                                                            <Run Text="{Binding PublisherWebsiteDisplay, Mode=OneWay}" />
+                                                                        </Hyperlink>
+                                                                    </TextBlock>
+                                                                </Grid>
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <Button Click="PreviewManagedFeed_Click"
+                                                                        Width="32"
+                                                                        Height="32"
+                                                                    Style="{StaticResource IconActionButtonStyle}"
+                                                                        Padding="0"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        ToolTip="Preview feed"
+                                                                        AutomationProperties.Name="Preview feed">
+                                                                    <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#2673B8" />
+                                                                </Button>
+                                                                <Button Click="EditFeed_Click"
+                                                                        Width="32"
+                                                                        Height="32"
+                                                                    Style="{StaticResource IconActionButtonStyle}"
+                                                                        Padding="0"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        ToolTip="Edit feed"
+                                                                        AutomationProperties.Name="Edit feed">
+                                                                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#2673B8" />
+                                                                </Button>
+                                                                <Button Click="ManageFeedCollections_Click"
+                                                                        MinWidth="82"
+                                                                        Height="30"
+                                                                        Margin="2,0"
+                                                                        Padding="7,4"
+                                                                        Style="{StaticResource SecondaryActionButtonStyle}"
+                                                                        Content="Collections"
+                                                                        FontSize="11"
+                                                                        ToolTip="Choose which collections include this feed"
+                                                                        AutomationProperties.Name="Choose collections for feed" />
+                                                                <Button Command="{Binding DataContext.CatalogManagement.CheckFeedHealthCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Width="32"
+                                                                        Height="32"
+                                                                    Style="{StaticResource IconActionButtonStyle}"
+                                                                        Padding="0"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        ToolTip="Check feed"
+                                                                        AutomationProperties.Name="Check feed">
+                                                                    <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource SuccessBrush}" />
+                                                                </Button>
+                                                                <Button Command="{Binding DataContext.CatalogManagement.DeleteFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Width="32"
+                                                                        Height="32"
+                                                                    Style="{StaticResource DestructiveIconActionButtonStyle}"
+                                                                        Padding="0"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        ToolTip="Remove feed"
+                                                                        AutomationProperties.Name="Remove feed">
+                                                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource DestructiveBrush}" />
+                                                                </Button>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <TextBlock Text="{Binding CatalogManagement.FeedResultsEmptyMessage}"
+                                                   Margin="12,16,12,0"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Top"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   IsHitTestVisible="False"
+                                                   Panel.ZIndex="1"
+                                                   Visibility="{Binding CatalogManagement.IsFeedResultsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    </Grid>
+                                </Grid>
+                            </TabItem>
+                            <TabItem Header="Categories &amp; collections" DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <Grid Margin="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid Margin="0,0,16,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button Content="+"
+                                                    Width="30"
+                                                    Height="30"
+                                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                                    Margin="0,0,8,0"
+                                                    FontSize="19"
+                                                    Padding="0"
+                                                    ToolTip="Add category"
+                                                    AutomationProperties.Name="Add category"
+                                                    Click="AddCategory_Click" />
+                                            <TextBlock Text="Categories" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding CatalogManagement.Categories}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <DataTemplate.Resources>
+                                                            <Style x:Key="TaxonomyHoverActionStyle" TargetType="Button">
+                                                                <Setter Property="Width" Value="30" />
+                                                                <Setter Property="Height" Value="30" />
+                                                                <Setter Property="Padding" Value="0" />
+                                                                <Setter Property="Margin" Value="0,0,2,0" />
+                                                                <Setter Property="Background" Value="Transparent" />
+                                                                <Setter Property="BorderThickness" Value="0" />
+                                                                <Setter Property="Opacity" Value="0" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                                        <Setter Property="Opacity" Value="1" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                                        <Setter Property="Opacity" Value="1" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </DataTemplate.Resources>
+                                                        <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                                    <Button Style="{StaticResource TaxonomyHoverActionStyle}"
+                                                                            Click="RenameCategory_Click"
+                                                                            ToolTip="Rename category"
+                                                                            AutomationProperties.Name="Rename category">
+                                                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#2673B8" />
+                                                                    </Button>
+                                                                    <Button Style="{StaticResource TaxonomyHoverActionStyle}"
+                                                                            Command="{Binding DataContext.CatalogManagement.DeleteCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}"
+                                                                            ToolTip="Remove category"
+                                                                            AutomationProperties.Name="Remove category">
+                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource DestructiveBrush}" />
+                                                                    </Button>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+                                    <Grid Grid.Column="1" Margin="16,0,0,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+                                            <Button Content="+"
+                                                    Width="30"
+                                                    Height="30"
+                                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                                    Margin="0,0,8,0"
+                                                    FontSize="19"
+                                                    Padding="0"
+                                                    ToolTip="Add collection"
+                                                    AutomationProperties.Name="Add collection"
+                                                    Click="AddCollection_Click" />
+                                            <TextBlock Text="Collections" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="1"
+                                                   Text="Curated by Catalog Master"
+                                                   Margin="0,0,0,8"
+                                                   FontSize="12"
+                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding CatalogManagement.Collections}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <DataTemplate.Resources>
+                                                            <Style x:Key="TaxonomyHoverActionStyle" TargetType="Button">
+                                                                <Setter Property="Width" Value="30" />
+                                                                <Setter Property="Height" Value="30" />
+                                                                <Setter Property="Padding" Value="0" />
+                                                                <Setter Property="Margin" Value="0,0,2,0" />
+                                                                <Setter Property="Background" Value="Transparent" />
+                                                                <Setter Property="BorderThickness" Value="0" />
+                                                                <Setter Property="Opacity" Value="0" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                                        <Setter Property="Opacity" Value="1" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                                        <Setter Property="Opacity" Value="1" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </DataTemplate.Resources>
+                                                        <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                                    <Button Style="{StaticResource TaxonomyHoverActionStyle}"
+                                                                            Click="ManageCollectionFeeds_Click"
+                                                                            ToolTip="Add or remove feeds"
+                                                                            AutomationProperties.Name="Manage feeds in collection">
+                                                                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#2673B8" />
+                                                                    </Button>
+                                                                    <Button Style="{StaticResource TaxonomyHoverActionStyle}"
+                                                                            Click="RenameCollection_Click"
+                                                                            ToolTip="Rename collection"
+                                                                            AutomationProperties.Name="Rename collection">
+                                                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#2673B8" />
+                                                                    </Button>
+                                                                    <Button Style="{StaticResource TaxonomyHoverActionStyle}"
+                                                                            Command="{Binding DataContext.CatalogManagement.DeleteCollectionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}"
+                                                                            ToolTip="Remove collection"
+                                                                            AutomationProperties.Name="Remove collection">
+                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource DestructiveBrush}" />
+                                                                    </Button>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Grid>
+                            </TabItem>
+                        </TabControl>
+                    </Grid>
+                </Grid>
+</UserControl>

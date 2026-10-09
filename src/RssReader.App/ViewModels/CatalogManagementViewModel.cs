@@ -28,12 +28,12 @@ public sealed class CatalogManagementViewModel : ObservableObject
     private readonly Profile _actor;
     private readonly CatalogService _catalogService;
     private readonly CatalogFeedPreviewService? _catalogFeedPreviewService;
+    private readonly CatalogCollectionMembershipEditor _collectionMembershipEditor;
+    private readonly CatalogTaxonomyManagement _taxonomyManagement;
     private string _feedName = string.Empty;
     private string _feedUrl = string.Empty;
     private string _feedWebsiteUrl = string.Empty;
     private string _feedDescription = string.Empty;
-    private string _categoryName = string.Empty;
-    private string _collectionName = string.Empty;
     private string _errorMessage = string.Empty;
     private string _importMessage = string.Empty;
     private string _searchQuery = string.Empty;
@@ -45,8 +45,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
     private CatalogFeedListItem? _selectedFeed;
     private CatalogCollection? _selectedCollection;
     private string? _editingFeedId;
-    private string? _editingCategoryId;
-    private string? _editingCollectionId;
 
     public CatalogManagementViewModel(
         Profile actor,
@@ -56,17 +54,25 @@ public sealed class CatalogManagementViewModel : ObservableObject
         _actor = actor;
         _catalogService = catalogService;
         _catalogFeedPreviewService = catalogFeedPreviewService;
+        _taxonomyManagement = new CatalogTaxonomyManagement(
+            _actor,
+            _catalogService,
+            () => Categories,
+            message => ErrorMessage = message,
+            () => RefreshAsync(),
+            message => ConfirmDeleteRequested?.Invoke(message) ?? Task.FromResult(false));
+        _taxonomyManagement.PropertyChanged += OnTaxonomyManagementPropertyChanged;
         AddFeedCommand = new AsyncCommand(AddFeedAsync);
         CheckFeedHealthCommand = new AsyncCommand<CatalogFeedListItem>(CheckFeedHealthAsync);
         LoadStarterPackCommand = new AsyncCommand(LoadStarterPackAsync);
         DeleteFeedCommand = new AsyncCommand<CatalogFeedListItem>(DeleteFeedAsync);
         ClearFiltersCommand = new RelayCommand(ClearFilters);
         DismissImportMessageCommand = new RelayCommand(() => ImportMessage = string.Empty);
-        AddCategoryCommand = new AsyncCommand(AddCategoryAsync);
-        MergeCategoryCommand = new AsyncCommand(MergeCategoryIntoExistingAsync);
-        DeleteCategoryCommand = new AsyncCommand<CatalogCategory>(DeleteCategoryAsync);
-        AddCollectionCommand = new AsyncCommand(AddCollectionAsync);
-        DeleteCollectionCommand = new AsyncCommand<CatalogCollection>(DeleteCollectionAsync);
+        AddCategoryCommand = new AsyncCommand(_taxonomyManagement.AddCategoryAsync);
+        MergeCategoryCommand = new AsyncCommand(_taxonomyManagement.MergeCategoryIntoExistingAsync);
+        DeleteCategoryCommand = new AsyncCommand<CatalogCategory>(_taxonomyManagement.DeleteCategoryAsync);
+        AddCollectionCommand = new AsyncCommand(_taxonomyManagement.AddCollectionAsync);
+        DeleteCollectionCommand = new AsyncCommand<CatalogCollection>(_taxonomyManagement.DeleteCollectionAsync);
         AddFeedToCollectionCommand = new AsyncCommand(AddFeedToCollectionAsync);
         RemoveFeedFromCollectionCommand = new AsyncCommand(RemoveFeedFromCollectionAsync);
 
@@ -81,6 +87,14 @@ public sealed class CatalogManagementViewModel : ObservableObject
         _selectedHealthFilter = HealthFilterOptions[0];
 
         VisibleFeeds = CreateVisibleFeedView(Feeds);
+        _collectionMembershipEditor = new CatalogCollectionMembershipEditor(
+            _actor,
+            _catalogService,
+            () => Feeds,
+            () => Collections,
+            () => CollectionFilterOptions,
+            message => ErrorMessage = message,
+            () => RefreshAsync());
     }
 
     public ObservableCollection<CatalogFeedListItem> Feeds { get; private set; } = [];
@@ -201,34 +215,19 @@ public sealed class CatalogManagementViewModel : ObservableObject
 
     public string CategoryName
     {
-        get => _categoryName;
-        set
-        {
-            if (SetProperty(ref _categoryName, value))
-            {
-                OnPropertyChanged(nameof(MergeTargetCategory));
-                OnPropertyChanged(nameof(CanMergeCategory));
-                OnPropertyChanged(nameof(MergeCategoryButtonLabel));
-            }
-        }
+        get => _taxonomyManagement.CategoryName;
+        set => _taxonomyManagement.CategoryName = value;
     }
 
-    public CatalogCategory? MergeTargetCategory =>
-        _editingCategoryId is null || string.IsNullOrWhiteSpace(CategoryName)
-            ? null
-            : Categories.FirstOrDefault(category =>
-                category.Id != _editingCategoryId &&
-                string.Equals(category.Name, CategoryName.Trim(), StringComparison.OrdinalIgnoreCase));
+    public CatalogCategory? MergeTargetCategory => _taxonomyManagement.MergeTargetCategory;
 
-    public bool CanMergeCategory => MergeTargetCategory is not null;
-    public string MergeCategoryButtonLabel => MergeTargetCategory is { } target
-        ? $"Merge into {target.Name}"
-        : "Merge into existing";
+    public bool CanMergeCategory => _taxonomyManagement.CanMergeCategory;
+    public string MergeCategoryButtonLabel => _taxonomyManagement.MergeCategoryButtonLabel;
 
     public string CollectionName
     {
-        get => _collectionName;
-        set => SetProperty(ref _collectionName, value);
+        get => _taxonomyManagement.CollectionName;
+        set => _taxonomyManagement.CollectionName = value;
     }
 
     public string ErrorMessage
@@ -273,24 +272,19 @@ public sealed class CatalogManagementViewModel : ObservableObject
     {
         ErrorMessage = string.Empty;
         _editingFeedId = null;
-        _editingCategoryId = null;
-        _editingCollectionId = null;
+        _taxonomyManagement.ResetEntryForm();
         FeedName = string.Empty;
         FeedUrl = string.Empty;
         FeedWebsiteUrl = string.Empty;
         FeedDescription = string.Empty;
         SelectedCategory = null;
-        CategoryName = string.Empty;
-        CollectionName = string.Empty;
-        NotifyMergeCategoryProperties();
     }
 
     public void PrepareFeedEdit(CatalogFeedListItem feed)
     {
         ErrorMessage = string.Empty;
         _editingFeedId = feed.Id;
-        _editingCategoryId = null;
-        _editingCollectionId = null;
+        _taxonomyManagement.ClearEditingState();
         FeedName = feed.Name;
         FeedUrl = feed.FeedUrl;
         FeedWebsiteUrl = feed.WebsiteUrl ?? string.Empty;
@@ -302,20 +296,14 @@ public sealed class CatalogManagementViewModel : ObservableObject
     {
         ErrorMessage = string.Empty;
         _editingFeedId = null;
-        _editingCategoryId = category.Id;
-        _editingCollectionId = null;
-        CategoryName = category.Name;
-        NotifyMergeCategoryProperties();
+        _taxonomyManagement.PrepareCategoryEdit(category);
     }
 
     public void PrepareCollectionEdit(CatalogCollection collection)
     {
         ErrorMessage = string.Empty;
         _editingFeedId = null;
-        _editingCategoryId = null;
-        _editingCollectionId = collection.Id;
-        CollectionName = collection.Name;
-        NotifyMergeCategoryProperties();
+        _taxonomyManagement.PrepareCollectionEdit(collection);
     }
 
     public async Task<CatalogFeedPreview> PreviewFeedAsync(
@@ -376,76 +364,33 @@ public sealed class CatalogManagementViewModel : ObservableObject
         var selectedFeedId = SelectedFeed?.Id;
         var selectedManagementCollectionId = SelectedCollection?.Id;
         var categories = await _catalogService.GetCategoriesAsync(cancellationToken);
-        var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
         var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
-        var sameNameCounts = feeds
-            .GroupBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
         var collections = await _catalogService.GetCollectionsAsync(cancellationToken);
         var collectionFeedIds = await _catalogService.GetCollectionFeedIdsByCollectionAsync(cancellationToken);
-        var categoryFeedCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var feed in feeds)
-        {
-            if (feed.CategoryId is { } categoryId)
-            {
-                categoryFeedCounts[categoryId] = categoryFeedCounts.GetValueOrDefault(categoryId) + 1;
-            }
-        }
-
-        var refreshedFeeds = new ObservableCollection<CatalogFeedListItem>();
-        foreach (var feed in feeds)
-        {
-            refreshedFeeds.Add(new CatalogFeedListItem(
-                feed.Id,
-                feed.Name,
-                feed.FeedUrl,
-                feed.Description,
-                feed.CategoryId is not null && categoryNames.TryGetValue(feed.CategoryId, out var categoryName)
-                    ? categoryName
-                    : null,
-                feed.CategoryId,
-                feed.WebsiteUrl,
-                sameNameCounts[feed.Name],
-                feed.LastHealthCheckedAt,
-                feed.LastHealthCheckSucceeded));
-        }
-        Feeds = refreshedFeeds;
+        var snapshot = CatalogManagementSnapshot.Create(feeds, categories, collections, collectionFeedIds);
+        Feeds = new ObservableCollection<CatalogFeedListItem>(snapshot.Feeds);
 
         Categories.Clear();
         foreach (var category in categories)
         {
             Categories.Add(category);
         }
-        NotifyMergeCategoryProperties();
+        _taxonomyManagement.NotifyCategoriesChanged();
 
         CategoryFilterOptions.Clear();
-        var allCategories = new CatalogCategoryFilterOption(null, $"All categories ({Feeds.Count})");
-        CategoryFilterOptions.Add(allCategories);
-        foreach (var category in categories.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var option in snapshot.CategoryFilterOptions)
         {
-            var categoryFeedCount = categoryFeedCounts.GetValueOrDefault(category.Id);
-            CategoryFilterOptions.Add(new CatalogCategoryFilterOption(
-                category.Id,
-                $"{category.Name} ({categoryFeedCount})"));
+            CategoryFilterOptions.Add(option);
         }
 
         CollectionFilterOptions.Clear();
-        var allCollections = new CatalogCollectionFilterOption(
-            null,
-            $"All collections ({Feeds.Count})",
-            new HashSet<string>(StringComparer.Ordinal));
-        CollectionFilterOptions.Add(allCollections);
-        foreach (var collection in collections.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var option in snapshot.CollectionFilterOptions)
         {
-            var feedIdSet = collectionFeedIds.TryGetValue(collection.Id, out var feedIds)
-                ? feedIds.ToHashSet(StringComparer.Ordinal)
-                : new HashSet<string>(StringComparer.Ordinal);
-            CollectionFilterOptions.Add(new CatalogCollectionFilterOption(
-                collection.Id,
-                $"{collection.Name} ({feedIdSet.Count})",
-                feedIdSet));
+            CollectionFilterOptions.Add(option);
         }
 
+        var allCategories = snapshot.CategoryFilterOptions[0];
+        var allCollections = snapshot.CollectionFilterOptions[0];
         _selectedCategoryFilter = CategoryFilterOptions.FirstOrDefault(option => option.CategoryId == selectedCategoryId)
             ?? allCategories;
         _selectedCollectionFilter = CollectionFilterOptions.FirstOrDefault(option => option.CollectionId == selectedCollectionId)
@@ -454,7 +399,7 @@ public sealed class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedCollectionFilter));
 
         Collections.Clear();
-        foreach (var collection in collections.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var collection in snapshot.Collections)
         {
             Collections.Add(collection);
         }
@@ -476,7 +421,14 @@ public sealed class CatalogManagementViewModel : ObservableObject
 
     private ListCollectionView CreateVisibleFeedView(ObservableCollection<CatalogFeedListItem> feeds) => new(feeds)
     {
-        Filter = IsFeedVisible,
+        Filter = item => item is CatalogFeedListItem feed &&
+            CatalogFeedFilter.IsVisible(
+                feed,
+                SearchQuery,
+                ShowMetadataGapsOnly,
+                SelectedCategoryFilter?.CategoryId,
+                SelectedCollectionFilter,
+                SelectedHealthFilter?.Filter ?? CatalogFeedHealthFilter.All),
         CustomSort = Comparer<CatalogFeedListItem>.Create((left, right) =>
         {
             var nameComparison = StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
@@ -495,42 +447,8 @@ public sealed class CatalogManagementViewModel : ObservableObject
         OnPropertyChanged(nameof(FeedResultsEmptyMessage));
     }
 
-    private bool IsFeedVisible(object item)
-    {
-        if (item is not CatalogFeedListItem feed ||
-            (ShowMetadataGapsOnly && !feed.HasMetadataGaps) ||
-            (SelectedCategoryFilter?.CategoryId is { } categoryId && feed.CategoryId != categoryId) ||
-            (SelectedCollectionFilter?.CollectionId is not null &&
-             !SelectedCollectionFilter.FeedIds.Contains(feed.Id)))
-        {
-            return false;
-        }
-
-        var healthFilter = SelectedHealthFilter?.Filter ?? CatalogFeedHealthFilter.All;
-        if (healthFilter == CatalogFeedHealthFilter.NotChecked && feed.LastHealthCheckedAt is not null ||
-            healthFilter == CatalogFeedHealthFilter.Succeeded && feed.LastHealthCheckSucceeded != true ||
-            healthFilter == CatalogFeedHealthFilter.Failed &&
-            (feed.LastHealthCheckedAt is null || feed.LastHealthCheckSucceeded != false))
-        {
-            return false;
-        }
-
-        var searchTerms = SearchQuery.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (searchTerms.Length == 0)
-        {
-            return true;
-        }
-
-        var searchableText = string.Join(" ", new[]
-        {
-            feed.Name,
-            feed.Description,
-            feed.CategoryName,
-            feed.FeedUrl,
-            feed.WebsiteUrl
-        }.Where(value => !string.IsNullOrWhiteSpace(value)));
-        return searchTerms.All(term => searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
+    private void OnTaxonomyManagementPropertyChanged(object? sender, PropertyChangedEventArgs e) =>
+        OnPropertyChanged(e.PropertyName);
 
     private void ClearFilters()
     {
@@ -651,120 +569,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
         }
     }
 
-    private async Task AddCategoryAsync()
-    {
-        ErrorMessage = string.Empty;
-        try
-        {
-            if (_editingCategoryId is { } categoryId)
-            {
-                await _catalogService.UpdateCategoryAsync(_actor, categoryId, CategoryName);
-                _editingCategoryId = null;
-            }
-            else
-            {
-                await _catalogService.AddCategoryAsync(_actor, CategoryName);
-            }
-
-            CategoryName = string.Empty;
-            await RefreshAsync();
-        }
-        catch (ArgumentException exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        catch (InvalidOperationException exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-    }
-
-    private async Task MergeCategoryIntoExistingAsync()
-    {
-        ErrorMessage = string.Empty;
-        if (_editingCategoryId is not { } sourceCategoryId || MergeTargetCategory is not { } targetCategory)
-        {
-            return;
-        }
-
-        try
-        {
-            await _catalogService.MergeCategoriesAsync(_actor, sourceCategoryId, targetCategory.Id);
-            _editingCategoryId = null;
-            CategoryName = string.Empty;
-            await RefreshAsync();
-        }
-        catch (ArgumentException exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        catch (InvalidOperationException exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-    }
-
-    private void NotifyMergeCategoryProperties()
-    {
-        OnPropertyChanged(nameof(MergeTargetCategory));
-        OnPropertyChanged(nameof(CanMergeCategory));
-        OnPropertyChanged(nameof(MergeCategoryButtonLabel));
-    }
-
-    private async Task DeleteCategoryAsync(CatalogCategory category)
-    {
-        var confirmation = ConfirmDeleteRequested;
-        if (confirmation is null || !await confirmation(
-            $"Delete category '{category.Name}'? Its feeds remain in the catalog and become uncategorized."))
-        {
-            return;
-        }
-
-        await _catalogService.DeleteCategoryAsync(_actor, category.Id);
-        await RefreshAsync();
-    }
-
-    private async Task AddCollectionAsync()
-    {
-        ErrorMessage = string.Empty;
-        try
-        {
-            if (_editingCollectionId is { } collectionId)
-            {
-                await _catalogService.UpdateCollectionAsync(_actor, collectionId, CollectionName);
-                _editingCollectionId = null;
-            }
-            else
-            {
-                await _catalogService.AddCollectionAsync(_actor, CollectionName);
-            }
-
-            CollectionName = string.Empty;
-            await RefreshAsync();
-        }
-        catch (ArgumentException exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-        catch (InvalidOperationException exception)
-        {
-            ErrorMessage = exception.Message;
-        }
-    }
-
-    private async Task DeleteCollectionAsync(CatalogCollection collection)
-    {
-        var confirmation = ConfirmDeleteRequested;
-        if (confirmation is null || !await confirmation(
-            $"Delete collection '{collection.Name}'? Its feed memberships are removed, but the feeds remain in the catalog and in profiles."))
-        {
-            return;
-        }
-
-        await _catalogService.DeleteCollectionAsync(_actor, collection.Id);
-        await RefreshAsync();
-    }
-
     private async Task AddFeedToCollectionAsync()
     {
         if (SelectedFeed is null || SelectedCollection is null)
@@ -792,114 +596,18 @@ public sealed class CatalogManagementViewModel : ObservableObject
     }
 
     public IReadOnlySet<string> GetCollectionIdsForFeed(string feedId) =>
-        CollectionFilterOptions
-            .Where(option => option.CollectionId is not null && option.FeedIds.Contains(feedId))
-            .Select(option => option.CollectionId!)
-            .ToHashSet(StringComparer.Ordinal);
+        _collectionMembershipEditor.GetCollectionIdsForFeed(feedId);
 
     public IReadOnlySet<string> GetFeedIdsForCollection(string collectionId) =>
-        CollectionFilterOptions
-            .FirstOrDefault(option => option.CollectionId == collectionId)?
-            .FeedIds
-            .ToHashSet(StringComparer.Ordinal)
-        ?? new HashSet<string>(StringComparer.Ordinal);
+        _collectionMembershipEditor.GetFeedIdsForCollection(collectionId);
 
-    public async Task<bool> UpdateFeedCollectionsAsync(
+    public Task<bool> UpdateFeedCollectionsAsync(
         string feedId,
-        IReadOnlyCollection<string> collectionIds)
-    {
-        ErrorMessage = string.Empty;
-        if (Feeds.All(feed => feed.Id != feedId))
-        {
-            ErrorMessage = "That feed no longer exists in the catalog.";
-            return false;
-        }
+        IReadOnlyCollection<string> collectionIds) =>
+        _collectionMembershipEditor.UpdateFeedCollectionsAsync(feedId, collectionIds);
 
-        var requestedCollectionIds = collectionIds.ToHashSet(StringComparer.Ordinal);
-        if (requestedCollectionIds.Any(id => Collections.All(collection => collection.Id != id)))
-        {
-            ErrorMessage = "One or more selected collections no longer exist.";
-            return false;
-        }
-
-        var changes = Collections
-            .Select(collection => new CollectionMembershipChange(
-                collection.Id,
-                feedId,
-                requestedCollectionIds.Contains(collection.Id)))
-            .Where(change => GetCollectionIdsForFeed(feedId).Contains(change.CollectionId) != change.IsMember)
-            .ToArray();
-        return await ApplyCollectionMembershipChangesAsync(changes);
-    }
-
-    public async Task<bool> UpdateCollectionFeedsAsync(
+    public Task<bool> UpdateCollectionFeedsAsync(
         string collectionId,
-        IReadOnlyCollection<string> feedIds)
-    {
-        ErrorMessage = string.Empty;
-        if (Collections.All(collection => collection.Id != collectionId))
-        {
-            ErrorMessage = "That collection no longer exists.";
-            return false;
-        }
-
-        var requestedFeedIds = feedIds.ToHashSet(StringComparer.Ordinal);
-        if (requestedFeedIds.Any(id => Feeds.All(feed => feed.Id != id)))
-        {
-            ErrorMessage = "One or more selected feeds no longer exist in the catalog.";
-            return false;
-        }
-
-        var currentFeedIds = GetFeedIdsForCollection(collectionId);
-        var changes = Feeds
-            .Select(feed => new CollectionMembershipChange(
-                collectionId,
-                feed.Id,
-                requestedFeedIds.Contains(feed.Id)))
-            .Where(change => currentFeedIds.Contains(change.FeedId) != change.IsMember)
-            .ToArray();
-        return await ApplyCollectionMembershipChangesAsync(changes);
-    }
-
-    private async Task<bool> ApplyCollectionMembershipChangesAsync(
-        IReadOnlyCollection<CollectionMembershipChange> changes)
-    {
-        try
-        {
-            foreach (var change in changes)
-            {
-                if (change.IsMember)
-                {
-                    await _catalogService.AddFeedToCollectionAsync(_actor, change.CollectionId, change.FeedId);
-                }
-                else
-                {
-                    await _catalogService.RemoveFeedFromCollectionAsync(_actor, change.CollectionId, change.FeedId);
-                }
-            }
-        }
-        catch (ArgumentException exception)
-        {
-            ErrorMessage = $"Could not update collection memberships: {exception.Message}";
-            await RefreshAsync();
-            return false;
-        }
-        catch (InvalidOperationException exception)
-        {
-            ErrorMessage = $"Could not update collection memberships: {exception.Message}";
-            await RefreshAsync();
-            return false;
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            ErrorMessage = $"Could not update collection memberships: {exception.Message}";
-            await RefreshAsync();
-            return false;
-        }
-
-        await RefreshAsync();
-        return true;
-    }
-
-    private sealed record CollectionMembershipChange(string CollectionId, string FeedId, bool IsMember);
+        IReadOnlyCollection<string> feedIds) =>
+        _collectionMembershipEditor.UpdateCollectionFeedsAsync(collectionId, feedIds);
 }

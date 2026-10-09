@@ -19,88 +19,59 @@ public sealed record FeedImportSummary(
     int AddedCount,
     int SkippedCount,
     IReadOnlyList<FeedDuplicateCandidate> DuplicateCandidates);
+
 public sealed record CatalogFeedHealthCheckResult(
     bool IsSuccessful,
     DateTimeOffset CheckedAt,
     string? ErrorMessage = null);
 
-public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDownloader = null)
+public sealed class CatalogService
 {
+    private readonly ICatalogStore _store;
+    private readonly CatalogFeedService _feeds;
+    private readonly CatalogCategoryService _categories;
+    private readonly CatalogCollectionService _collections;
+
+    public CatalogService(ICatalogStore store, IFeedDownloader? feedDownloader = null)
+    {
+        _store = store;
+        _feeds = new CatalogFeedService(store, feedDownloader);
+        _categories = new CatalogCategoryService(store);
+        _collections = new CatalogCollectionService(store);
+    }
+
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
-        store.InitializeAsync(cancellationToken);
+        _store.InitializeAsync(cancellationToken);
 
     public Task<IReadOnlyList<CatalogFeed>> GetFeedsAsync(CancellationToken cancellationToken = default) =>
-        store.GetFeedsAsync(cancellationToken);
+        _store.GetFeedsAsync(cancellationToken);
 
     public Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default) =>
-        store.GetCategoriesAsync(cancellationToken);
+        _store.GetCategoriesAsync(cancellationToken);
 
     public Task<IReadOnlyList<CatalogCollection>> GetCollectionsAsync(CancellationToken cancellationToken = default) =>
-        store.GetCollectionsAsync(cancellationToken);
+        _store.GetCollectionsAsync(cancellationToken);
 
     public Task<IReadOnlyList<string>> GetCollectionFeedIdsAsync(
         string collectionId,
         CancellationToken cancellationToken = default) =>
-        store.GetCollectionFeedIdsAsync(collectionId, cancellationToken);
+        _store.GetCollectionFeedIdsAsync(collectionId, cancellationToken);
 
     public Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> GetCollectionFeedIdsByCollectionAsync(
         CancellationToken cancellationToken = default) =>
-        store.GetCollectionFeedIdsByCollectionAsync(cancellationToken);
+        _store.GetCollectionFeedIdsByCollectionAsync(cancellationToken);
 
-    public async Task<CatalogFeed> AddFeedAsync(
+    public Task<CatalogFeed> AddFeedAsync(
         Profile actor,
         string name,
         string feedUrl,
         string? description,
         string? categoryId,
         CancellationToken cancellationToken = default,
-        string? websiteUrl = null)
-    {
-        EnsureCatalogMaster(actor);
-        var normalizedName = RequireName(name, "feed");
-        if (!TryNormalizeFeedUrl(feedUrl, out var normalizedUrl))
-        {
-            throw new ArgumentException("Feed URLs must use HTTP or HTTPS.", nameof(feedUrl));
-        }
+        string? websiteUrl = null) =>
+        _feeds.AddFeedAsync(actor, name, feedUrl, description, categoryId, cancellationToken, websiteUrl);
 
-        string? normalizedWebsiteUrl = null;
-        if (!string.IsNullOrWhiteSpace(websiteUrl) && !TryNormalizeFeedUrl(websiteUrl, out normalizedWebsiteUrl))
-        {
-            throw new ArgumentException("Website URLs must use HTTP or HTTPS.", nameof(websiteUrl));
-        }
-
-        var existingFeeds = await store.GetFeedsAsync(cancellationToken);
-        if (existingFeeds.Any(feed => string.Equals(feed.FeedUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("That feed URL is already in the catalog.");
-        }
-
-        if (await store.FeedUrlExistsAsync(normalizedUrl, cancellationToken: cancellationToken))
-        {
-            throw new InvalidOperationException("That feed URL is already used by a profile's personal feed.");
-        }
-
-        if (categoryId is not null)
-        {
-            var categories = await store.GetCategoriesAsync(cancellationToken);
-            if (categories.All(category => category.Id != categoryId))
-            {
-                throw new ArgumentException("The selected category does not exist.", nameof(categoryId));
-            }
-        }
-
-        var feed = new CatalogFeed(
-            Guid.NewGuid().ToString("N"),
-            normalizedName,
-            normalizedUrl,
-            string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-            categoryId,
-            normalizedWebsiteUrl);
-        await store.AddFeedAsync(feed, cancellationToken);
-        return feed;
-    }
-
-    public async Task<CatalogFeed> UpdateFeedAsync(
+    public Task<CatalogFeed> UpdateFeedAsync(
         Profile actor,
         string feedId,
         string name,
@@ -108,379 +79,83 @@ public sealed class CatalogService(ICatalogStore store, IFeedDownloader? feedDow
         string? description,
         string? categoryId,
         CancellationToken cancellationToken = default,
-        string? websiteUrl = null)
-    {
-        EnsureCatalogMaster(actor);
-        var normalizedName = RequireName(name, "feed");
-        if (!TryNormalizeFeedUrl(feedUrl, out var normalizedUrl))
-        {
-            throw new ArgumentException("Feed URLs must use HTTP or HTTPS.", nameof(feedUrl));
-        }
+        string? websiteUrl = null) =>
+        _feeds.UpdateFeedAsync(actor, feedId, name, feedUrl, description, categoryId, cancellationToken, websiteUrl);
 
-        string? normalizedWebsiteUrl = null;
-        if (!string.IsNullOrWhiteSpace(websiteUrl) && !TryNormalizeFeedUrl(websiteUrl, out normalizedWebsiteUrl))
-        {
-            throw new ArgumentException("Website URLs must use HTTP or HTTPS.", nameof(websiteUrl));
-        }
-
-        var existingFeeds = await store.GetFeedsAsync(cancellationToken);
-        var existingFeed = existingFeeds.FirstOrDefault(feed => feed.Id == feedId);
-        if (existingFeed is null)
-        {
-            throw new InvalidOperationException("That feed no longer exists in the catalog.");
-        }
-
-        if (existingFeeds.Any(feed => feed.Id != feedId &&
-            string.Equals(feed.FeedUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("That feed URL is already in the catalog.");
-        }
-
-        if (await store.FeedUrlExistsAsync(normalizedUrl, feedId, cancellationToken))
-        {
-            throw new InvalidOperationException("That feed URL is already used by another feed.");
-        }
-
-        if (categoryId is not null)
-        {
-            var categories = await store.GetCategoriesAsync(cancellationToken);
-            if (categories.All(category => category.Id != categoryId))
-            {
-                throw new ArgumentException("The selected category does not exist.", nameof(categoryId));
-            }
-        }
-
-        var updatedFeed = new CatalogFeed(
-            feedId,
-            normalizedName,
-            normalizedUrl,
-            string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-            categoryId,
-            normalizedWebsiteUrl,
-            existingFeed.LastHealthCheckedAt,
-            existingFeed.LastHealthCheckSucceeded);
-        await store.UpdateFeedAsync(updatedFeed, cancellationToken);
-        return updatedFeed;
-    }
-
-    public async Task<CatalogFeedHealthCheckResult> CheckFeedHealthAsync(
+    public Task<CatalogFeedHealthCheckResult> CheckFeedHealthAsync(
         Profile actor,
         string feedId,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        if (feedDownloader is null)
-        {
-            throw new InvalidOperationException("Feed health checks are unavailable.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _feeds.CheckFeedHealthAsync(actor, feedId, cancellationToken);
 
-        var feed = (await store.GetFeedsAsync(cancellationToken))
-            .FirstOrDefault(candidate => candidate.Id == feedId)
-            ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
-
-        var isSuccessful = false;
-        string? errorMessage = null;
-        try
-        {
-            await feedDownloader.DownloadAsync(feed, cancellationToken);
-            isSuccessful = true;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            errorMessage = exception.ToString();
-        }
-
-        var checkedAt = DateTimeOffset.UtcNow;
-        await store.UpdateFeedAsync(feed with
-        {
-            LastHealthCheckedAt = checkedAt,
-            LastHealthCheckSucceeded = isSuccessful
-        }, cancellationToken);
-        return new CatalogFeedHealthCheckResult(isSuccessful, checkedAt, errorMessage);
-    }
-
-    public async Task<FeedImportSummary> ImportFeedsAsync(
+    public Task<FeedImportSummary> ImportFeedsAsync(
         Profile actor,
         IEnumerable<OpmlFeed> importedFeeds,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        ArgumentNullException.ThrowIfNull(importedFeeds);
+        CancellationToken cancellationToken = default) =>
+        _feeds.ImportFeedsAsync(actor, importedFeeds, cancellationToken);
 
-        var categories = (await store.GetCategoriesAsync(cancellationToken)).ToList();
-        var existingFeedsByUrl = new Dictionary<string, CatalogFeed>(StringComparer.OrdinalIgnoreCase);
-        var existingFeedsByName = new Dictionary<string, List<CatalogFeed>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var feed in await store.GetFeedsAsync(cancellationToken))
-        {
-            if (TryNormalizeFeedUrl(feed.FeedUrl, out var normalizedUrl))
-            {
-                existingFeedsByUrl.TryAdd(normalizedUrl, feed);
-            }
-
-            if (!existingFeedsByName.TryGetValue(feed.Name.Trim(), out var sameNameFeeds))
-            {
-                sameNameFeeds = [];
-                existingFeedsByName.Add(feed.Name.Trim(), sameNameFeeds);
-            }
-
-            sameNameFeeds.Add(feed);
-        }
-
-        var addedCount = 0;
-        var skippedCount = 0;
-        var duplicateCandidates = new List<FeedDuplicateCandidate>();
-        foreach (var importedFeed in importedFeeds)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(importedFeed.Name) ||
-                !TryNormalizeFeedUrl(importedFeed.FeedUrl, out var normalizedUrl))
-            {
-                skippedCount++;
-                continue;
-            }
-
-            var normalizedName = RequireName(importedFeed.Name, "feed");
-            if (existingFeedsByUrl.TryGetValue(normalizedUrl, out var urlMatch))
-            {
-                duplicateCandidates.Add(new FeedDuplicateCandidate(
-                    FeedDuplicateKind.ExactUrl,
-                    normalizedName,
-                    normalizedUrl,
-                    urlMatch.Name,
-                    urlMatch.FeedUrl));
-                skippedCount++;
-                continue;
-            }
-
-            if (await store.FeedUrlExistsAsync(normalizedUrl, cancellationToken: cancellationToken))
-            {
-                duplicateCandidates.Add(new FeedDuplicateCandidate(
-                    FeedDuplicateKind.ExactUrl,
-                    normalizedName,
-                    normalizedUrl,
-                    "Personal profile feed",
-                    normalizedUrl));
-                skippedCount++;
-                continue;
-            }
-
-            if (existingFeedsByName.TryGetValue(normalizedName, out var sameNameMatches))
-            {
-                duplicateCandidates.AddRange(sameNameMatches.Select(match => new FeedDuplicateCandidate(
-                    FeedDuplicateKind.SameNameDifferentUrl,
-                    normalizedName,
-                    normalizedUrl,
-                    match.Name,
-                    match.FeedUrl)));
-            }
-
-            string? categoryId = null;
-            if (!string.IsNullOrWhiteSpace(importedFeed.CategoryName))
-            {
-                var categoryName = importedFeed.CategoryName.Trim();
-                var category = categories.FirstOrDefault(item =>
-                    string.Equals(item.Name, categoryName, StringComparison.OrdinalIgnoreCase));
-                if (category is null)
-                {
-                    category = new CatalogCategory(Guid.NewGuid().ToString("N"), RequireName(categoryName, "category"));
-                    await store.AddCategoryAsync(category, cancellationToken);
-                    categories.Add(category);
-                }
-
-                categoryId = category.Id;
-            }
-
-            var feed = new CatalogFeed(
-                Guid.NewGuid().ToString("N"),
-                normalizedName,
-                normalizedUrl,
-                string.IsNullOrWhiteSpace(importedFeed.Description) ? null : importedFeed.Description.Trim(),
-                categoryId,
-                TryNormalizeFeedUrl(importedFeed.WebsiteUrl, out var websiteUrl) ? websiteUrl : null);
-            await store.AddFeedAsync(feed, cancellationToken);
-            existingFeedsByUrl.Add(normalizedUrl, feed);
-            if (!existingFeedsByName.TryGetValue(normalizedName, out sameNameMatches))
-            {
-                sameNameMatches = [];
-                existingFeedsByName.Add(normalizedName, sameNameMatches);
-            }
-
-            sameNameMatches.Add(feed);
-            addedCount++;
-        }
-
-        return new FeedImportSummary(addedCount, skippedCount, duplicateCandidates);
-    }
-
-    public async Task<CatalogCategory> AddCategoryAsync(
+    public Task<CatalogCategory> AddCategoryAsync(
         Profile actor,
         string name,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        var normalizedName = RequireName(name, "category");
-        var categories = await store.GetCategoriesAsync(cancellationToken);
-        if (categories.Any(category => string.Equals(category.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("That category already exists.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _categories.AddCategoryAsync(actor, name, cancellationToken);
 
-        var category = new CatalogCategory(Guid.NewGuid().ToString("N"), normalizedName);
-        await store.AddCategoryAsync(category, cancellationToken);
-        return category;
-    }
-
-    public async Task<CatalogCategory> UpdateCategoryAsync(
+    public Task<CatalogCategory> UpdateCategoryAsync(
         Profile actor,
         string categoryId,
         string name,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        var normalizedName = RequireName(name, "category");
-        var categories = await store.GetCategoriesAsync(cancellationToken);
-        var existingCategory = categories.FirstOrDefault(category => category.Id == categoryId)
-            ?? throw new InvalidOperationException("That category no longer exists.");
-        if (categories.Any(category => category.Id != categoryId &&
-            string.Equals(category.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("That category already exists.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _categories.UpdateCategoryAsync(actor, categoryId, name, cancellationToken);
 
-        var updatedCategory = existingCategory with { Name = normalizedName };
-        await store.UpdateCategoryAsync(updatedCategory, cancellationToken);
-        return updatedCategory;
-    }
-
-    public async Task MergeCategoriesAsync(
+    public Task MergeCategoriesAsync(
         Profile actor,
         string sourceCategoryId,
         string targetCategoryId,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        if (string.Equals(sourceCategoryId, targetCategoryId, StringComparison.Ordinal))
-        {
-            throw new ArgumentException("Choose a different category to merge into.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _categories.MergeCategoriesAsync(actor, sourceCategoryId, targetCategoryId, cancellationToken);
 
-        var categories = await store.GetCategoriesAsync(cancellationToken);
-        if (categories.All(category => category.Id != sourceCategoryId) ||
-            categories.All(category => category.Id != targetCategoryId))
-        {
-            throw new InvalidOperationException("The source or target category no longer exists.");
-        }
+    public Task DeleteCategoryAsync(
+        Profile actor,
+        string categoryId,
+        CancellationToken cancellationToken = default) =>
+        _categories.DeleteCategoryAsync(actor, categoryId, cancellationToken);
 
-        await store.MergeCategoriesAsync(sourceCategoryId, targetCategoryId, cancellationToken);
-    }
-
-    public async Task<CatalogCollection> AddCollectionAsync(
+    public Task<CatalogCollection> AddCollectionAsync(
         Profile actor,
         string name,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        var normalizedName = RequireName(name, "collection");
-        var collections = await store.GetCollectionsAsync(cancellationToken);
-        if (collections.Any(collection => string.Equals(collection.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("That collection already exists.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _collections.AddCollectionAsync(actor, name, cancellationToken);
 
-        var collection = new CatalogCollection(Guid.NewGuid().ToString("N"), normalizedName);
-        await store.AddCollectionAsync(collection, cancellationToken);
-        return collection;
-    }
-
-    public async Task<CatalogCollection> UpdateCollectionAsync(
+    public Task<CatalogCollection> UpdateCollectionAsync(
         Profile actor,
         string collectionId,
         string name,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        var normalizedName = RequireName(name, "collection");
-        var collections = await store.GetCollectionsAsync(cancellationToken);
-        var existingCollection = collections.FirstOrDefault(collection => collection.Id == collectionId)
-            ?? throw new InvalidOperationException("That collection no longer exists.");
-        if (collections.Any(collection => collection.Id != collectionId &&
-            string.Equals(collection.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException("That collection already exists.");
-        }
+        CancellationToken cancellationToken = default) =>
+        _collections.UpdateCollectionAsync(actor, collectionId, name, cancellationToken);
 
-        var updatedCollection = existingCollection with { Name = normalizedName };
-        await store.UpdateCollectionAsync(updatedCollection, cancellationToken);
-        return updatedCollection;
-    }
+    public Task DeleteCollectionAsync(
+        Profile actor,
+        string collectionId,
+        CancellationToken cancellationToken = default) =>
+        _collections.DeleteCollectionAsync(actor, collectionId, cancellationToken);
 
-    public async Task DeleteFeedAsync(Profile actor, string feedId, CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        await store.DeleteFeedAsync(feedId, cancellationToken);
-    }
-
-    public async Task DeleteCategoryAsync(Profile actor, string categoryId, CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        await store.DeleteCategoryAsync(categoryId, cancellationToken);
-    }
-
-    public async Task DeleteCollectionAsync(Profile actor, string collectionId, CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        await store.DeleteCollectionAsync(collectionId, cancellationToken);
-    }
-
-    public async Task AddFeedToCollectionAsync(
+    public Task AddFeedToCollectionAsync(
         Profile actor,
         string collectionId,
         string feedId,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        var collections = await store.GetCollectionsAsync(cancellationToken);
-        var feeds = await store.GetFeedsAsync(cancellationToken);
-        if (collections.All(collection => collection.Id != collectionId) || feeds.All(feed => feed.Id != feedId))
-        {
-            throw new ArgumentException("The collection or feed does not exist.");
-        }
-
-        await store.AddFeedToCollectionAsync(collectionId, feedId, cancellationToken);
-    }
+        CancellationToken cancellationToken = default) =>
+        _collections.AddFeedToCollectionAsync(actor, collectionId, feedId, cancellationToken);
 
     public Task RemoveFeedFromCollectionAsync(
         Profile actor,
         string collectionId,
         string feedId,
-        CancellationToken cancellationToken = default)
-    {
-        EnsureCatalogMaster(actor);
-        return store.RemoveFeedFromCollectionAsync(collectionId, feedId, cancellationToken);
-    }
+        CancellationToken cancellationToken = default) =>
+        _collections.RemoveFeedFromCollectionAsync(actor, collectionId, feedId, cancellationToken);
 
-    private static void EnsureCatalogMaster(Profile actor)
-    {
-        if (!actor.IsCatalogMaster || actor.Id != Profile.CreateCatalogMaster().Id)
-        {
-            throw new UnauthorizedAccessException("Only Catalog Master can modify the shared feed catalog.");
-        }
-    }
-
-    private static string RequireName(string name, string entryType)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException($"A {entryType} name is required.", nameof(name));
-        }
-
-        return name.Trim();
-    }
-
-    private static bool TryNormalizeFeedUrl(string? feedUrl, out string normalizedUrl)
-        => FeedUrlNormalizer.TryNormalize(feedUrl, out normalizedUrl);
+    public Task DeleteFeedAsync(
+        Profile actor,
+        string feedId,
+        CancellationToken cancellationToken = default) =>
+        _feeds.DeleteFeedAsync(actor, feedId, cancellationToken);
 }

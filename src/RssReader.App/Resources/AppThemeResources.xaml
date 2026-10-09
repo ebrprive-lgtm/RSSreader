@@ -1,0 +1,47 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:local="clr-namespace:RssReader.App">
+        <Style TargetType="{x:Type ListBoxItem}">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <SolidColorBrush x:Key="WindowBrush" Color="#F7F8F8" />
+
+        <SolidColorBrush x:Key="SidebarBrush" Color="#F1F3F3" />
+
+        <SolidColorBrush x:Key="TextBrush" Color="#202927" />
+
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#687773" />
+
+        <SolidColorBrush x:Key="AccentBrush" Color="#476F63" />
+
+        <SolidColorBrush x:Key="AccentWashBrush" Color="#E4ECE8" />
+
+        <SolidColorBrush x:Key="ContentBrush" Color="#FFFFFF" />
+
+        <SolidColorBrush x:Key="NeutralHoverBrush" Color="#E8EEEB" />
+
+        <SolidColorBrush x:Key="NeutralPressedBrush" Color="#DCE4DF" />
+
+        <SolidColorBrush x:Key="WindowFrameBrush" Color="#B8C4BE" />
+
+        <SolidColorBrush x:Key="ControlBorderBrush" Color="#D8DFDB" />
+
+        <SolidColorBrush x:Key="SeparatorBrush" Color="#E3E7E5" />
+
+        <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#3B5D53" />
+
+        <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#314E45" />
+
+        <SolidColorBrush x:Key="DisabledSurfaceBrush" Color="#DCE5E0" />
+
+        <SolidColorBrush x:Key="DestructiveBrush" Color="#A33C35" />
+
+        <SolidColorBrush x:Key="DestructiveWashBrush" Color="#FCE8E6" />
+
+        <SolidColorBrush x:Key="SuccessBrush" Color="#218739" />
+
+        <SolidColorBrush x:Key="WarningBrush" Color="#A65B00" />
+</ResourceDictionary>

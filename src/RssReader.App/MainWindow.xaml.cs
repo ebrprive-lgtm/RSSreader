@@ -22,7 +22,6 @@ public partial class MainWindow : Window
     private MainWindowViewModel? _viewModel;
     private ArticleRowViewModel? _articleToRestoreFocus;
     private string? _articleRouteWhenOpened;
-    private bool _isSidebarPeekOpen;
 
     public MainWindow() : this(new MainWindowViewModel(Profile.CreateRegular("Reader")))
     {
@@ -50,15 +49,24 @@ public partial class MainWindow : Window
         }
 
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
-        SelectedArticleHtmlViewer.ExternalLinkRequested += ArticleHtmlViewer_ExternalLinkRequested;
-        UpdateSelectedArticleContent();
+        SidebarView.LogoutRequested += SidebarView_LogoutRequested;
+        SidebarView.PreferencesRequested += SidebarView_PreferencesRequested;
+        ArticleReaderView.SourceLinkRequested += SourceLink_RequestNavigate;
+        CatalogAdminView.SourceLinkRequested += SourceLink_RequestNavigate;
+        ArticleReaderView.RawFeedRequested += ShowRawFeed_Click;
+        ArticleReaderView.ExternalLinkRequested += ArticleHtmlViewer_ExternalLinkRequested;
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
         Closing += (_, _) => SaveWindowPlacement();
         Closed += (_, _) =>
         {
             _autoRefreshTimer.Stop();
             viewModel.PropertyChanged -= ViewModel_PropertyChanged;
-            SelectedArticleHtmlViewer.ExternalLinkRequested -= ArticleHtmlViewer_ExternalLinkRequested;
+            SidebarView.LogoutRequested -= SidebarView_LogoutRequested;
+            SidebarView.PreferencesRequested -= SidebarView_PreferencesRequested;
+            ArticleReaderView.SourceLinkRequested -= SourceLink_RequestNavigate;
+            CatalogAdminView.SourceLinkRequested -= SourceLink_RequestNavigate;
+            ArticleReaderView.RawFeedRequested -= ShowRawFeed_Click;
+            ArticleReaderView.ExternalLinkRequested -= ArticleHtmlViewer_ExternalLinkRequested;
         };
         UpdateSidebarPresentation();
         ConfigureAutoRefreshTimer();
@@ -181,6 +189,10 @@ public partial class MainWindow : Window
 
     public event Action? PreferencesRequested;
 
+    private void SidebarView_LogoutRequested() => LogoutRequested?.Invoke();
+
+    private void SidebarView_PreferencesRequested() => PreferencesRequested?.Invoke();
+
     private void MinimizeWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void MaximizeWindow_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Maximized;
@@ -216,37 +228,10 @@ public partial class MainWindow : Window
             contentCornerRadius);
     }
 
-    private async void ManageFeedTags_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel is null || sender is not FrameworkElement { DataContext: SidebarLink { IsFeedEntry: true } feedLink })
-        {
-            return;
-        }
-
-        var feedId = feedLink.Route["feed:".Length..];
-        try
-        {
-            var tagData = await _viewModel.GetFeedTagEditorDataAsync(feedId);
-            var dialog = new FeedTagEditorWindow(feedLink.Label, tagData.AvailableTags, tagData.AssignedTags)
-            {
-                Owner = this
-            };
-            if (dialog.ShowDialog() == true)
-            {
-                await _viewModel.UpdateFeedTagsAsync(feedId, dialog.SelectedTagNames);
-            }
-        }
-        catch (Exception exception)
-        {
-            MessageDialogWindow.Show(this, exception.Message, MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
     private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainWindowViewModel.SelectedArticle))
         {
-            UpdateSelectedArticleContent();
             if (_viewModel?.SelectedArticle is { } selectedArticle)
             {
                 _articleToRestoreFocus = selectedArticle;
@@ -259,13 +244,8 @@ public partial class MainWindow : Window
                 _articleRouteWhenOpened = null;
                 Dispatcher.BeginInvoke(
                     DispatcherPriority.Input,
-                    new Action(() => RestoreArticleListFocus(articleToRestore)));
+                    new Action(() => ArticleListView.RestoreArticleFocus(articleToRestore)));
             }
-        }
-
-        if (e.PropertyName == nameof(MainWindowViewModel.LimitArticleWidth))
-        {
-            UpdateSelectedArticleContent();
         }
 
         if (e.PropertyName == nameof(MainWindowViewModel.AutoRefreshIntervalMinutes))
@@ -276,59 +256,6 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(MainWindowViewModel.IsSidebarPinned))
         {
             UpdateSidebarPresentation();
-        }
-    }
-
-    private void UpdateSelectedArticleContent()
-    {
-        var article = _viewModel?.SelectedArticle;
-        SelectedArticleHtmlViewer.SetArticle(
-            article?.Content,
-            article?.Summary,
-            article?.Link,
-            article?.FeedUrl,
-            _viewModel?.LimitArticleWidth ?? true,
-            article?.CardImageUrl);
-    }
-
-    private void RestoreArticleListFocus(ArticleRowViewModel article)
-    {
-        if (_viewModel?.IsArticleListVisible != true)
-        {
-            return;
-        }
-
-        var articleList = new[]
-        {
-            ArticleRowsList,
-            ArticleMagazineList,
-            ArticleCardsList,
-            ArticleFolderCardsList
-        }.FirstOrDefault(list => list.IsVisible);
-        if (articleList is null)
-        {
-            return;
-        }
-
-        if (!_viewModel.VisibleArticles.Contains(article))
-        {
-            articleList.Focus();
-            return;
-        }
-
-        articleList.ScrollIntoView(article);
-        articleList.UpdateLayout();
-        if (articleList.ItemContainerGenerator.ContainerFromItem(article) is ListBoxItem articleContainer)
-        {
-            var articleAction = FindVisualDescendant<Button>(articleContainer);
-            if (articleAction?.Focus() != true)
-            {
-                articleList.Focus();
-            }
-        }
-        else
-        {
-            articleList.Focus();
         }
     }
 
@@ -352,162 +279,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateSidebarPresentation()
-    {
-        if (_viewModel is null)
-        {
-            return;
-        }
+    private void UpdateSidebarPresentation() => SidebarView.UpdatePresentation();
 
-        var sidebarActionName = _viewModel.IsSidebarPinned ? "Hide sidebar" : "Pin sidebar";
-        SidebarPinButton.ToolTip = sidebarActionName;
-        AutomationProperties.SetName(SidebarPinButton, sidebarActionName);
-        SidebarPeekButton.ToolTip = sidebarActionName;
-        AutomationProperties.SetName(SidebarPeekButton, sidebarActionName);
-        if (_viewModel.IsSidebarPinned)
-        {
-            _isSidebarPeekOpen = false;
-            SidebarPeekButton.Visibility = Visibility.Collapsed;
-            SidebarPanel.Visibility = Visibility.Visible;
-            SetSidebarOffset(0, animate: false);
-        }
-        else
-        {
-            SidebarPeekButton.Visibility = Visibility.Visible;
-            if (!_isSidebarPeekOpen)
-            {
-                SidebarPanel.Visibility = Visibility.Collapsed;
-                SetSidebarOffset(-_viewModel.SidebarPanelWidth, animate: false);
-            }
-        }
-    }
-
-    private void SidebarPanel_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => ShowSidebarPeek();
-
-    private void SidebarPeekButton_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) => ShowSidebarPeek();
-
-    private void SidebarLinkRoot_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (sender is Grid { DataContext: SidebarLink link } row && (link.IsFolder || link.IsFeedEntry))
-        {
-            row.Tag = true;
-        }
-    }
-
-    private void SidebarLinkRoot_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (sender is Grid { DataContext: SidebarLink link } row && (link.IsFolder || link.IsFeedEntry))
-        {
-            row.Tag = false;
-        }
-    }
-
-    private void SidebarPanel_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => ScheduleSidebarPeekClose();
-
-    private void SidebarPeekButton_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) => ScheduleSidebarPeekClose();
-
-    private void ShowSidebarPeek()
-    {
-        if (_viewModel is null || _viewModel.IsSidebarPinned)
-        {
-            return;
-        }
-
-        var wasCollapsed = SidebarPanel.Visibility == Visibility.Collapsed;
-        _isSidebarPeekOpen = true;
-        if (wasCollapsed)
-        {
-            SetSidebarOffset(-_viewModel.SidebarPanelWidth, animate: false);
-        }
-
-        SidebarPanel.Visibility = Visibility.Visible;
-        SetSidebarOffset(0, animate: true);
-    }
-
-    private void ScheduleSidebarPeekClose()
-    {
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-        {
-            if (_viewModel is null || _viewModel.IsSidebarPinned || SidebarPanel.IsMouseOver || SidebarPeekButton.IsMouseOver)
-            {
-                return;
-            }
-
-            _isSidebarPeekOpen = false;
-            SidebarPeekButton.ToolTip = "Show sidebar";
-            var animation = CreateSidebarAnimation(-_viewModel.SidebarPanelWidth);
-            animation.Completed += (_, _) =>
-            {
-                if (!_isSidebarPeekOpen && !_viewModel.IsSidebarPinned)
-                {
-                    SidebarPanel.Visibility = Visibility.Collapsed;
-                }
-            };
-            ((TranslateTransform)SidebarPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animation);
-        }));
-    }
-
-    private void SetSidebarOffset(double offset, bool animate)
-    {
-        var transform = (TranslateTransform)SidebarPanel.RenderTransform;
-        if (animate)
-        {
-            transform.BeginAnimation(TranslateTransform.XProperty, CreateSidebarAnimation(offset));
-            return;
-        }
-
-        transform.BeginAnimation(TranslateTransform.XProperty, null);
-        transform.X = offset;
-    }
-
-    private static DoubleAnimation CreateSidebarAnimation(double offset) => new(offset, TimeSpan.FromMilliseconds(180))
-    {
-        EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-    };
-
-    private void ProfileMenuButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { ContextMenu: { } menu } button)
-        {
-            menu.PlacementTarget = button;
-            menu.Placement = PlacementMode.Bottom;
-            menu.IsOpen = true;
-        }
-    }
-
-    private void CatalogActionsButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button { ContextMenu: { } menu } button)
-        {
-            menu.PlacementTarget = button;
-            menu.Placement = PlacementMode.Bottom;
-            menu.IsOpen = true;
-        }
-    }
-
-    private void CopyCatalogFeedCheckError_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not MenuItem { DataContext: TextBlock errorText } ||
-            string.IsNullOrEmpty(errorText.Text))
-        {
-            return;
-        }
-
-        try
-        {
-            Clipboard.SetText(errorText.Text);
-        }
-        catch (ExternalException exception)
-        {
-            Trace.TraceError($"Could not copy the catalog feed-check error to the clipboard: {exception}");
-        }
-    }
-
-    private void PreferencesMenuItem_Click(object sender, RoutedEventArgs e) => PreferencesRequested?.Invoke();
-
-    private void LogoutMenuItem_Click(object sender, RoutedEventArgs e) => LogoutRequested?.Invoke();
-
-    private void SourceLink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+    private void SourceLink_RequestNavigate(object? sender, RequestNavigateEventArgs e)
     {
         OpenExternalUri(e.Uri);
         e.Handled = true;
@@ -573,378 +347,5 @@ public partial class MainWindow : Window
             Owner = this
         };
         return Task.FromResult(dialog.ShowDialog() == true ? dialog.SelectedFolder : null);
-    }
-
-    private async void ImportOpml_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        var dialog = new OpenFileDialog
-        {
-            Title = "Import feed list",
-            Filter = "OPML files (*.opml;*.xml)|*.opml;*.xml|All files (*.*)|*.*",
-            CheckFileExists = true,
-            Multiselect = false
-        };
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        using var stream = dialog.OpenFile();
-        await catalogManagement.ImportOpmlAsync(stream);
-    }
-
-    private async void AddPersonalFeed_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel is null || !_viewModel.IsPersonalFeedManagementVisible)
-        {
-            return;
-        }
-
-        var dialog = new ProfileFeedEntryWindow { Owner = this };
-        if (dialog.ShowDialog() != true)
-        {
-            return;
-        }
-
-        try
-        {
-            await _viewModel.AddPersonalFeedAsync(dialog.FeedName, dialog.FeedUrl);
-        }
-        catch (Exception exception)
-        {
-            MessageDialogWindow.Show(
-                this,
-                $"The personal feed could not be added.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
-    private async void ImportPersonalOpml_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel is null || !_viewModel.IsPersonalFeedManagementVisible)
-        {
-            return;
-        }
-
-        var dialog = new OpenFileDialog
-        {
-            Title = "Import feeds to your profile",
-            Filter = "OPML files (*.opml;*.xml)|*.opml;*.xml|All files (*.*)|*.*",
-            CheckFileExists = true,
-            Multiselect = false
-        };
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        try
-        {
-            await using var stream = dialog.OpenFile();
-            var result = await _viewModel.ImportPersonalFeedsAsync(stream);
-            MessageDialogWindow.Show(
-                this,
-                $"Added {result.AddedCount} feed(s). Skipped {result.DuplicateCount} duplicate(s) and {result.SkippedCount} invalid or unsupported outline(s).",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        catch (Exception exception)
-        {
-            MessageDialogWindow.Show(
-                this,
-                $"The OPML file could not be imported.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
-    private async void ExportPersonalOpml_Click(object sender, RoutedEventArgs e)
-    {
-        if (_viewModel is null || !_viewModel.IsPersonalFeedManagementVisible)
-        {
-            return;
-        }
-
-        var dialog = new SaveFileDialog
-        {
-            Title = "Export your feeds",
-            Filter = "OPML files (*.opml)|*.opml",
-            DefaultExt = ".opml",
-            AddExtension = true,
-            FileName = "rss-reader-feeds.opml"
-        };
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        try
-        {
-            var opml = await _viewModel.ExportPersonalFeedsAsync();
-            await File.WriteAllTextAsync(dialog.FileName, opml, new System.Text.UTF8Encoding(false));
-        }
-        catch (Exception exception)
-        {
-            MessageDialogWindow.Show(
-                this,
-                $"Your feeds could not be exported.{Environment.NewLine}{Environment.NewLine}{exception.Message}",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
-    private void AddFeed_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Feed);
-
-    private void EditFeed_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
-            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        var feedList = (ListBox?)FindName("CatalogManagementFeedList");
-        var scrollOffset = feedList is null
-            ? null
-            : FindVisualDescendant<ScrollViewer>(feedList)?.VerticalOffset;
-        catalogManagement.PrepareFeedEdit(feed);
-        ShowCatalogEntry(CatalogEntryKind.Feed, isEditingFeed: true);
-
-        if (scrollOffset is { } offset)
-        {
-            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
-            {
-                if (FindName("CatalogManagementFeedList") is ListBox updatedFeedList)
-                {
-                    FindVisualDescendant<ScrollViewer>(updatedFeedList)?.ScrollToVerticalOffset(offset);
-                }
-            }));
-        }
-    }
-
-    private void PreviewManagedFeed_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
-            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        var dialog = new CatalogFeedPreviewWindow(
-            feed,
-            token => catalogManagement.PreviewFeedAsync(feed, token),
-            () => catalogManagement.DeleteFeedCommand.ExecuteAsync(feed),
-            () => catalogManagement.CheckFeedHealthCommand.ExecuteAsync(feed),
-            token => catalogManagement.GetRawFeedXmlAsync(feed, token))
-        {
-            Owner = this
-        };
-        dialog.ShowDialog();
-    }
-
-    private void PreviewCatalogFeed_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
-            DataContext is not MainWindowViewModel viewModel)
-        {
-            return;
-        }
-
-        var dialog = new CatalogFeedPreviewWindow(
-            feed,
-            token => viewModel.LoadCatalogFeedPreviewAsync(feed, token),
-            loadRawFeedXml: token => viewModel.LoadCatalogFeedRawXmlAsync(feed, token))
-        {
-            Owner = this
-        };
-        dialog.ShowDialog();
-    }
-
-    private void RenameCategory_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogCategory category } ||
-            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        catalogManagement.PrepareCategoryEdit(category);
-        ShowCatalogEntry(CatalogEntryKind.Category, isEditingCategory: true);
-    }
-
-    private void AddCategory_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Category);
-
-    private void AddCollection_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Collection);
-
-    private void RenameCollection_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogCollection collection } ||
-            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        catalogManagement.PrepareCollectionEdit(collection);
-        ShowCatalogEntry(CatalogEntryKind.Collection, isEditingCollection: true);
-    }
-
-    private async void ManageFeedCollections_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
-            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        var memberships = catalogManagement.GetCollectionIdsForFeed(feed.Id);
-        var choices = catalogManagement.Collections
-            .OrderBy(collection => collection.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(collection =>
-            {
-                var count = catalogManagement.GetFeedIdsForCollection(collection.Id).Count;
-                var feedLabel = count == 1 ? "1 feed" : $"{count} feeds";
-                return new CatalogMembershipPickerItem(
-                    collection.Id,
-                    collection.Name,
-                    feedLabel,
-                    memberships.Contains(collection.Id));
-            });
-        var picker = new CatalogMembershipPickerWindow(
-            $"Collections for {feed.Name}",
-            "Choose every collection that should include this feed. Categories and subscriptions are unchanged.",
-            choices,
-            owner => CreateCollectionPickerItemAsync(catalogManagement, owner))
-        {
-            Owner = this
-        };
-        if (picker.ShowDialog() != true ||
-            await catalogManagement.UpdateFeedCollectionsAsync(feed.Id, picker.SelectedIds))
-        {
-            return;
-        }
-
-        MessageDialogWindow.Show(this, catalogManagement.ErrorMessage, MessageBoxButton.OK, MessageBoxImage.Error);
-    }
-
-    private Task<CatalogMembershipPickerItem?> CreateCollectionPickerItemAsync(
-        CatalogManagementViewModel catalogManagement,
-        Window owner)
-    {
-        var existingCollectionIds = catalogManagement.Collections
-            .Select(collection => collection.Id)
-            .ToHashSet(StringComparer.Ordinal);
-        var dialog = new CatalogEntryWindow(catalogManagement, CatalogEntryKind.Collection)
-        {
-            Owner = owner
-        };
-        if (dialog.ShowDialog() != true)
-        {
-            return Task.FromResult<CatalogMembershipPickerItem?>(null);
-        }
-
-        var createdCollection = catalogManagement.Collections
-            .FirstOrDefault(collection => !existingCollectionIds.Contains(collection.Id));
-        if (createdCollection is null)
-        {
-            MessageDialogWindow.Show(
-                owner,
-                "The collection dialog closed successfully, but the new collection could not be found.",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-            return Task.FromResult<CatalogMembershipPickerItem?>(null);
-        }
-
-        return Task.FromResult<CatalogMembershipPickerItem?>(new CatalogMembershipPickerItem(
-            createdCollection.Id,
-            createdCollection.Name,
-            "0 feeds",
-            isSelected: false));
-    }
-
-    private async void ManageCollectionFeeds_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: CatalogCollection collection } ||
-            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        var memberships = catalogManagement.GetFeedIdsForCollection(collection.Id);
-        var choices = catalogManagement.Feeds
-            .OrderBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(feed =>
-            {
-                var details = string.Join(
-                    " · ",
-                    new[] { feed.CategoryName ?? "Uncategorized", feed.Description, feed.WebsiteUrl }
-                        .Where(value => !string.IsNullOrWhiteSpace(value)));
-                return new CatalogMembershipPickerItem(
-                    feed.Id,
-                    feed.Name,
-                    details,
-                    memberships.Contains(feed.Id));
-            });
-        var picker = new CatalogMembershipPickerWindow(
-            $"Feeds in {collection.Name}",
-            "Select every feed that belongs in this collection. Search, then select or clear all visible results.",
-            choices)
-        {
-            Owner = this
-        };
-        if (picker.ShowDialog() != true ||
-            await catalogManagement.UpdateCollectionFeedsAsync(collection.Id, picker.SelectedIds))
-        {
-            return;
-        }
-
-        MessageDialogWindow.Show(this, catalogManagement.ErrorMessage, MessageBoxButton.OK, MessageBoxImage.Error);
-    }
-
-    private void ShowCatalogEntry(
-        CatalogEntryKind entryKind,
-        bool isEditingFeed = false,
-        bool isEditingCategory = false,
-        bool isEditingCollection = false)
-    {
-        if (DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
-        {
-            return;
-        }
-
-        var dialog = new CatalogEntryWindow(
-            catalogManagement,
-            entryKind,
-            isEditingFeed,
-            isEditingCategory,
-            isEditingCollection)
-        {
-            Owner = this
-        };
-        dialog.ShowDialog();
-    }
-
-    private static T? FindVisualDescendant<T>(DependencyObject parent) where T : DependencyObject
-    {
-        if (parent is T match)
-        {
-            return match;
-        }
-
-        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, index);
-            if (FindVisualDescendant<T>(child) is { } descendant)
-            {
-                return descendant;
-            }
-        }
-
-        return null;
     }
 }

@@ -26,6 +26,22 @@ public sealed class MainWindowViewModelTests
 {
     public TestContext TestContext { get; set; } = null!;
 
+    private static T FindReaderElement<T>(MainWindow window, string name) where T : class
+    {
+        var readerView = window.FindName("ArticleReaderView") as FrameworkElement
+            ?? throw new AssertFailedException("The article reader view was not found.");
+        return readerView.FindName(name) as T
+            ?? throw new AssertFailedException($"The article reader element '{name}' was not found.");
+    }
+
+    private static T FindArticleListElement<T>(MainWindow window, string name) where T : class
+    {
+        var articleListView = window.FindName("ArticleListView") as FrameworkElement
+            ?? throw new AssertFailedException("The article list view was not found.");
+        return articleListView.FindName(name) as T
+            ?? throw new AssertFailedException($"The article list element '{name}' was not found.");
+    }
+
     [TestMethod]
     public void CollectionMembershipPickerSearchesBulkSelectsAndAddsCollections()
     {
@@ -463,7 +479,7 @@ public sealed class MainWindowViewModelTests
             articleLabels.Contains("Tagged article"),
             $"Visible articles: {mainViewModel.VisibleArticles.Count}; rendered labels: {string.Join(" | ", articleLabels)}");
         var taggedArticle = mainViewModel.VisibleArticles.Single(article => article.Title == "Tagged article");
-        var articleRowsList = (ListBox)mainWindow.FindName("ArticleRowsList")!;
+        var articleRowsList = FindArticleListElement<ListBox>(mainWindow, "ArticleRowsList");
         articleRowsList.ScrollIntoView(taggedArticle);
         articleRowsList.UpdateLayout();
         var articleRowContainer = articleRowsList.ItemContainerGenerator.ContainerFromItem(taggedArticle)
@@ -491,7 +507,7 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual(0, rowSaveToggle.Opacity);
         mainViewModel.IsCardsView = true;
         mainWindow.UpdateLayout();
-        var articleCardsList = (ListBox)mainWindow.FindName("ArticleFolderCardsList")!;
+        var articleCardsList = FindArticleListElement<ListBox>(mainWindow, "ArticleFolderCardsList");
         articleCardsList.ScrollIntoView(taggedArticle);
         mainWindow.UpdateLayout();
         articleCardsList.UpdateLayout();
@@ -550,7 +566,7 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual(Visibility.Collapsed, unreadIndicator.Visibility);
         mainViewModel.IsCardsView = false;
         mainWindow.UpdateLayout();
-        var articleTopicFilter = (ComboBox)mainWindow.FindName("ArticleTopicFilterComboBox")!;
+        var articleTopicFilter = FindArticleListElement<ComboBox>(mainWindow, "ArticleTopicFilterComboBox");
         Assert.AreEqual("Filter articles by topic", AutomationProperties.GetName(articleTopicFilter));
         Assert.AreEqual(nameof(ArticleTopicOption.DisplayName), articleTopicFilter.DisplayMemberPath);
         if (!FindVisualChildren<TextBlock>(articleTopicFilter)
@@ -573,13 +589,14 @@ public sealed class MainWindowViewModelTests
         windowButtons["Minimize window"].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.AreEqual(WindowState.Minimized, mainWindow.WindowState);
         mainWindow.WindowState = WindowState.Normal;
-        var sidebarPinButton = (Button)mainWindow.FindName("SidebarPinButton");
-        var sidebarPeekButton = (Button)mainWindow.FindName("SidebarPeekButton");
+        var sidebarControl = (UserControl)mainWindow.FindName("SidebarView");
+        var sidebarPinButton = (Button)sidebarControl.FindName("SidebarPinButton");
+        var sidebarPeekButton = (Button)sidebarControl.FindName("SidebarPeekButton");
         Assert.AreEqual(sidebarPinButton.ToolTip, AutomationProperties.GetName(sidebarPinButton));
         Assert.AreEqual(sidebarPeekButton.ToolTip, AutomationProperties.GetName(sidebarPeekButton));
         mainViewModel.SelectArticleCommand.Execute(taggedArticle);
         mainWindow.UpdateLayout();
-        var selectedFeedName = (TextBlock)mainWindow.FindName("SelectedArticleFeedName")!;
+        var selectedFeedName = FindReaderElement<TextBlock>(mainWindow, "SelectedArticleFeedName");
         Assert.AreEqual(Visibility.Visible, selectedFeedName.Visibility);
         var feedNameText = string.Join(
             " ",
@@ -606,13 +623,14 @@ public sealed class MainWindowViewModelTests
         {
             catalogMainWindow.Show();
             catalogMainWindow.UpdateLayout();
-            var catalogTabs = (TabControl)catalogMainWindow.FindName("CatalogManagementTabs")!;
+            var catalogAdminView = (UserControl)catalogMainWindow.FindName("CatalogAdminView")!;
+            var catalogTabs = (TabControl)catalogAdminView.FindName("CatalogManagementTabs")!;
             catalogTabs.ApplyTemplate();
             Assert.IsNotNull(catalogTabs.Template.FindName("HeaderPanel", catalogTabs));
             var feedsTab = (TabItem)catalogTabs.ItemContainerGenerator.ContainerFromIndex(0);
             feedsTab.ApplyTemplate();
             Assert.IsNotNull(feedsTab.Template.FindName("TabSurface", feedsTab));
-            var categoryFilter = (ComboBox)catalogMainWindow.FindName("CatalogManagementCategoryFilter")!;
+            var categoryFilter = (ComboBox)catalogAdminView.FindName("CatalogManagementCategoryFilter")!;
             categoryFilter.ApplyTemplate();
             Assert.IsNotNull(categoryFilter.Template.FindName("FocusRing", categoryFilter));
             var selectedCategory = categoryFilter.SelectedItem as CatalogCategoryFilterOption;
@@ -626,7 +644,7 @@ public sealed class MainWindowViewModelTests
                     $"The catalog category ComboBox does not display the selected option Name. Selected='{selectedCategory?.Name ?? "<null>"}', text='{string.Join(" | ", categoryTextBlocks)}'.");
             }
 
-            var catalogActionsButton = (Button)catalogMainWindow.FindName("CatalogActionsButton")!;
+            var catalogActionsButton = (Button)catalogAdminView.FindName("CatalogActionsButton")!;
             var catalogMenu = catalogActionsButton.ContextMenu!;
             try
             {
@@ -971,8 +989,8 @@ public sealed class MainWindowViewModelTests
                     visibleFolderDeleteButtons.Length);
                 Assert.IsTrue(visibleFolderDeleteButtons.Length >= viewModel.FeedLinks.Count(link => link.IsFolder));
                 Assert.IsTrue(visibleFolderDeleteButtons.All(button => button.Opacity == 0));
-                var articleCardsList = (ListBox)window.FindName("ArticleCardsList");
-                var folderArticleCardsList = (ListBox)window.FindName("ArticleFolderCardsList");
+                var articleCardsList = FindArticleListElement<ListBox>(window, "ArticleCardsList");
+                var folderArticleCardsList = FindArticleListElement<ListBox>(window, "ArticleFolderCardsList");
                 viewModel.IsCardsView = true;
                 window.UpdateLayout();
                 Assert.AreEqual(Visibility.Visible, folderArticleCardsList.Visibility);
@@ -1081,11 +1099,12 @@ public sealed class MainWindowViewModelTests
                 checkFeedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, checkFeedButton));
                 Assert.IsTrue(managedPreviewCheckRequested);
                 Assert.IsFalse(managedCheckPreviewWindow.IsVisible);
-                var catalogManagementList = (ListBox)window.FindName("CatalogManagementFeedList");
+                var catalogAdminView = (UserControl)window.FindName("CatalogAdminView")!;
+                var catalogManagementList = (ListBox)catalogAdminView.FindName("CatalogManagementFeedList");
                 Assert.AreEqual("Catalog feed management results", AutomationProperties.GetName(catalogManagementList));
                 Assert.IsTrue(VirtualizingPanel.GetIsVirtualizing(catalogManagementList));
                 Assert.AreEqual(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(catalogManagementList));
-                var catalogActionsButton = (Button)window.FindName("CatalogActionsButton");
+                var catalogActionsButton = (Button)catalogAdminView.FindName("CatalogActionsButton");
                 Assert.AreEqual("Catalog actions", AutomationProperties.GetName(catalogActionsButton));
                 CollectionAssert.AreEqual(
                     new[] { "Import OPML...", "Load starter pack" },
@@ -1093,22 +1112,23 @@ public sealed class MainWindowViewModelTests
                 catalogActionsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, catalogActionsButton));
                 Assert.IsTrue(catalogActionsButton.ContextMenu.IsOpen);
                 catalogActionsButton.ContextMenu.IsOpen = false;
-                Assert.AreEqual(2, ((TabControl)window.FindName("CatalogManagementTabs")).Items.Count);
-                Assert.AreEqual(Visibility.Collapsed, ((ProgressBar)window.FindName("CatalogManagementLoadProgressBar")).Visibility);
-                Assert.IsNull(window.FindName("CatalogFeedPreviewPanel"));
+                Assert.AreEqual(2, ((TabControl)catalogAdminView.FindName("CatalogManagementTabs")).Items.Count);
+                Assert.AreEqual(Visibility.Collapsed, ((ProgressBar)catalogAdminView.FindName("CatalogManagementLoadProgressBar")).Visibility);
+                Assert.IsNull(catalogAdminView.FindName("CatalogFeedPreviewPanel"));
                 viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
                 window.UpdateLayout();
-                var catalogSearchBox = (TextBox)window.FindName("CatalogFeedSearchBox");
+                var catalogBrowser = (UserControl)window.FindName("CatalogBrowserView")!;
+                var catalogSearchBox = (TextBox)catalogBrowser.FindName("CatalogFeedSearchBox");
                 catalogSearchBox.Text = "comic";
                 Assert.AreEqual("comic", viewModel.CatalogSearchQuery);
-                var categoryFilter = (ComboBox)window.FindName("CatalogCategoryFilter");
+                var categoryFilter = (ComboBox)catalogBrowser.FindName("CatalogCategoryFilter");
                 Assert.AreEqual("All categories (0)", ((CatalogCategoryOption)categoryFilter.SelectedItem).Name);
-                var collectionFilter = (ComboBox)window.FindName("CatalogCollectionFilter");
+                var collectionFilter = (ComboBox)catalogBrowser.FindName("CatalogCollectionFilter");
                 Assert.AreEqual("All collections (0)", ((CatalogCollectionOption)collectionFilter.SelectedItem).Name);
-                var hideFollowedCheckBox = (CheckBox)window.FindName("HideFollowedCatalogCheckBox");
+                var hideFollowedCheckBox = (CheckBox)catalogBrowser.FindName("HideFollowedCatalogCheckBox");
                 hideFollowedCheckBox.IsChecked = true;
                 Assert.IsTrue(viewModel.HideFollowedCatalogFeeds);
-                var catalogResults = (ListBox)window.FindName("CatalogFeedResultsList");
+                var catalogResults = (ListBox)catalogBrowser.FindName("CatalogFeedResultsList");
                 Assert.AreEqual("Catalog feed results", AutomationProperties.GetName(catalogResults));
                 Assert.IsTrue(VirtualizingPanel.GetIsVirtualizing(catalogResults));
                 Assert.AreEqual(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(catalogResults));
@@ -1153,10 +1173,10 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual(followedFeedTextLeft, unfollowedFeedTextLeft, 0.1);
                 Assert.AreEqual("Unfollow Example comic feed", AutomationProperties.GetName(subscriptionButton));
                 Assert.AreEqual("\uE738", ((TextBlock)subscriptionButton.Content).Text);
-                var selectAllCatalogFeedsCheckBox = (CheckBox)window.FindName("SelectAllCatalogFeedsCheckBox");
+                var selectAllCatalogFeedsCheckBox = (CheckBox)catalogBrowser.FindName("SelectAllCatalogFeedsCheckBox");
                 Assert.IsTrue(selectAllCatalogFeedsCheckBox.IsThreeState);
                 Assert.AreEqual(0, Grid.GetColumn(selectAllCatalogFeedsCheckBox));
-                var batchFollowButton = (Button)window.FindName("BatchFollowSelectedButton");
+                var batchFollowButton = (Button)catalogBrowser.FindName("BatchFollowSelectedButton");
                 Assert.AreEqual("\uE710", batchFollowButton.Content);
                 Assert.AreEqual("Follow selected feeds", AutomationProperties.GetName(batchFollowButton));
                 Assert.AreEqual("Follow selected (0)", AutomationProperties.GetHelpText(batchFollowButton));
@@ -1197,7 +1217,8 @@ public sealed class MainWindowViewModelTests
                 closeRawFeedButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeRawFeedButton));
                 Assert.IsFalse(rawWindow.IsVisible);
 
-                var profileButton = (Button)window.FindName("ProfileMenuButton");
+                var sidebarControl = (UserControl)window.FindName("SidebarView")!;
+                var profileButton = (Button)sidebarControl.FindName("ProfileMenuButton");
                 profileButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, profileButton));
                 Assert.IsTrue(profileButton.ContextMenu?.IsOpen);
                 Assert.IsFalse(logoutRequested);
@@ -1214,8 +1235,8 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(logoutRequested);
                 profileButton.ContextMenu.IsOpen = false;
 
-                var sidebarPanel = (Border)window.FindName("SidebarPanel");
-                var sidebarPeekButton = (Button)window.FindName("SidebarPeekButton");
+                var sidebarPanel = (Border)sidebarControl.FindName("SidebarPanel");
+                var sidebarPeekButton = (Button)sidebarControl.FindName("SidebarPeekButton");
                 var shellGrid = (Grid)window.FindName("ShellGrid");
                 viewModel.ToggleSidebarCommand.Execute(null);
                 window.UpdateLayout();
@@ -1252,7 +1273,7 @@ public sealed class MainWindowViewModelTests
                 viewModel.SelectArticleCommand.Execute(comicArticle);
                 window.UpdateLayout();
                 Assert.AreEqual(Visibility.Collapsed, ((DockPanel)window.FindName("WorkspaceHeader")).Visibility);
-                var articleViewer = (RssReader.App.ArticleHtmlViewer)window.FindName("SelectedArticleHtmlViewer");
+                var articleViewer = FindReaderElement<RssReader.App.ArticleHtmlViewer>(window, "SelectedArticleHtmlViewer");
                 Assert.AreEqual(Visibility.Visible, articleViewer.Visibility);
                 var initialViewerWidth = articleViewer.ActualWidth;
                 var initialViewerHeight = articleViewer.ActualHeight;
@@ -1313,16 +1334,16 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(articleViewer.ActualHeight > initialViewerHeight);
                 Assert.AreEqual(articleViewer.ActualWidth, browser.ActualWidth, 1);
                 Assert.AreEqual(articleViewer.ActualHeight, browser.ActualHeight, 1);
-                var articleTitle = (TextBlock)window.FindName("SelectedArticleTitle");
+                var articleTitle = FindReaderElement<TextBlock>(window, "SelectedArticleTitle");
                 Assert.AreEqual(
                     new Uri("https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031"),
                     ((Hyperlink)articleTitle.Inlines.Single()).NavigateUri);
-                var websiteLink = (TextBlock)window.FindName("SelectedArticleWebsiteLink");
+                var websiteLink = FindReaderElement<TextBlock>(window, "SelectedArticleWebsiteLink");
                 Assert.AreEqual(Visibility.Visible, websiteLink.Visibility);
                 Assert.AreEqual(
                     new Uri("https://www.arcamax.com/thefunnies/ninechickweedlane"),
                     ((Hyperlink)websiteLink.Inlines.Single()).NavigateUri);
-                var selectedArticleAuthor = (TextBlock)window.FindName("SelectedArticleAuthor");
+                var selectedArticleAuthor = FindReaderElement<TextBlock>(window, "SelectedArticleAuthor");
                 Assert.AreEqual(Visibility.Visible, selectedArticleAuthor.Visibility);
                 var authorInlines = selectedArticleAuthor.Inlines.OfType<Run>()
                     .Select(run => run.Text)
@@ -1367,15 +1388,16 @@ public sealed class MainWindowViewModelTests
                 var catalogMasterWindow = CreateTestMainWindow(catalogMasterViewModel);
                 catalogMasterWindow.Show();
                 catalogMasterWindow.UpdateLayout();
-                var catalogImportReport = (Grid)catalogMasterWindow.FindName("CatalogImportReport");
-                var dismissImportReportButton = (Button)catalogMasterWindow.FindName("DismissCatalogImportReportButton");
+                var catalogMasterAdminView = (UserControl)catalogMasterWindow.FindName("CatalogAdminView")!;
+                var catalogImportReport = (Grid)catalogMasterAdminView.FindName("CatalogImportReport");
+                var dismissImportReportButton = (Button)catalogMasterAdminView.FindName("DismissCatalogImportReportButton");
                 Assert.AreEqual(Visibility.Collapsed, catalogImportReport.Visibility);
                 Assert.AreEqual("Dismiss import report", AutomationProperties.GetName(dismissImportReportButton));
                 Assert.AreSame(catalogManagement.DismissImportMessageCommand, dismissImportReportButton.Command);
                 Assert.AreEqual(1, catalogManagement.VisibleFeedCount);
-                ((TabControl)catalogMasterWindow.FindName("CatalogManagementTabs")).SelectedIndex = 0;
+                ((TabControl)catalogMasterAdminView.FindName("CatalogManagementTabs")).SelectedIndex = 0;
                 catalogMasterWindow.UpdateLayout();
-                var managementList = (ListBox)catalogMasterWindow.FindName("CatalogManagementFeedList");
+                var managementList = (ListBox)catalogMasterAdminView.FindName("CatalogManagementFeedList");
                 Assert.AreSame(
                     catalogMasterViewModel,
                     managementList.DataContext,
@@ -1406,7 +1428,7 @@ public sealed class MainWindowViewModelTests
                 Assert.AreEqual(managedFeed.HealthCheckDisplay, healthIcon.ToolTip);
                 Assert.AreEqual("\uE711", healthIcon.Text);
 
-                var managementTabs = (TabControl)catalogMasterWindow.FindName("CatalogManagementTabs");
+                var managementTabs = (TabControl)catalogMasterAdminView.FindName("CatalogManagementTabs");
                 managementTabs.SelectedIndex = 1;
                 catalogMasterWindow.UpdateLayout();
                 var renameButton = FindVisualChildren<Button>(catalogMasterWindow)
@@ -3089,7 +3111,7 @@ public sealed class MainWindowViewModelTests
                             ProfileArticlePresentation.Magazine => "ArticleMagazineList",
                             _ => "ArticleCardsList"
                         };
-                        var articleList = (ListBox)window.FindName(articleListName)!;
+                        var articleList = FindArticleListElement<ListBox>(window, articleListName);
                         Assert.AreEqual(Visibility.Visible, articleList.Visibility);
                         articleList.ScrollIntoView(article);
                         articleList.UpdateLayout();
@@ -3206,7 +3228,8 @@ public sealed class MainWindowViewModelTests
                     shellGrid.ColumnDefinitions[0].Width = new GridLength(354);
                     window.UpdateLayout();
                     Assert.AreEqual(354, viewModel.SidebarPanelWidth);
-                    Assert.AreEqual(354, ((Border)window.FindName("SidebarPanel")!).Width);
+                    var sidebarControl = (UserControl)window.FindName("SidebarView")!;
+                    Assert.AreEqual(354, ((Border)sidebarControl.FindName("SidebarPanel")!).Width);
 
                     var resizedWidth = Math.Min(1040, visibleArea.Width);
                     var resizedHeight = Math.Min(680, visibleArea.Height);
@@ -3579,20 +3602,21 @@ public sealed class MainWindowViewModelTests
                 var window = CreateTestMainWindow(viewModel);
                 var articleSearchBox = (TextBox)window.FindName("ArticleSearchBox");
                 var clearArticleSearchButton = (Button)window.FindName("ClearArticleSearchButton");
-                var searchViewLabel = (TextBlock)window.FindName("SearchViewLabel");
-                var searchViewSearchBox = (TextBox)window.FindName("SearchViewSearchBox");
-                var clearSearchViewButton = (Button)window.FindName("ClearSearchViewButton");
+                var searchViewLabel = FindArticleListElement<TextBlock>(window, "SearchViewLabel");
+                var searchViewSearchBox = FindArticleListElement<TextBox>(window, "SearchViewSearchBox");
+                var clearSearchViewButton = FindArticleListElement<Button>(window, "ClearSearchViewButton");
                 var refreshFailureHeader = (TextBlock)window.FindName("RefreshFailureHeader");
                 var retryFailedFeedsHeaderButton = (Button)window.FindName("RetryFailedFeedsHeaderButton");
-                var refreshFailureStatus = (TextBlock)window.FindName("RefreshFailureStatus");
-                var retryFailedFeedsButton = (Button)window.FindName("RetryFailedFeedsButton");
-                var catalogFeedCheckErrorText = (TextBlock)window.FindName("CatalogFeedCheckErrorText");
-                var backButton = (Button)window.FindName("BackButton");
+                var refreshFailureStatus = FindReaderElement<TextBlock>(window, "RefreshFailureStatus");
+                var retryFailedFeedsButton = FindReaderElement<Button>(window, "RetryFailedFeedsButton");
+                var catalogAdminView = (UserControl)window.FindName("CatalogAdminView")!;
+                var catalogFeedCheckErrorText = (TextBlock)catalogAdminView.FindName("CatalogFeedCheckErrorText");
+                var backButton = FindReaderElement<Button>(window, "BackButton");
                 var workspaceBackButton = (Button)window.FindName("WorkspaceBackButton");
-                var toggleReadButton = (Button)window.FindName("ToggleReadButton");
-                var toggleSavedButton = (Button)window.FindName("ToggleSavedButton");
-                var previousButton = (Button)window.FindName("PreviousArticleButton");
-                var nextButton = (Button)window.FindName("NextArticleButton");
+                var toggleReadButton = FindReaderElement<Button>(window, "ToggleReadButton");
+                var toggleSavedButton = FindReaderElement<Button>(window, "ToggleSavedButton");
+                var previousButton = FindReaderElement<Button>(window, "PreviousArticleButton");
+                var nextButton = FindReaderElement<Button>(window, "NextArticleButton");
 
                 Assert.AreEqual("Search articles", AutomationProperties.GetName(articleSearchBox));
                 Assert.AreEqual("Clear search expression", AutomationProperties.GetName(clearArticleSearchButton));
@@ -3745,7 +3769,7 @@ public sealed class MainWindowViewModelTests
                 window.Show();
                 window.Activate();
                 window.UpdateLayout();
-                var articleList = (ListBox)window.FindName("ArticleRowsList");
+                var articleList = FindArticleListElement<ListBox>(window, "ArticleRowsList");
                 articleList.ScrollIntoView(article);
                 articleList.UpdateLayout();
 
@@ -4307,7 +4331,7 @@ public sealed class MainWindowViewModelTests
 
                 viewModel.SelectArticleCommand.Execute(article);
 
-                var articleViewer = (RssReader.App.ArticleHtmlViewer)window.FindName("SelectedArticleHtmlViewer");
+                var articleViewer = FindReaderElement<RssReader.App.ArticleHtmlViewer>(window, "SelectedArticleHtmlViewer");
                 StringAssert.Contains(articleViewer.CurrentDocument, "https://example.test/inline.png");
                 Assert.IsFalse(articleViewer.CurrentDocument.Contains("https://example.test/feed-image.png", StringComparison.Ordinal));
                 window.Close();
