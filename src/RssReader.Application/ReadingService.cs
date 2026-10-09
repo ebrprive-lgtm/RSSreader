@@ -24,6 +24,17 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
         CancellationToken cancellationToken = default) =>
         store.GetFeedRefreshStatesAsync(profileId, cancellationToken);
 
+    public Task ClearFeedRefreshFailureAsync(
+        Profile profile,
+        string feedId,
+        CancellationToken cancellationToken = default) =>
+        store.ClearFeedRefreshFailureAsync(profile.Id, feedId, cancellationToken);
+
+    public Task ClearFeedRefreshFailuresAsync(
+        Profile profile,
+        CancellationToken cancellationToken = default) =>
+        store.ClearFeedRefreshFailuresAsync(profile.Id, cancellationToken);
+
     public async Task SubscribeAsync(
         Profile profile,
         string feedId,

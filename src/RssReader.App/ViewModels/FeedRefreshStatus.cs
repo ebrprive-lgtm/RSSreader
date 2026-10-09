@@ -31,10 +31,7 @@ internal sealed class FeedRefreshStatus
 
         var lastAttempt = state.LastAttemptAt.ToLocalTime().ToString("g");
         var lastSuccess = state.LastSuccessfulAt?.ToLocalTime().ToString("g") ?? "Never";
-        var message = $"Last attempt: {lastAttempt}. Last successful refresh: {lastSuccess}.";
-        return string.IsNullOrWhiteSpace(state.LastFailure)
-            ? message
-            : $"{message} {state.LastFailure}";
+        return $"Last attempt: {lastAttempt}. Last successful refresh: {lastSuccess}.";
     }
 
     public bool SetFailureMessage(string? message)

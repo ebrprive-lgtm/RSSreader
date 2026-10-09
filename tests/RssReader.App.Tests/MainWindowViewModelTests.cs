@@ -2808,6 +2808,9 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(viewModel.HasRefreshFailure);
             StringAssert.Contains(viewModel.RefreshFailureMessage!, "Existing: The feed is unavailable.");
             Assert.IsFalse(viewModel.RefreshFailureMessage!.Contains("New:", StringComparison.Ordinal));
+            Assert.AreEqual(1, viewModel.FeedWarningCount);
+            Assert.AreEqual(existingFeed.Id, viewModel.SelectedFeedWarning?.FeedId);
+            StringAssert.Contains(viewModel.SelectedFeedWarning!.Message, "Existing: The feed is unavailable.");
             Assert.AreEqual("Updated headline", viewModel.SelectedArticle?.Title);
             Assert.IsFalse(viewModel.HasVisibleRefreshFailure);
             Assert.IsNull(viewModel.VisibleRefreshFailureMessage);
@@ -2831,7 +2834,9 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(viewModel.RetryFailedFeedsCommand.CanExecute(null));
             Assert.AreEqual("<p>Cached article body</p>", viewModel.SelectedArticle?.Content);
             StringAssert.Contains(viewModel.SelectedArticleRefreshStatusMessage!, "Last successful refresh:");
-            StringAssert.Contains(viewModel.SelectedArticleRefreshStatusMessage!, "Existing: The feed is unavailable.");
+            Assert.IsFalse(viewModel.SelectedArticleRefreshStatusMessage!.Contains(
+                "Existing: The feed is unavailable.",
+                StringComparison.Ordinal));
 
             viewModel.ApplyPreferences(new ProfilePreferences(RefreshFeedsWhenOpened: false, ShowRawFeedButton: true));
             viewModel.BackCommand.Execute(null);
@@ -2861,11 +2866,15 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(reopenedViewModel.HasFailedRefreshFeeds);
             Assert.IsTrue(reopenedViewModel.RetryFailedFeedsCommand.CanExecute(null));
             StringAssert.Contains(reopenedViewModel.RefreshFailureMessage!, "Existing: The feed is unavailable.");
+            Assert.AreEqual(1, reopenedViewModel.FeedWarningCount);
+            Assert.AreEqual(existingFeed.Id, reopenedViewModel.SelectedFeedWarning?.FeedId);
             var reopenedFailedArticle = reopenedViewModel.VisibleArticles.Single(article => article.ArticleId == cachedExistingArticle.Id);
             reopenedViewModel.SelectArticleCommand.Execute(reopenedFailedArticle);
             Assert.AreEqual("<p>Cached article body</p>", reopenedViewModel.SelectedArticle?.Content);
             StringAssert.Contains(reopenedViewModel.SelectedArticleRefreshStatusMessage!, "Last successful refresh:");
-            StringAssert.Contains(reopenedViewModel.SelectedArticleRefreshStatusMessage!, "Existing: The feed is unavailable.");
+            Assert.IsFalse(reopenedViewModel.SelectedArticleRefreshStatusMessage!.Contains(
+                "Existing: The feed is unavailable.",
+                StringComparison.Ordinal));
 
             var requestedFeedCount = downloader.RequestedFeedIds.Count;
             downloader.FailingFeedIds.Clear();
@@ -2879,6 +2888,97 @@ public sealed class MainWindowViewModelTests
             Assert.IsFalse(viewModel.HasFailedRefreshFeeds);
             Assert.IsNull(viewModel.VisibleRefreshFailureMessage);
             Assert.IsFalse(viewModel.HasVisibleFailedRefreshFeeds);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task FeedWarningsCanBeNavigatedAndDismissedPersistently()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-feed-warnings-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+            var profile = Profile.CreateRegular("Reader");
+            await profileStore.AddAsync(profile);
+            var alphaFeed = new CatalogFeed("feed-alpha", "Alpha", "https://example.com/alpha.xml", null, null);
+            var betaFeed = new CatalogFeed("feed-beta", "Beta", "https://example.com/beta.xml", null, null);
+            await catalogStore.AddFeedAsync(alphaFeed);
+            await catalogStore.AddFeedAsync(betaFeed);
+            await readerStore.AddFolderAsync(profile.Id, "Warnings");
+            await readerStore.SubscribeAsync(profile.Id, alphaFeed.Id, "Warnings");
+            await readerStore.SubscribeAsync(profile.Id, betaFeed.Id, "Warnings");
+            var attemptedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            foreach (var feed in new[] { alphaFeed, betaFeed })
+            {
+                await readerStore.RecordFeedRefreshAttemptAsync(profile.Id, feed.Id, attemptedAt);
+                await readerStore.RecordFeedRefreshResultAsync(
+                    profile.Id,
+                    feed.Id,
+                    successfulAt: null,
+                    $"{feed.Name}: the server could not be reached.");
+            }
+
+            var readingService = new ReadingService(readerStore, catalogStore);
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                readingService,
+                new FeedRefreshService(readerStore, catalogStore, new RecordingFeedDownloader()),
+                new ProfilePreferences(RefreshFeedsWhenOpened: false));
+            await viewModel.InitializeAsync();
+
+            Assert.AreEqual(2, viewModel.FeedWarningCount);
+            Assert.AreEqual(alphaFeed.Id, viewModel.SelectedFeedWarning?.FeedId);
+            Assert.AreEqual("1 of 2", viewModel.FeedWarningPositionLabel);
+            viewModel.NextFeedWarningCommand.Execute(null);
+            Assert.AreEqual(betaFeed.Id, viewModel.SelectedFeedWarning?.FeedId);
+            Assert.AreEqual("2 of 2", viewModel.FeedWarningPositionLabel);
+            viewModel.PreviousFeedWarningCommand.Execute(null);
+            Assert.AreEqual(alphaFeed.Id, viewModel.SelectedFeedWarning?.FeedId);
+            viewModel.IsFeedWarningsPopupOpen = true;
+            Assert.IsTrue(viewModel.IsFeedWarningsPopupOpen);
+            viewModel.NextFeedWarningCommand.Execute(null);
+
+            await viewModel.DismissCurrentFeedWarningCommand.ExecuteAsync();
+
+            Assert.AreEqual(1, viewModel.FeedWarningCount);
+            Assert.AreEqual(alphaFeed.Id, viewModel.SelectedFeedWarning?.FeedId);
+            var states = await readerStore.GetFeedRefreshStatesAsync(profile.Id);
+            Assert.IsTrue(states.Single(state => state.FeedId == alphaFeed.Id).LastFailure is not null);
+            Assert.IsNull(states.Single(state => state.FeedId == betaFeed.Id).LastFailure);
+
+            await viewModel.DismissAllFeedWarningsCommand.ExecuteAsync();
+
+            Assert.AreEqual(0, viewModel.FeedWarningCount);
+            Assert.IsFalse(viewModel.HasFeedWarnings);
+            Assert.IsFalse(viewModel.IsFeedWarningsPopupOpen);
+            Assert.IsTrue((await readerStore.GetFeedRefreshStatesAsync(profile.Id))
+                .All(state => state.LastFailure is null));
+
+            var reopenedViewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                readingService,
+                new FeedRefreshService(readerStore, catalogStore, new RecordingFeedDownloader()),
+                new ProfilePreferences(RefreshFeedsWhenOpened: false));
+            await reopenedViewModel.InitializeAsync();
+            Assert.AreEqual(0, reopenedViewModel.FeedWarningCount);
         }
         finally
         {
@@ -3605,10 +3705,14 @@ public sealed class MainWindowViewModelTests
                 var searchViewLabel = FindArticleListElement<TextBlock>(window, "SearchViewLabel");
                 var searchViewSearchBox = FindArticleListElement<TextBox>(window, "SearchViewSearchBox");
                 var clearSearchViewButton = FindArticleListElement<Button>(window, "ClearSearchViewButton");
-                var refreshFailureHeader = (TextBlock)window.FindName("RefreshFailureHeader");
-                var retryFailedFeedsHeaderButton = (Button)window.FindName("RetryFailedFeedsHeaderButton");
-                var refreshFailureStatus = FindReaderElement<TextBlock>(window, "RefreshFailureStatus");
-                var retryFailedFeedsButton = FindReaderElement<Button>(window, "RetryFailedFeedsButton");
+                var feedWarningsView = (FeedWarningsView)window.FindName("FeedWarningsView")!;
+                var feedWarningsButton = (Button)feedWarningsView.FindName("FeedWarningsButton");
+                var feedWarningsPopup = (System.Windows.Controls.Primitives.Popup)feedWarningsView.FindName("FeedWarningsPopup");
+                var previousFeedWarningButton = (Button)feedWarningsView.FindName("PreviousFeedWarningButton");
+                var nextFeedWarningButton = (Button)feedWarningsView.FindName("NextFeedWarningButton");
+                var feedWarningMessage = (TextBox)feedWarningsView.FindName("FeedWarningMessage");
+                var dismissFeedWarningButton = (Button)feedWarningsView.FindName("DismissFeedWarningButton");
+                var dismissAllFeedWarningsButton = (Button)feedWarningsView.FindName("DismissAllFeedWarningsButton");
                 var catalogAdminView = (UserControl)window.FindName("CatalogAdminView")!;
                 var catalogFeedCheckErrorText = (TextBlock)catalogAdminView.FindName("CatalogFeedCheckErrorText");
                 var backButton = FindReaderElement<Button>(window, "BackButton");
@@ -3639,23 +3743,28 @@ public sealed class MainWindowViewModelTests
                     nameof(MainWindowViewModel.ClearSearchQueryCommand),
                     BindingOperations.GetBinding(clearSearchViewButton, Button.CommandProperty)?.Path.Path);
                 Assert.AreEqual(
-                    nameof(MainWindowViewModel.VisibleRefreshFailureMessage),
-                    BindingOperations.GetBinding(refreshFailureHeader, TextBlock.TextProperty)?.Path.Path);
+                    nameof(MainWindowViewModel.HasFeedWarnings),
+                    BindingOperations.GetBinding(feedWarningsButton, UIElement.VisibilityProperty)?.Path.Path);
                 Assert.AreEqual(
-                    nameof(MainWindowViewModel.HasVisibleRefreshFailure),
-                    BindingOperations.GetBinding(refreshFailureHeader, UIElement.VisibilityProperty)?.Path.Path);
+                    nameof(MainWindowViewModel.IsFeedWarningsPopupOpen),
+                    BindingOperations.GetBinding(feedWarningsPopup, System.Windows.Controls.Primitives.Popup.IsOpenProperty)?.Path.Path);
                 Assert.AreEqual(
-                    nameof(MainWindowViewModel.HasVisibleFailedRefreshFeeds),
-                    BindingOperations.GetBinding(retryFailedFeedsHeaderButton, UIElement.VisibilityProperty)?.Path.Path);
+                    nameof(MainWindowViewModel.PreviousFeedWarningCommand),
+                    BindingOperations.GetBinding(previousFeedWarningButton, Button.CommandProperty)?.Path.Path);
                 Assert.AreEqual(
-                    nameof(MainWindowViewModel.VisibleRefreshFailureMessage),
-                    BindingOperations.GetBinding(refreshFailureStatus, TextBlock.TextProperty)?.Path.Path);
+                    nameof(MainWindowViewModel.NextFeedWarningCommand),
+                    BindingOperations.GetBinding(nextFeedWarningButton, Button.CommandProperty)?.Path.Path);
                 Assert.AreEqual(
-                    nameof(MainWindowViewModel.HasVisibleRefreshFailure),
-                    BindingOperations.GetBinding(refreshFailureStatus, UIElement.VisibilityProperty)?.Path.Path);
+                    "SelectedFeedWarning.Message",
+                    BindingOperations.GetBinding(feedWarningMessage, TextBox.TextProperty)?.Path.Path);
                 Assert.AreEqual(
-                    nameof(MainWindowViewModel.HasVisibleFailedRefreshFeeds),
-                    BindingOperations.GetBinding(retryFailedFeedsButton, UIElement.VisibilityProperty)?.Path.Path);
+                    nameof(MainWindowViewModel.DismissCurrentFeedWarningCommand),
+                    BindingOperations.GetBinding(dismissFeedWarningButton, Button.CommandProperty)?.Path.Path);
+                Assert.AreEqual(
+                    nameof(MainWindowViewModel.DismissAllFeedWarningsCommand),
+                    BindingOperations.GetBinding(dismissAllFeedWarningsButton, Button.CommandProperty)?.Path.Path);
+                Assert.IsTrue(feedWarningMessage.IsReadOnly);
+                Assert.IsTrue(feedWarningMessage.IsReadOnlyCaretVisible);
                 viewModel.SearchQuery = "trump";
                 window.UpdateLayout();
                 Assert.AreEqual(Visibility.Visible, clearArticleSearchButton.Visibility);

@@ -128,29 +128,7 @@
                     <Run Text="Topics: " FontWeight="SemiBold" />
                     <Run Text="{Binding SelectedArticle.FullTopicSummary, Mode=OneWay}" />
                 </TextBlock>
-                <TextBlock x:Name="RefreshFailureStatus"
-                           Grid.Row="4"
-                           Grid.Column="1"
-                           Grid.ColumnSpan="2"
-                           Margin="0,4,0,0"
-                           FontSize="11"
-                           Foreground="{StaticResource MutedTextBrush}"
-                           Text="{Binding VisibleRefreshFailureMessage, Mode=OneWay}"
-                           TextWrapping="Wrap"
-                           AutomationProperties.Name="Feed refresh failure"
-                           Visibility="{Binding HasVisibleRefreshFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                <Button x:Name="RetryFailedFeedsButton"
-                        Grid.Row="5"
-                        Grid.Column="1"
-                        Margin="0,4,0,0"
-                        Padding="8,4"
-                        HorizontalAlignment="Left"
-                        Style="{StaticResource SecondaryActionButtonStyle}"
-                        Content="Retry failed feeds"
-                        Command="{Binding RetryFailedFeedsCommand}"
-                        AutomationProperties.Name="Retry failed feeds"
-                        Visibility="{Binding HasVisibleFailedRefreshFeeds, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                    <TextBlock x:Name="SelectedArticleRefreshStatus"
+                <TextBlock x:Name="SelectedArticleRefreshStatus"
                            Grid.Row="6"
                            Grid.Column="1"
                            Grid.ColumnSpan="2"

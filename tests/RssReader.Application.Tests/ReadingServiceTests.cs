@@ -194,6 +194,8 @@ public sealed class ReadingServiceTests
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileFeedRefreshState>>([]);
+        public Task ClearFeedRefreshFailureAsync(string profileId, string feedId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ClearFeedRefreshFailuresAsync(string profileId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RecordFeedRefreshAttemptAsync(string profileId, string feedId, DateTimeOffset attemptedAt, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RecordFeedRefreshResultAsync(string profileId, string feedId, DateTimeOffset? successfulAt, string? failure, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }

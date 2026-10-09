@@ -17,6 +17,8 @@ public interface IReaderStore
     Task<IReadOnlyList<ArticleForProfile>> GetArticlesAsync(string profileId, CancellationToken cancellationToken = default);
     Task<int> SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default);
+    Task ClearFeedRefreshFailureAsync(string profileId, string feedId, CancellationToken cancellationToken = default);
+    Task ClearFeedRefreshFailuresAsync(string profileId, CancellationToken cancellationToken = default);
     Task RecordFeedRefreshAttemptAsync(string profileId, string feedId, DateTimeOffset attemptedAt, CancellationToken cancellationToken = default);
     Task RecordFeedRefreshResultAsync(string profileId, string feedId, DateTimeOffset? successfulAt, string? failure, CancellationToken cancellationToken = default);
     Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default);

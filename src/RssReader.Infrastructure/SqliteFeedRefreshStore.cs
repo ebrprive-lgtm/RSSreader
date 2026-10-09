@@ -53,6 +53,30 @@ internal sealed class SqliteFeedRefreshStore(SqliteConnectionFactory connections
         ("$feedId", feedId),
         ("$attemptedAt", attemptedAt.ToString("O", CultureInfo.InvariantCulture)));
 
+    public Task ClearFeedRefreshFailureAsync(
+        string profileId,
+        string feedId,
+        CancellationToken cancellationToken) => connections.ExecuteAsync(
+        """
+        UPDATE ProfileFeedRefreshStates
+        SET LastFailure = NULL
+        WHERE ProfileId = $profileId AND FeedId = $feedId;
+        """,
+        cancellationToken,
+        ("$profileId", profileId),
+        ("$feedId", feedId));
+
+    public Task ClearFeedRefreshFailuresAsync(
+        string profileId,
+        CancellationToken cancellationToken) => connections.ExecuteAsync(
+        """
+        UPDATE ProfileFeedRefreshStates
+        SET LastFailure = NULL
+        WHERE ProfileId = $profileId AND LastFailure IS NOT NULL;
+        """,
+        cancellationToken,
+        ("$profileId", profileId));
+
     public Task RecordFeedRefreshResultAsync(
         string profileId,
         string feedId,

@@ -243,6 +243,27 @@ public sealed class FeedRefreshServiceTests
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileFeedRefreshState>>(_refreshStates.Values.Where(state => state.ProfileId == profileId).ToArray());
+        public Task ClearFeedRefreshFailureAsync(string profileId, string feedId, CancellationToken cancellationToken = default)
+        {
+            if (_refreshStates.TryGetValue((profileId, feedId), out var state))
+            {
+                _refreshStates[(profileId, feedId)] = state with { LastFailure = null };
+            }
+
+            return Task.CompletedTask;
+        }
+        public Task ClearFeedRefreshFailuresAsync(string profileId, CancellationToken cancellationToken = default)
+        {
+            foreach (var key in _refreshStates.Keys.Where(key => key.ProfileId == profileId))
+            {
+                if (_refreshStates.TryGetValue(key, out var state))
+                {
+                    _refreshStates[key] = state with { LastFailure = null };
+                }
+            }
+
+            return Task.CompletedTask;
+        }
         public Task RecordFeedRefreshAttemptAsync(string profileId, string feedId, DateTimeOffset attemptedAt, CancellationToken cancellationToken = default)
         {
             _refreshStates.AddOrUpdate(

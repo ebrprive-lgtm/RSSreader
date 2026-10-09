@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Resources\RssReader.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +20,10 @@
   <ItemGroup>
     <ProjectReference Include="..\RssReader.Application\RssReader.Application.csproj" />
     <ProjectReference Include="..\RssReader.Infrastructure\RssReader.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\RssReader.ico" />
   </ItemGroup>
 
 </Project>

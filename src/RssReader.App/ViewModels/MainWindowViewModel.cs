@@ -37,6 +37,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly HashSet<string> _pendingInitialRefreshFeedIds = new(StringComparer.Ordinal);
     private readonly HashSet<string> _subscribedFeedIds = new(StringComparer.Ordinal);
     private readonly FeedRefreshStatus _feedRefreshStatus = new();
+    private readonly BulkObservableCollection<FeedRefreshWarning> _feedRefreshWarnings = [];
     private ProfilePreferences _profilePreferences;
     private string _activeRoute;
     private string _searchQuery = string.Empty;
@@ -52,7 +53,9 @@ public sealed class MainWindowViewModel : ObservableObject
     private double _sidebarWidth = DefaultSidebarWidth;
     private bool _hasAppliedStartPage;
     private bool _hasLoadedInitialReaderData;
+    private bool _isFeedWarningsPopupOpen;
     private bool _updatingArticleTopicOptions;
+    private int _selectedFeedWarningIndex = -1;
     private int _folderArticlesPerFeedLimit;
 
     public MainWindowViewModel(Profile profile) : this(profile, null, null, null)
@@ -172,6 +175,20 @@ public sealed class MainWindowViewModel : ObservableObject
         RetryFailedFeedsCommand = new RelayCommand(
             () => _ = RetryFailedFeedsAsync(),
             () => !IsRefreshing && HasVisibleFailedRefreshFeeds);
+        ToggleFeedWarningsPopupCommand = new RelayCommand(
+            () => IsFeedWarningsPopupOpen = !IsFeedWarningsPopupOpen,
+            () => HasFeedWarnings);
+        CloseFeedWarningsPopupCommand = new RelayCommand(() => IsFeedWarningsPopupOpen = false);
+        PreviousFeedWarningCommand = new RelayCommand(
+            SelectPreviousFeedWarning,
+            () => _selectedFeedWarningIndex > 0);
+        NextFeedWarningCommand = new RelayCommand(
+            SelectNextFeedWarning,
+            () => _selectedFeedWarningIndex >= 0 &&
+                  _selectedFeedWarningIndex < _feedRefreshWarnings.Count - 1);
+        DismissCurrentFeedWarningCommand = new AsyncCommand(DismissCurrentFeedWarningAsync);
+        DismissAllFeedWarningsCommand = new AsyncCommand(DismissAllFeedWarningsAsync);
+        RetryCurrentFeedWarningCommand = new AsyncCommand(RetryCurrentFeedWarningAsync);
         ToggleSubscriptionCommand = new AsyncCommand<CatalogFeedListItem>(ToggleSubscriptionAsync);
 
         UpdateSelectedLinks();
@@ -217,6 +234,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ICollectionView CatalogFeedListView => _catalogBrowser.CatalogFeedListView;
     public ObservableCollection<CatalogCollection> CatalogCollections => _catalogBrowser.CatalogCollections;
     public ObservableCollection<string> FolderNames { get; }
+    public ObservableCollection<FeedRefreshWarning> FeedRefreshWarnings => _feedRefreshWarnings;
     public CatalogManagementViewModel? CatalogManagement { get; }
 
     public RelayCommand<SidebarLink> NavigateCommand { get; }
@@ -241,6 +259,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand<SidebarLink> DeleteFolderCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public RelayCommand RetryFailedFeedsCommand { get; }
+    public RelayCommand ToggleFeedWarningsPopupCommand { get; }
+    public RelayCommand CloseFeedWarningsPopupCommand { get; }
+    public RelayCommand PreviousFeedWarningCommand { get; }
+    public RelayCommand NextFeedWarningCommand { get; }
+    public AsyncCommand DismissCurrentFeedWarningCommand { get; }
+    public AsyncCommand DismissAllFeedWarningsCommand { get; }
+    public AsyncCommand RetryCurrentFeedWarningCommand { get; }
     public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
 
     public Task<string> GetRawArticleContentAsync(
@@ -565,6 +590,24 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    public bool HasFeedWarnings => _feedRefreshWarnings.Count > 0;
+    public int FeedWarningCount => _feedRefreshWarnings.Count;
+    public FeedRefreshWarning? SelectedFeedWarning =>
+        _selectedFeedWarningIndex >= 0 && _selectedFeedWarningIndex < _feedRefreshWarnings.Count
+            ? _feedRefreshWarnings[_selectedFeedWarningIndex]
+            : null;
+    public string FeedWarningPositionLabel =>
+        _feedRefreshWarnings.Count == 0
+            ? "0 of 0"
+            : $"{_selectedFeedWarningIndex + 1} of {_feedRefreshWarnings.Count}";
+    public bool HasSelectedFeedWarningFeed => SelectedFeedWarning?.FeedId is not null;
+
+    public bool IsFeedWarningsPopupOpen
+    {
+        get => _isFeedWarningsPopupOpen;
+        set => SetProperty(ref _isFeedWarningsPopupOpen, value && HasFeedWarnings);
+    }
+
     public string? RefreshFailureMessage
     {
         get => _feedRefreshStatus.FailureMessage;
@@ -575,6 +618,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(RefreshFailureMessage));
                 OnPropertyChanged(nameof(HasRefreshFailure));
                 NotifyRefreshFailureContextChanged();
+                UpdateFeedWarnings();
             }
         }
     }
@@ -1517,6 +1561,148 @@ public sealed class MainWindowViewModel : ObservableObject
         _feedRefreshStatus.ReplaceFailedFeedIds(feedIds);
         OnPropertyChanged(nameof(HasFailedRefreshFeeds));
         NotifyRefreshFailureContextChanged();
+        UpdateFeedWarnings();
+    }
+
+    private void UpdateFeedWarnings()
+    {
+        var selectedFeedId = SelectedFeedWarning?.FeedId;
+        var warnings = _feedRefreshStatus.FailedFeedIds
+            .Select(CreateFeedRefreshWarning)
+            .OfType<FeedRefreshWarning>()
+            .OrderBy(warning => warning.FeedName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (warnings.Count == 0 && !string.IsNullOrWhiteSpace(RefreshFailureMessage))
+        {
+            warnings.Add(new FeedRefreshWarning(null, "Feed refresh", RefreshFailureMessage));
+        }
+
+        _feedRefreshWarnings.ReplaceAll(warnings);
+        var selectedIndex = selectedFeedId is null
+            ? -1
+            : warnings.FindIndex(warning => warning.FeedId == selectedFeedId);
+        _selectedFeedWarningIndex = selectedIndex >= 0
+            ? selectedIndex
+            : warnings.Count == 0
+                ? -1
+                : Math.Clamp(_selectedFeedWarningIndex, 0, warnings.Count - 1);
+        if (warnings.Count == 0)
+        {
+            IsFeedWarningsPopupOpen = false;
+        }
+
+        OnPropertyChanged(nameof(HasFeedWarnings));
+        OnPropertyChanged(nameof(FeedWarningCount));
+        NotifySelectedFeedWarningChanged();
+        ToggleFeedWarningsPopupCommand.NotifyCanExecuteChanged();
+    }
+
+    private FeedRefreshWarning? CreateFeedRefreshWarning(string feedId)
+    {
+        var message = _feedRefreshStatus.GetFailureMessage(feedId);
+        return string.IsNullOrWhiteSpace(message)
+            ? null
+            : new FeedRefreshWarning(feedId, GetFeedName(feedId), message);
+    }
+
+    private string GetFeedName(string feedId) =>
+        _sidebarFeedNavigation.FeedLinks.FirstOrDefault(link =>
+            string.Equals(link.Route, $"feed:{feedId}", StringComparison.Ordinal))?.Label ??
+        _catalogBrowser.CatalogFeeds.FirstOrDefault(feed =>
+            string.Equals(feed.Id, feedId, StringComparison.Ordinal))?.Name ??
+        feedId;
+
+    private void NotifySelectedFeedWarningChanged()
+    {
+        OnPropertyChanged(nameof(SelectedFeedWarning));
+        OnPropertyChanged(nameof(FeedWarningPositionLabel));
+        OnPropertyChanged(nameof(HasSelectedFeedWarningFeed));
+        PreviousFeedWarningCommand.NotifyCanExecuteChanged();
+        NextFeedWarningCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SelectPreviousFeedWarning()
+    {
+        if (_selectedFeedWarningIndex > 0)
+        {
+            _selectedFeedWarningIndex--;
+            NotifySelectedFeedWarningChanged();
+        }
+    }
+
+    private void SelectNextFeedWarning()
+    {
+        if (_selectedFeedWarningIndex >= 0 &&
+            _selectedFeedWarningIndex < _feedRefreshWarnings.Count - 1)
+        {
+            _selectedFeedWarningIndex++;
+            NotifySelectedFeedWarningChanged();
+        }
+    }
+
+    private async Task DismissCurrentFeedWarningAsync()
+    {
+        if (SelectedFeedWarning is not { } warning)
+        {
+            return;
+        }
+
+        if (warning.FeedId is not { } feedId)
+        {
+            RefreshFailureMessage = null;
+            UpdateFeedWarnings();
+            StatusMessage = "Dismissed the feed refresh warning.";
+            return;
+        }
+
+        if (_readingService is null)
+        {
+            StatusMessage = "Feed warning dismissal is unavailable.";
+            return;
+        }
+
+        try
+        {
+            await _readingService.ClearFeedRefreshFailureAsync(ActiveProfile, feedId);
+            await LoadFeedRefreshStatesAsync(CancellationToken.None);
+            StatusMessage = $"Dismissed the warning for {warning.FeedName}.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not dismiss the warning for {warning.FeedName}: {exception.Message}";
+        }
+    }
+
+    private async Task DismissAllFeedWarningsAsync()
+    {
+        if (_readingService is null)
+        {
+            StatusMessage = "Feed warning dismissal is unavailable.";
+            return;
+        }
+
+        try
+        {
+            await _readingService.ClearFeedRefreshFailuresAsync(ActiveProfile);
+            await LoadFeedRefreshStatesAsync(CancellationToken.None);
+            RefreshFailureMessage = null;
+            StatusMessage = "Dismissed all feed warnings.";
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = $"Could not dismiss feed warnings: {exception.Message}";
+        }
+    }
+
+    private async Task RetryCurrentFeedWarningAsync()
+    {
+        if (_feedRefreshService is null || SelectedFeedWarning?.FeedId is not { } feedId)
+        {
+            return;
+        }
+
+        await RefreshUsingAsync(
+            () => _feedRefreshService.RefreshFeedsAsync(ActiveProfile.Id, [feedId]));
     }
 
     private string[] GetRelevantFailedRefreshFeedIds()

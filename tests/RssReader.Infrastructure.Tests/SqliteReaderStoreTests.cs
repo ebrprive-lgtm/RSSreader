@@ -164,6 +164,17 @@ public sealed class SqliteReaderStoreTests
         Assert.AreEqual(firstSuccess, firstProfileState.LastSuccessfulAt);
         Assert.AreEqual("Feed unavailable", firstProfileState.LastFailure);
         Assert.AreEqual(0, (await reader.GetFeedRefreshStatesAsync(secondProfile.Id)).Count);
+
+        await reader.ClearFeedRefreshFailureAsync(firstProfile.Id, feed.Id);
+        firstProfileState = (await reader.GetFeedRefreshStatesAsync(firstProfile.Id)).Single();
+        Assert.IsNull(firstProfileState.LastFailure);
+        Assert.AreEqual(firstSuccess, firstProfileState.LastSuccessfulAt);
+
+        await reader.RecordFeedRefreshResultAsync(firstProfile.Id, feed.Id, null, "Feed unavailable again");
+        await reader.ClearFeedRefreshFailuresAsync(firstProfile.Id);
+        firstProfileState = (await reader.GetFeedRefreshStatesAsync(firstProfile.Id)).Single();
+        Assert.IsNull(firstProfileState.LastFailure);
+        Assert.AreEqual(0, (await reader.GetFeedRefreshStatesAsync(secondProfile.Id)).Count);
     }
 
     [TestMethod]

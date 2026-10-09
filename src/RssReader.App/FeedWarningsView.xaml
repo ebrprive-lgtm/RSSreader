@@ -1,0 +1,143 @@
+<UserControl x:Class="RssReader.App.FeedWarningsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework">
+    <Grid>
+        <Button x:Name="FeedWarningsButton"
+                Width="34"
+                Height="30"
+                Padding="0"
+                Style="{StaticResource IconActionButtonStyle}"
+                Command="{Binding ToggleFeedWarningsPopupCommand}"
+                Visibility="{Binding HasFeedWarnings, Converter={StaticResource BooleanToVisibilityConverter}}"
+                ToolTip="{Binding FeedWarningCount, StringFormat=View feed warnings ({0})}"
+                AutomationProperties.Name="{Binding FeedWarningCount, StringFormat=Feed warnings ({0})}"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <TextBlock Text="&#xE7BA;"
+                       FontFamily="Segoe MDL2 Assets"
+                       FontSize="16"
+                       Foreground="{StaticResource WarningBrush}" />
+        </Button>
+        <Popup x:Name="FeedWarningsPopup"
+               Placement="Bottom"
+               PlacementTarget="{Binding ElementName=FeedWarningsButton}"
+               DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+               IsOpen="{Binding IsFeedWarningsPopupOpen, Mode=TwoWay}"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade">
+            <Border Width="440"
+                    Padding="14"
+                    Background="{StaticResource ContentBrush}"
+                    BorderBrush="{StaticResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <Button DockPanel.Dock="Right"
+                                Width="28"
+                                Height="28"
+                                Padding="0"
+                                Content="&#xE711;"
+                                Style="{StaticResource IconActionButtonStyle}"
+                                Command="{Binding CloseFeedWarningsPopupCommand}"
+                                ToolTip="Close feed warnings"
+                                AutomationProperties.Name="Close feed warnings" />
+                        <TextBlock Text="Feed warnings"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                    </DockPanel>
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="PreviousFeedWarningButton"
+                                Grid.Column="0"
+                                Width="36"
+                                Height="36"
+                                Margin="0,0,8,0"
+                                Padding="0"
+                                FontSize="22"
+                                Content="‹"
+                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                Command="{Binding PreviousFeedWarningCommand}"
+                                ToolTip="Previous feed warning"
+                                AutomationProperties.Name="Previous feed warning" />
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SelectedFeedWarning.FeedName}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding SelectedFeedWarning.FeedName}" />
+                            <TextBlock Text="{Binding FeedWarningPositionLabel}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedTextBrush}" />
+                        </StackPanel>
+                        <Button x:Name="NextFeedWarningButton"
+                                Grid.Column="2"
+                                Width="36"
+                                Height="36"
+                                Margin="8,0,0,0"
+                                Padding="0"
+                                FontSize="22"
+                                Content="›"
+                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                Command="{Binding NextFeedWarningCommand}"
+                                ToolTip="Next feed warning"
+                                AutomationProperties.Name="Next feed warning" />
+                    </Grid>
+                    <TextBox x:Name="FeedWarningMessage"
+                             Grid.Row="2"
+                             MinHeight="110"
+                             MaxHeight="260"
+                             Margin="0,0,0,12"
+                             Padding="9"
+                             Text="{Binding SelectedFeedWarning.Message, Mode=OneWay}"
+                             IsReadOnly="True"
+                             IsReadOnlyCaretVisible="True"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"
+                             Background="{StaticResource ContentBrush}"
+                             BorderBrush="{StaticResource ControlBorderBrush}"
+                             AutomationProperties.Name="Feed warning details" />
+                    <DockPanel Grid.Row="3" LastChildFill="False">
+                        <Button x:Name="DismissAllFeedWarningsButton"
+                                DockPanel.Dock="Right"
+                                Margin="8,0,0,0"
+                                Padding="10,6"
+                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                Content="Dismiss all"
+                                Command="{Binding DismissAllFeedWarningsCommand}"
+                                AutomationProperties.Name="Dismiss all feed warnings" />
+                        <Button x:Name="DismissFeedWarningButton"
+                                DockPanel.Dock="Right"
+                                Margin="8,0,0,0"
+                                Padding="10,6"
+                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                Content="Dismiss"
+                                Command="{Binding DismissCurrentFeedWarningCommand}"
+                                AutomationProperties.Name="Dismiss current feed warning" />
+                        <Button x:Name="RetryFeedWarningButton"
+                                DockPanel.Dock="Left"
+                                Padding="10,6"
+                                Style="{StaticResource PrimaryActionButtonStyle}"
+                                Content="Retry feed"
+                                Command="{Binding RetryCurrentFeedWarningCommand}"
+                                Visibility="{Binding HasSelectedFeedWarningFeed, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                AutomationProperties.Name="Retry feed with warning" />
+                    </DockPanel>
+                </Grid>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

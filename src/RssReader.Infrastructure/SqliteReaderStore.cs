@@ -137,6 +137,17 @@ public sealed class SqliteReaderStore : IReaderStore
         CancellationToken cancellationToken = default) =>
         _feedRefresh.GetFeedRefreshStatesAsync(profileId, cancellationToken);
 
+    public Task ClearFeedRefreshFailureAsync(
+        string profileId,
+        string feedId,
+        CancellationToken cancellationToken = default) =>
+        _feedRefresh.ClearFeedRefreshFailureAsync(profileId, feedId, cancellationToken);
+
+    public Task ClearFeedRefreshFailuresAsync(
+        string profileId,
+        CancellationToken cancellationToken = default) =>
+        _feedRefresh.ClearFeedRefreshFailuresAsync(profileId, cancellationToken);
+
     public Task RecordFeedRefreshAttemptAsync(
         string profileId,
         string feedId,

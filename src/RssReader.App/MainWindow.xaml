@@ -6,7 +6,8 @@
     xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel"
     x:Name="MainWindowRoot"
         Title="RSS Reader"
-        WindowStyle="None"
+    Icon="Resources/RssReader.ico"
+    WindowStyle="None"
     ResizeMode="CanResize"
     WindowStartupLocation="Manual"
     AllowsTransparency="True"
@@ -112,23 +113,6 @@
                                FontSize="11"
                                Foreground="{StaticResource MutedTextBrush}"
                                TextWrapping="Wrap" />
-                    <TextBlock x:Name="RefreshFailureHeader"
-                               Text="{Binding VisibleRefreshFailureMessage, Mode=OneWay}"
-                               Margin="0,4,0,0"
-                               FontSize="11"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               TextWrapping="Wrap"
-                               AutomationProperties.Name="Feed refresh failure"
-                               Visibility="{Binding HasVisibleRefreshFailure, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                        <Button x:Name="RetryFailedFeedsHeaderButton"
-                            HorizontalAlignment="Left"
-                            Margin="0,4,0,0"
-                            Padding="8,4"
-                            Style="{StaticResource SecondaryActionButtonStyle}"
-                            Content="Retry failed feeds"
-                            Command="{Binding RetryFailedFeedsCommand}"
-                            AutomationProperties.Name="Retry failed feeds"
-                            Visibility="{Binding HasVisibleFailedRefreshFeeds, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 </StackPanel>
                 <Button x:Name="RefreshButton"
                         DockPanel.Dock="Right"
@@ -196,6 +180,11 @@
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
                        Foreground="{StaticResource TextBrush}" />
+            <local:FeedWarningsView x:Name="FeedWarningsView"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,122,0"
+                                    Panel.ZIndex="31" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="&#xE921;"
                         Style="{StaticResource IconActionButtonStyle}"
