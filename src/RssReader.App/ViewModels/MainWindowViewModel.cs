@@ -55,6 +55,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _hasLoadedInitialReaderData;
     private bool _isFeedWarningsPopupOpen;
     private bool _updatingArticleTopicOptions;
+    private int _articleListScrollToTopRequest;
     private int _selectedFeedWarningIndex = -1;
     private int _folderArticlesPerFeedLimit;
 
@@ -148,6 +149,10 @@ public sealed class MainWindowViewModel : ObservableObject
         NavigateCommand = new RelayCommand<SidebarLink>(link => NavigateTo(link));
         ActivateSidebarLinkCommand = new RelayCommand<SidebarLink>(ActivateSidebarLink);
         SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
+        SelectArticleTopicCommand = new RelayCommand<ArticleTopicChip>(
+            SelectArticleTopic,
+            CanSelectArticleTopic);
+        SelectFeedTagCommand = new RelayCommand<ArticleFeedTagChip>(SelectFeedTag, CanSelectFeedTag);
         PreviousArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(-1), () => CanNavigateToAdjacentArticle(-1));
         NextArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(1), () => CanNavigateToAdjacentArticle(1));
         NavigateToSelectedArticleFeedCommand = new RelayCommand(NavigateToSelectedArticleFeed);
@@ -240,6 +245,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<SidebarLink> NavigateCommand { get; }
     public RelayCommand<SidebarLink> ActivateSidebarLinkCommand { get; }
     public RelayCommand<ArticleRowViewModel> SelectArticleCommand { get; }
+    public RelayCommand<ArticleTopicChip> SelectArticleTopicCommand { get; }
+    public RelayCommand<ArticleFeedTagChip> SelectFeedTagCommand { get; }
     public RelayCommand PreviousArticleCommand { get; }
     public RelayCommand NextArticleCommand { get; }
     public RelayCommand NavigateToSelectedArticleFeedCommand { get; }
@@ -548,6 +555,12 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    public int ArticleListScrollToTopRequest
+    {
+        get => _articleListScrollToTopRequest;
+        private set => SetProperty(ref _articleListScrollToTopRequest, value);
+    }
+
     public string SearchQuery
     {
         get => _searchQuery;
@@ -779,6 +792,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsReadingViewVisible));
+                SelectArticleTopicCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(IsRawFeedButtonVisible));
                 OnPropertyChanged(nameof(HasSelectedArticleFeed));
                 OnPropertyChanged(nameof(SelectedArticleRefreshStatusMessage));
@@ -1132,6 +1146,11 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedArticle = null;
         ActiveRoute = link.Route;
         UpdateSelectedLinks();
+        if (link.IsFolder || link.IsFeedEntry)
+        {
+            ArticleListScrollToTopRequest++;
+        }
+
         _ = RefreshRouteFeedsAsync(link.Route);
     }
 
@@ -1259,6 +1278,53 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanGoBack));
         BackCommand.NotifyCanExecuteChanged();
+        SelectArticleTopicCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanSelectArticleTopic(ArticleTopicChip topic) =>
+        topic.IsSelectable && (SelectedArticle is null || CanGoBack);
+
+    private void SelectArticleTopic(ArticleTopicChip topic)
+    {
+        if (topic.Term is not { } term)
+        {
+            return;
+        }
+
+        if (SelectedArticle is not null)
+        {
+            if (_navigationHistory.Pop() is not { } previous)
+            {
+                return;
+            }
+
+            NotifyNavigationHistoryChanged();
+            RestoreNavigationState(previous with
+            {
+                SelectedArticleTopicTerm = term,
+                SelectedArticleTopicScheme = topic.Scheme
+            });
+            return;
+        }
+
+        SelectedArticleTopic = ArticleTopicOptions.FirstOrDefault(option =>
+            string.Equals(option.Term, term, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(option.Scheme, topic.Scheme, StringComparison.OrdinalIgnoreCase))
+            ?? new ArticleTopicOption(term, topic.Scheme, topic.Name, 0);
+    }
+
+    private bool CanSelectFeedTag(ArticleFeedTagChip tag) => tag.IsSelectable;
+
+    private void SelectFeedTag(ArticleFeedTagChip tag)
+    {
+        var tagLink = TagLinks.FirstOrDefault(link =>
+            string.Equals(link.Label, tag.Name, StringComparison.OrdinalIgnoreCase));
+        if (tagLink is null)
+        {
+            throw new InvalidOperationException($"The user tag '{tag.Name}' is not available.");
+        }
+
+        NavigateTo(tagLink);
     }
 
     private void NavigateToSelectedArticleFeed()

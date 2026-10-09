@@ -3,7 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:RssReader.App">
     <UserControl.Resources>
-        <Geometry x:Key="BackTrailIconGeometry">M 8,3 L 4,7 L 8,11 M 4,7 L 10,7 M 12,3 L 17,3 M 12,7 L 17,7 M 12,11 L 17,11</Geometry>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/ArticlePresentationResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <Geometry x:Key="BackTrailIconGeometry">M 8,3 L 4,7 L 8,11 M 4,7 L 10,7 M 12,3 L 17,3 M 12,7 L 17,7 M 12,11 L 17,11</Geometry>
+        </ResourceDictionary>
     </UserControl.Resources>
         <Grid Visibility="{Binding IsReadingViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid.RowDefinitions>
@@ -116,18 +121,38 @@
                     <Run Text="{Binding SelectedArticle.PublishedDateLabel, Mode=OneWay}" />
                     <Run Text=")" />
                 </TextBlock>
-                <TextBlock Grid.Row="3"
-                           Grid.Column="1"
-                           Grid.ColumnSpan="2"
-                           Margin="0,4,0,0"
-                           FontSize="12"
-                           Foreground="{StaticResource MutedTextBrush}"
-                           TextWrapping="Wrap"
-                           AutomationProperties.Name="Article topics"
-                           Visibility="{Binding SelectedArticle.HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <Run Text="Topics: " FontWeight="SemiBold" />
-                    <Run Text="{Binding SelectedArticle.FullTopicSummary, Mode=OneWay}" />
-                </TextBlock>
+                <ItemsControl x:Name="SelectedArticleTopicPills"
+                              Grid.Row="3"
+                              Grid.Column="1"
+                              Grid.ColumnSpan="2"
+                              Margin="0,4,0,0"
+                              ItemsSource="{Binding SelectedArticle.TopicChips}"
+                              ItemTemplate="{StaticResource ArticleTopicPillTemplate}"
+                              ToolTip="{Binding SelectedArticle.FullTopicSummary}"
+                              AutomationProperties.Name="Article topics"
+                              Visibility="{Binding SelectedArticle.HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <ItemsControl x:Name="SelectedArticleFeedTagPills"
+                              Grid.Row="4"
+                              Grid.Column="1"
+                              Grid.ColumnSpan="2"
+                              Margin="0,3,0,0"
+                              ItemsSource="{Binding SelectedArticle.FeedTagChips}"
+                              ItemTemplate="{StaticResource ArticleFeedTagPillTemplate}"
+                              ToolTip="{Binding SelectedArticle.FullFeedTagSummary}"
+                              AutomationProperties.Name="User tags"
+                              Visibility="{Binding SelectedArticle.HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
                 <TextBlock x:Name="SelectedArticleRefreshStatus"
                            Grid.Row="6"
                            Grid.Column="1"

@@ -168,6 +168,13 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual("Science / Reviews / Events +1", article.TopicSummary);
         Assert.AreEqual("Science / Reviews / Events / Updates", article.FullTopicSummary);
         CollectionAssert.AreEqual(new[] { "Science", "Reviews", "+2" }, article.TopicChipLabels.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Science", "Reviews", "Events", "Updates" },
+            article.TopicChips.Select(topic => topic.Name).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Science", "Reviews", "+2" },
+            article.CardTopicChips.Select(topic => topic.Name).ToArray());
+        Assert.IsFalse(article.CardTopicChips[^1].IsSelectable);
     }
 
     [TestMethod]
@@ -184,6 +191,11 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual("Reviews / News / Analysis +1", article.FeedTagSummary);
         Assert.AreEqual("Reviews / News / Analysis / Culture", article.FullFeedTagSummary);
         CollectionAssert.AreEqual(new[] { "Reviews", "News", "+2" }, article.FeedTagChipLabels.ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "Reviews", "News", "+2" },
+            article.FeedTagChips.Select(chip => chip.Name).ToArray());
+        Assert.IsTrue(article.FeedTagChips.Take(2).All(chip => chip.IsSelectable));
+        Assert.IsFalse(article.FeedTagChips[^1].IsSelectable);
         Assert.IsTrue(article.HasFeedTags);
 
         var untaggedArticle = new ArticleRowViewModel(
@@ -526,9 +538,23 @@ public sealed class MainWindowViewModelTests
         var topicChips = FindVisualChildren<ItemsControl>(cardSurface)
             .Single(control => AutomationProperties.GetName(control) == "Publisher topics");
         var feedTagChips = FindVisualChildren<ItemsControl>(cardSurface)
-            .Single(control => AutomationProperties.GetName(control) == "Feed tags");
+            .Single(control => AutomationProperties.GetName(control) == "User tags");
         Assert.AreEqual(1, topicChips.Items.Count);
         Assert.AreEqual(2, feedTagChips.Items.Count);
+        var cardTopicPill = FindVisualChildren<Button>(topicChips)
+            .Single(button => AutomationProperties.GetName(button) == "Publisher topic");
+        Assert.AreSame(mainViewModel.SelectArticleTopicCommand, cardTopicPill.Command);
+        Assert.AreEqual(taggedArticle.TopicChips.Single(), cardTopicPill.CommandParameter);
+        var topicPillBackground = cardTopicPill.Background as SolidColorBrush
+            ?? throw new AssertFailedException("The publisher-topic pill background was not a solid color.");
+        Assert.AreEqual(Color.FromRgb(0xE8, 0xF2, 0xEC), topicPillBackground.Color);
+        var cardFeedTagPill = FindVisualChildren<Button>(feedTagChips)
+            .Single(button => AutomationProperties.GetName(button) == taggedArticle.FeedTagChips[0].Name);
+        Assert.AreSame(mainViewModel.SelectFeedTagCommand, cardFeedTagPill.Command);
+        Assert.AreEqual(taggedArticle.FeedTagChips[0], cardFeedTagPill.CommandParameter);
+        var tagPillBackground = cardFeedTagPill.Background as SolidColorBrush
+            ?? throw new AssertFailedException("The user-tag pill background was not a solid color.");
+        Assert.AreEqual(Color.FromRgb(0xEA, 0xF1, 0xF8), tagPillBackground.Color);
         foreach (var metadataRow in new[] { topicChips, feedTagChips })
         {
             var rowBottom = metadataRow.TransformToAncestor(cardSurface)
@@ -564,6 +590,28 @@ public sealed class MainWindowViewModelTests
         taggedArticle.IsRead = true;
         mainWindow.UpdateLayout();
         Assert.AreEqual(Visibility.Collapsed, unreadIndicator.Visibility);
+        mainViewModel.IsMagazineView = true;
+        mainWindow.UpdateLayout();
+        var magazineList = FindArticleListElement<ListBox>(mainWindow, "ArticleMagazineList");
+        magazineList.ScrollIntoView(taggedArticle);
+        magazineList.UpdateLayout();
+        var magazineContainer = magazineList.ItemContainerGenerator.ContainerFromItem(taggedArticle)
+            ?? throw new AssertFailedException("The tagged magazine article was not created.");
+        var magazineTopicPills = FindVisualChildren<ItemsControl>(magazineContainer)
+            .Single(control => AutomationProperties.GetName(control) == "Publisher topics");
+        var magazineTopicPill = FindVisualChildren<Button>(magazineTopicPills)
+            .Single(button => AutomationProperties.GetName(button) == "Publisher topic");
+        Assert.AreSame(mainViewModel.SelectArticleTopicCommand, magazineTopicPill.Command);
+        Assert.AreEqual(taggedArticle.TopicChips.Single(), magazineTopicPill.CommandParameter);
+        var magazineFeedTagPills = FindVisualChildren<ItemsControl>(magazineContainer)
+            .Single(control => AutomationProperties.GetName(control) == "User tags");
+        Assert.AreEqual(2, magazineFeedTagPills.Items.Count);
+        var magazineFeedTagPill = FindVisualChildren<Button>(magazineFeedTagPills)
+            .Single(button => AutomationProperties.GetName(button) == taggedArticle.FeedTagChips[0].Name);
+        Assert.AreSame(mainViewModel.SelectFeedTagCommand, magazineFeedTagPill.Command);
+        Assert.AreEqual(taggedArticle.FeedTagChips[0], magazineFeedTagPill.CommandParameter);
+        mainViewModel.IsListView = true;
+        mainWindow.UpdateLayout();
         mainViewModel.IsCardsView = false;
         mainWindow.UpdateLayout();
         var articleTopicFilter = FindArticleListElement<ComboBox>(mainWindow, "ArticleTopicFilterComboBox");
@@ -592,6 +640,7 @@ public sealed class MainWindowViewModelTests
         var sidebarControl = (UserControl)mainWindow.FindName("SidebarView");
         var sidebarPinButton = (Button)sidebarControl.FindName("SidebarPinButton");
         var sidebarPeekButton = (Button)sidebarControl.FindName("SidebarPeekButton");
+        Assert.AreEqual(1, Grid.GetColumn(sidebarPinButton));
         Assert.AreEqual(sidebarPinButton.ToolTip, AutomationProperties.GetName(sidebarPinButton));
         Assert.AreEqual(sidebarPeekButton.ToolTip, AutomationProperties.GetName(sidebarPeekButton));
         mainViewModel.SelectArticleCommand.Execute(taggedArticle);
@@ -608,6 +657,18 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual("Open feed Gaming News", AutomationProperties.GetName(feedNameLink));
         var feedCommand = feedNameLink.Command
             ?? throw new AssertFailedException("The article feed link has no navigation command.");
+        var readerTopicPills = FindReaderElement<ItemsControl>(mainWindow, "SelectedArticleTopicPills");
+        Assert.AreEqual(1, readerTopicPills.Items.Count);
+        var readerTopicPill = FindVisualChildren<Button>(readerTopicPills)
+            .Single(button => AutomationProperties.GetName(button) == "Publisher topic");
+        Assert.AreSame(mainViewModel.SelectArticleTopicCommand, readerTopicPill.Command);
+        Assert.AreEqual(taggedArticle.TopicChips.Single(), readerTopicPill.CommandParameter);
+        var readerFeedTagPills = FindReaderElement<ItemsControl>(mainWindow, "SelectedArticleFeedTagPills");
+        Assert.AreEqual(2, readerFeedTagPills.Items.Count);
+        var readerFeedTagPill = FindVisualChildren<Button>(readerFeedTagPills)
+            .Single(button => AutomationProperties.GetName(button) == taggedArticle.FeedTagChips[0].Name);
+        Assert.AreSame(mainViewModel.SelectFeedTagCommand, readerFeedTagPill.Command);
+        Assert.AreEqual(taggedArticle.FeedTagChips[0], readerFeedTagPill.CommandParameter);
         feedCommand.Execute(null);
         mainWindow.UpdateLayout();
         Assert.AreEqual("feed:tag-feed", mainViewModel.ActiveRoute);
@@ -944,6 +1005,99 @@ public sealed class MainWindowViewModelTests
             MessageBoxResult.No,
             MessageDialogWindow.Show(null, "Continue?", MessageBoxButton.YesNo, MessageBoxImage.Warning));
         return styleFailures;
+    }
+
+    [TestMethod]
+    public void SelectingAFolderOrFeedScrollsTheArticleListToTheTop()
+    {
+        Exception? failure = null;
+        WpfTestHost.Run(() =>
+        {
+            RssReader.App.MainWindow? window = null;
+            try
+            {
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+                viewModel.IsListView = true;
+                var folderLink = viewModel.FeedLinks.Single(link => link.Route == "folder:Gaming");
+                viewModel.NavigateCommand.Execute(folderLink);
+
+                void AddTallArticleList()
+                {
+                    for (var index = 0; index < 120; index++)
+                    {
+                        viewModel.VisibleArticles.Add(new ArticleRowViewModel(
+                            $"Article {index}",
+                            "Test source",
+                            DateTimeOffset.Now.AddMinutes(-index),
+                            folderLink.Label,
+                            [],
+                            "Article summary"));
+                    }
+                }
+
+                void ProcessPendingScrollRequests()
+                {
+                    var frame = new DispatcherFrame();
+                    Dispatcher.CurrentDispatcher.BeginInvoke(
+                        DispatcherPriority.ContextIdle,
+                        new Action(() => frame.Continue = false));
+                    Dispatcher.PushFrame(frame);
+                }
+
+                window = CreateTestMainWindow(viewModel);
+                window.Show();
+                window.UpdateLayout();
+                var articleRowsList = FindArticleListElement<ListBox>(window, "ArticleRowsList");
+                var scrollViewer = FindVisualChildren<ScrollViewer>(articleRowsList).First();
+
+                AddTallArticleList();
+                window.UpdateLayout();
+                scrollViewer.ScrollToVerticalOffset(scrollViewer.ScrollableHeight);
+                window.UpdateLayout();
+                Assert.IsTrue(scrollViewer.VerticalOffset > 0);
+
+                var folderScrollRequest = viewModel.ArticleListScrollToTopRequest;
+                viewModel.NavigateCommand.Execute(folderLink);
+                ProcessPendingScrollRequests();
+                window.UpdateLayout();
+                Assert.AreEqual(folderScrollRequest + 1, viewModel.ArticleListScrollToTopRequest);
+                Assert.AreEqual(0, scrollViewer.VerticalOffset, 0.5);
+
+                var feedLink = new SidebarLink(
+                    "feed:test",
+                    "Test feed",
+                    "\uE774",
+                    indentLevel: 2,
+                    parentFolder: folderLink);
+                viewModel.FeedLinks.Add(feedLink);
+                viewModel.NavigateCommand.Execute(feedLink);
+                AddTallArticleList();
+                window.UpdateLayout();
+                scrollViewer.ScrollToVerticalOffset(scrollViewer.ScrollableHeight);
+                window.UpdateLayout();
+                Assert.IsTrue(scrollViewer.VerticalOffset > 0);
+
+                var feedScrollRequest = viewModel.ArticleListScrollToTopRequest;
+                viewModel.NavigateCommand.Execute(feedLink);
+                ProcessPendingScrollRequests();
+                window.UpdateLayout();
+                Assert.AreEqual(feedScrollRequest + 1, viewModel.ArticleListScrollToTopRequest);
+                Assert.AreEqual(0, scrollViewer.VerticalOffset, 0.5);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+            finally
+            {
+                if (window?.IsVisible == true)
+                {
+                    window.Close();
+                }
+            }
+        });
+
+        Assert.IsNull(failure, failure?.ToString());
     }
 
     [TestMethod]
@@ -1657,7 +1811,8 @@ public sealed class MainWindowViewModelTests
             CollectionAssert.AreEqual(new[] { "News", "Reviews" }, editorData.AvailableTags.ToArray());
             CollectionAssert.AreEqual(new[] { "News", "Reviews" }, editorData.AssignedTags.ToArray());
 
-            viewModel.NavigateCommand.Execute(viewModel.TagLinks.Single(link => link.Label == "Reviews"));
+            viewModel.SelectFeedTagCommand.Execute(
+                viewModel.VisibleArticles.Single().FeedTagChips.Single(chip => chip.Name == "Reviews"));
             Assert.AreEqual("tag:Reviews", viewModel.ActiveRoute);
             await viewModel.UpdateFeedTagsAsync(feed.Id, ["News"]);
             Assert.AreEqual("All", viewModel.ActiveRoute);
@@ -3578,6 +3733,111 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual(todayRoute, viewModel.ActiveRoute);
         Assert.AreEqual(string.Empty, viewModel.SearchQuery);
         Assert.IsFalse(viewModel.CanGoBack);
+    }
+
+    [TestMethod]
+    public async Task TopicPillsFilterTheListAndReturnFromTheArticleWithTopicSelected()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-app-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+
+            var profile = Profile.CreateRegular("Reader");
+            await profileStore.AddAsync(profile);
+            var feed = new CatalogFeed("topic-feed", "Topic News", "https://example.com/feed.xml", "News", null);
+            await catalogStore.AddFeedAsync(feed);
+            await readerStore.AddFolderAsync(profile.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, feed.Id, "News");
+            await readerStore.SaveArticlesAsync(feed.Id,
+            [
+                new FeedArticle(
+                    "topic-one",
+                    feed.Id,
+                    "item-1",
+                    "Article with two topics",
+                    null,
+                    DateTimeOffset.UtcNow,
+                    "Article summary",
+                    "Full story")
+                {
+                    Categories = [new ArticleCategory("science"), new ArticleCategory("reviews")]
+                },
+                new FeedArticle(
+                    "topic-two",
+                    feed.Id,
+                    "item-2",
+                    "Article about reviews",
+                    null,
+                    DateTimeOffset.UtcNow,
+                    "Article summary",
+                    "Full story")
+                {
+                    Categories = [new ArticleCategory("reviews")]
+                },
+                new FeedArticle(
+                    "topic-three",
+                    feed.Id,
+                    "item-3",
+                    "Article about science",
+                    null,
+                    DateTimeOffset.UtcNow,
+                    "Article summary",
+                    "Full story")
+                {
+                    Categories = [new ArticleCategory("science")]
+                }
+            ]);
+
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                null,
+                new ProfilePreferences(HideReadArticles: false));
+            await viewModel.InitializeAsync();
+
+            viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Search"));
+            viewModel.SearchQuery = "article";
+            var article = viewModel.VisibleArticles.Single(item => item.ArticleId == "topic-one");
+            var scienceTopic = article.TopicChips.Single(topic => topic.Name == "science");
+
+            Assert.IsTrue(viewModel.SelectArticleTopicCommand.CanExecute(scienceTopic));
+            viewModel.SelectArticleTopicCommand.Execute(scienceTopic);
+            Assert.AreEqual("science", viewModel.SelectedArticleTopic?.Term);
+            CollectionAssert.AreEquivalent(
+                new[] { "topic-one", "topic-three" },
+                viewModel.VisibleArticles.Select(item => item.ArticleId).ToArray());
+
+            viewModel.SelectArticleCommand.Execute(article);
+            var reviewsTopic = article.TopicChips.Single(topic => topic.Name == "reviews");
+            Assert.IsTrue(viewModel.SelectArticleTopicCommand.CanExecute(reviewsTopic));
+            viewModel.SelectArticleTopicCommand.Execute(reviewsTopic);
+
+            Assert.IsTrue(viewModel.IsArticleListVisible);
+            Assert.AreEqual("Search", viewModel.ActiveRoute);
+            Assert.AreEqual("article", viewModel.SearchQuery);
+            Assert.AreEqual("reviews", viewModel.SelectedArticleTopic?.Term);
+            CollectionAssert.AreEquivalent(
+                new[] { "topic-one", "topic-two" },
+                viewModel.VisibleArticles.Select(item => item.ArticleId).ToArray());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
     }
 
     [TestMethod]

@@ -2,6 +2,13 @@ using RssReader.Domain;
 
 namespace RssReader.App.ViewModels;
 
+public sealed record ArticleTopicChip(string Name, string? Term, string? Scheme)
+{
+    public bool IsSelectable => !string.IsNullOrWhiteSpace(Term);
+}
+
+public sealed record ArticleFeedTagChip(string Name, bool IsSelectable = true);
+
 public sealed class ArticleRowViewModel(
     string title,
     string source,
@@ -33,11 +40,14 @@ public sealed class ArticleRowViewModel(
     public string FeedTagSummary { get; } = FormatFeedTagSummary(tags);
     public string FullFeedTagSummary { get; } = FormatFeedTagSummary(tags, int.MaxValue);
     public IReadOnlyList<string> FeedTagChipLabels { get; } = FormatChipLabels(GetFeedTagNames(tags));
+    public IReadOnlyList<ArticleFeedTagChip> FeedTagChips { get; } = CreateFeedTagChips(GetFeedTagNames(tags));
     public bool HasFeedTags => !string.IsNullOrEmpty(FeedTagSummary);
     public IReadOnlyList<ArticleCategory> Topics { get; } = NormalizeTopics(topics ?? []);
     public string TopicSummary { get; } = FormatTopicSummary(NormalizeTopics(topics ?? []));
     public string FullTopicSummary { get; } = FormatTopicSummary(NormalizeTopics(topics ?? []), int.MaxValue);
     public IReadOnlyList<string> TopicChipLabels { get; } = FormatChipLabels(GetTopicNames(NormalizeTopics(topics ?? [])));
+    public IReadOnlyList<ArticleTopicChip> TopicChips { get; } = CreateTopicChips(NormalizeTopics(topics ?? []));
+    public IReadOnlyList<ArticleTopicChip> CardTopicChips { get; } = CreateCardTopicChips(NormalizeTopics(topics ?? []));
     public bool HasTopics => !string.IsNullOrEmpty(TopicSummary);
     public string Summary { get; } = FeedTextEncodingRepair.Repair(summary);
     public string? ArticleId { get; } = articleId;
@@ -114,6 +124,24 @@ public sealed class ArticleRowViewModel(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
+    private static IReadOnlyList<ArticleTopicChip> CreateTopicChips(IReadOnlyList<ArticleCategory> topics) =>
+        topics
+            .Select(topic => new ArticleTopicChip(
+                string.IsNullOrWhiteSpace(topic.Label) ? topic.Term.Trim() : topic.Label.Trim(),
+                topic.Term,
+                topic.Scheme))
+            .Where(topic => !string.IsNullOrWhiteSpace(topic.Name))
+            .DistinctBy(topic => topic.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<ArticleTopicChip> CreateCardTopicChips(IReadOnlyList<ArticleCategory> topics)
+    {
+        var chips = CreateTopicChips(topics);
+        return chips.Count <= 2
+            ? chips
+            : chips.Take(2).Append(new ArticleTopicChip($"+{chips.Count - 2}", null, null)).ToArray();
+    }
+
     private static IReadOnlyList<ArticleCategory> NormalizeTopics(IReadOnlyList<ArticleCategory> topics) =>
         topics.Select(topic => topic with
         {
@@ -136,6 +164,21 @@ public sealed class ArticleRowViewModel(
             .Select(tag => FeedTextEncodingRepair.Repair(tag.Trim()))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+
+    private static IReadOnlyList<ArticleFeedTagChip> CreateFeedTagChips(IReadOnlyList<string> names)
+    {
+        const int visibleLimit = 2;
+        var chips = names
+            .Take(visibleLimit)
+            .Select(name => new ArticleFeedTagChip(name))
+            .ToList();
+        if (names.Count > visibleLimit)
+        {
+            chips.Add(new ArticleFeedTagChip($"+{names.Count - visibleLimit}", IsSelectable: false));
+        }
+
+        return chips;
+    }
 
     private static IReadOnlyList<string> FormatChipLabels(string[] names)
     {

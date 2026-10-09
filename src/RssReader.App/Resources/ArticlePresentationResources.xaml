@@ -2,6 +2,119 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:RssReader.App"
                     xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel">
+    <Style x:Key="ArticleMetadataPillButtonStyle" TargetType="{x:Type Button}">
+        <Setter Property="Background" Value="#E8F2EC" />
+        <Setter Property="Foreground" Value="#53695C" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="6,2" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="MaxWidth" Value="88" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border x:Name="PillBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="7"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Opacity" Value="0.9" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter Property="Opacity" Value="0.75" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="PillBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="PillBorder" Property="BorderThickness" Value="1" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.55" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <DataTemplate x:Key="ArticleTopicPillTemplate">
+        <Grid>
+            <Button x:Name="ArticleTopicPillButton"
+                    Style="{StaticResource ArticleMetadataPillButtonStyle}"
+                    Command="{Binding DataContext.SelectArticleTopicCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                    CommandParameter="{Binding}"
+                    ToolTip="{Binding Name}"
+                    AutomationProperties.Name="{Binding Name}">
+                <TextBlock Text="{Binding Name}"
+                           FontSize="10"
+                           Foreground="#53695C"
+                           TextTrimming="CharacterEllipsis" />
+            </Button>
+            <Border x:Name="AdditionalTopicsPill"
+                    Background="#E8F2EC"
+                    CornerRadius="7"
+                    Padding="6,2"
+                    Margin="0,0,4,0"
+                    MaxWidth="88"
+                    Visibility="Collapsed">
+                <TextBlock Text="{Binding Name}"
+                           FontSize="10"
+                           Foreground="#53695C"
+                           TextTrimming="CharacterEllipsis" />
+            </Border>
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsSelectable}" Value="False">
+                <Setter TargetName="ArticleTopicPillButton" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="AdditionalTopicsPill" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <DataTemplate x:Key="ArticleFeedTagPillTemplate">
+        <Grid>
+            <Button x:Name="ArticleFeedTagPillButton"
+                    Style="{StaticResource ArticleMetadataPillButtonStyle}"
+                    Background="#EAF1F8"
+                    Foreground="#536B82"
+                    Command="{Binding DataContext.SelectFeedTagCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                    CommandParameter="{Binding}"
+                    ToolTip="{Binding Name}"
+                    AutomationProperties.Name="{Binding Name}">
+                <TextBlock Text="{Binding Name}"
+                           FontSize="10"
+                           Foreground="#536B82"
+                           TextTrimming="CharacterEllipsis" />
+            </Button>
+            <Border x:Name="AdditionalFeedTagsPill"
+                    Background="#EAF1F8"
+                    CornerRadius="7"
+                    Padding="6,2"
+                    Margin="0,0,4,0"
+                    MaxWidth="88"
+                    Visibility="Collapsed">
+                <TextBlock Text="{Binding Name}"
+                           FontSize="10"
+                           Foreground="#536B82"
+                           TextTrimming="CharacterEllipsis" />
+            </Border>
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsSelectable}" Value="False">
+                <Setter TargetName="ArticleFeedTagPillButton" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="AdditionalFeedTagsPill" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
     <Style x:Key="ArticleRowButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
@@ -228,22 +341,30 @@
                                        Foreground="{StaticResource MutedTextBrush}"
                                        TextWrapping="Wrap"
                                        TextTrimming="CharacterEllipsis" />
-                            <TextBlock Margin="0,4,0,0"
-                                       FontSize="10"
-                                       Foreground="{StaticResource MutedTextBrush}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{Binding HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <Run Text="Topics: " FontWeight="SemiBold" />
-                                <Run Text="{Binding TopicSummary, Mode=OneWay}" />
-                            </TextBlock>
-                            <TextBlock Margin="0,3,0,0"
-                                       FontSize="10"
-                                       Foreground="{StaticResource MutedTextBrush}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{Binding HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <Run Text="Feed tags: " FontWeight="SemiBold" />
-                                <Run Text="{Binding FeedTagSummary, Mode=OneWay}" />
-                            </TextBlock>
+                            <ItemsControl ItemsSource="{Binding TopicChips}"
+                                          Margin="0,4,0,0"
+                                          ItemTemplate="{StaticResource ArticleTopicPillTemplate}"
+                                          ToolTip="{Binding FullTopicSummary}"
+                                          AutomationProperties.Name="Publisher topics"
+                                          Visibility="{Binding HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                            <ItemsControl ItemsSource="{Binding FeedTagChips}"
+                                          Margin="0,3,0,0"
+                                          ItemTemplate="{StaticResource ArticleFeedTagPillTemplate}"
+                                          ToolTip="{Binding FullFeedTagSummary}"
+                                          AutomationProperties.Name="User tags"
+                                          Visibility="{Binding HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
                         </StackPanel>
                     </Grid>
                 </Button>
@@ -365,8 +486,9 @@
                                        Margin="0,8,0,0"
                                        FontSize="11"
                                        Foreground="{StaticResource MutedTextBrush}" />
-                            <ItemsControl ItemsSource="{Binding TopicChipLabels}"
+                            <ItemsControl ItemsSource="{Binding CardTopicChips}"
                                           Margin="0,4,0,0"
+                                          ItemTemplate="{StaticResource ArticleTopicPillTemplate}"
                                           ToolTip="{Binding FullTopicSummary}"
                                           AutomationProperties.Name="Publisher topics"
                                           Visibility="{Binding HasTopics, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -375,47 +497,18 @@
                                         <StackPanel Orientation="Horizontal" />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#EAF1F8"
-                                                CornerRadius="7"
-                                                Padding="6,2"
-                                                Margin="0,0,4,0"
-                                                MaxWidth="88">
-                                            <TextBlock Text="{Binding}"
-                                                       FontSize="10"
-                                                       Foreground="#536B82"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding}" />
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <ItemsControl ItemsSource="{Binding FeedTagChipLabels}"
+                            <ItemsControl ItemsSource="{Binding FeedTagChips}"
                                           Margin="0,3,0,0"
+                                          ItemTemplate="{StaticResource ArticleFeedTagPillTemplate}"
                                           ToolTip="{Binding FullFeedTagSummary}"
-                                          AutomationProperties.Name="Feed tags"
+                                          AutomationProperties.Name="User tags"
                                           Visibility="{Binding HasFeedTags, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal" />
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#E8F2EC"
-                                                CornerRadius="7"
-                                                Padding="6,2"
-                                                Margin="0,0,4,0"
-                                                MaxWidth="88">
-                                            <TextBlock Text="{Binding}"
-                                                       FontSize="10"
-                                                       Foreground="#53695C"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       ToolTip="{Binding}" />
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </StackPanel>
                     </StackPanel>

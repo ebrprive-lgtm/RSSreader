@@ -253,6 +253,7 @@
                         </Grid>
                     </Button>
                     <Button x:Name="SidebarPinButton"
+                            Grid.Column="1"
                             Command="{Binding ToggleSidebarCommand}"
                             Style="{StaticResource SidebarIconButtonStyle}"
                             ContentTemplate="{StaticResource SidebarIconTemplate}"

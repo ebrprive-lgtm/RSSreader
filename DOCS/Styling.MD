@@ -43,7 +43,8 @@ Use `Segoe MDL2 Assets` for the existing icon glyphs. Pair icons with clear text
 
 - Keep operational views dense, aligned, and easy to scan; favor whitespace through consistent margins rather than decorative cards.
 - Article cards are an intentional content-surface exception: use a restrained 10-12 px corner radius and subtle separator, without heavy shadows.
-- Keep article-card hover and keyboard-focus feedback visible but restrained; distinguish publisher-topic and profile feed-tag chips, and preserve a consistent `UniformToFill` image crop.
+- Keep article-card hover and keyboard-focus feedback visible but restrained; use the same clickable green publisher-topic pills in cards, magazine, and article views, and render clickable user-created feed-tag pills in light blue so they navigate to that tag's article list. Preserve a consistent `UniformToFill` image crop.
+- Selecting a publisher-topic pill filters the current article list; from the article view, it returns through navigation history with that topic selected.
 - Keep the title-only article list focused on the headline, with publisher and age as compact metadata; show folder labels and folder groups only in folder-sort mode, and keep date-sort mode as one global newest-first list.
 - Keep the unsaved read-later bookmark hidden until its row is hovered or keyboard-focused; saved bookmarks remain visible.
 - Use the existing 286 px navigation sidebar and restrained content margins in the main window.
