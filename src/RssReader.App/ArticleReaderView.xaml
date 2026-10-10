@@ -217,20 +217,6 @@
                             AutomationProperties.Name="Adjust reader typography">
                         <TextBlock Text="&#xE8D2;" FontFamily="Segoe MDL2 Assets" />
                     </Button>
-                        <Button x:Name="ReaderSplitPaneToggleButton"
-                                Margin="0,0,4,0"
-                                Style="{StaticResource SplitPaneToggleButtonStyle}"
-                                Command="{Binding ToggleSplitPaneCommand}"
-                                Visibility="{Binding IsFullPageReadingViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                AutomationProperties.Name="Toggle split view">
-                            <Path Width="18"
-                                  Height="16"
-                                  Data="{StaticResource SplitPaneIconGeometry}"
-                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
-                                  StrokeThickness="1.5"
-                                  StrokeLineJoin="Round"
-                                  IsHitTestVisible="False" />
-                        </Button>
                         <Button x:Name="SelectedArticleActionsButton"
                                 Width="32"
                                 Height="32"
@@ -266,6 +252,20 @@
                             AutomationProperties.Name="Next article">
                         <TextBlock Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" />
                     </Button>
+                        <Button x:Name="ReaderSplitPaneToggleButton"
+                                Margin="4,0,0,0"
+                                Style="{StaticResource SplitPaneToggleButtonStyle}"
+                                Command="{Binding ToggleSplitPaneCommand}"
+                                Visibility="{Binding IsFullPageReadingViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                AutomationProperties.Name="Toggle split view">
+                            <Path Width="18"
+                                  Height="16"
+                                  Data="{StaticResource SplitPaneIconGeometry}"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                  StrokeThickness="1.5"
+                                  StrokeLineJoin="Round"
+                                  IsHitTestVisible="False" />
+                        </Button>
                 </StackPanel>
                 <Button Grid.Column="3"
                         Content="Show XML"

@@ -22,29 +22,13 @@
                             <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                         </Trigger>
                         <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
                             <Setter Property="FontWeight" Value="SemiBold" />
                         </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
-        <Style.Triggers>
-            <MultiDataTrigger>
-                <MultiDataTrigger.Conditions>
-                    <Condition Binding="{Binding IsFolder}" Value="True" />
-                    <Condition Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True" />
-                </MultiDataTrigger.Conditions>
-                <Setter Property="Padding" Value="9,8,40,8" />
-            </MultiDataTrigger>
-            <MultiDataTrigger>
-                <MultiDataTrigger.Conditions>
-                    <Condition Binding="{Binding IsFolder}" Value="True" />
-                    <Condition Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True" />
-                </MultiDataTrigger.Conditions>
-                <Setter Property="Padding" Value="9,8,40,8" />
-            </MultiDataTrigger>
-        </Style.Triggers>
     </Style>
     <Style x:Key="SidebarLinkRootStyle" TargetType="Grid">
         <Setter Property="ClipToBounds" Value="True" />

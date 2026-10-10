@@ -59,7 +59,8 @@ public partial class SidebarView : UserControl
 
     private void SidebarLinkRoot_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is Grid { DataContext: SidebarLink link } row && (link.IsFolder || link.IsFeedEntry))
+        if (sender is Grid { DataContext: SidebarLink link } row &&
+            (link.IsFolder || link.IsFeedEntry || !string.IsNullOrWhiteSpace(link.Count)))
         {
             row.Tag = true;
         }
@@ -67,7 +68,8 @@ public partial class SidebarView : UserControl
 
     private void SidebarLinkRoot_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (sender is Grid { DataContext: SidebarLink link } row && (link.IsFolder || link.IsFeedEntry))
+        if (sender is Grid { DataContext: SidebarLink link } row &&
+            (link.IsFolder || link.IsFeedEntry || !string.IsNullOrWhiteSpace(link.Count)))
         {
             row.Tag = false;
         }

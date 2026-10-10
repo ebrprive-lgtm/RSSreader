@@ -12,32 +12,21 @@
                     Style="{StaticResource SidebarLinkRootStyle}"
                     MouseEnter="SidebarLinkRoot_MouseEnter"
                     MouseLeave="SidebarLinkRoot_MouseLeave">
-                    <Button Style="{StaticResource SidebarButtonStyle}"
-                           Command="{Binding DataContext.ActivateSidebarLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                           CommandParameter="{Binding}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0"
+                            Style="{StaticResource SidebarButtonStyle}"
+                            Command="{Binding DataContext.ActivateSidebarLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}">
                         <Grid Margin="{Binding IndentMargin}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="36" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock FontFamily="Segoe MDL2 Assets"
-                                       FontSize="9"
-                                       HorizontalAlignment="Left"
-                                       VerticalAlignment="Center"
-                                       Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="&#xE76C;" />
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                <Setter Property="Text" Value="&#xE70D;" />
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
                             <TextBlock Text="{Binding Glyph}"
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="13"
@@ -57,6 +46,8 @@
                             <TextBlock Grid.Column="1"
                                        Text="{Binding Label}"
                                        FontSize="14"
+                                       TextTrimming="CharacterEllipsis"
+                                       TextWrapping="NoWrap"
                                        VerticalAlignment="Center"
                                        Visibility="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
                             <TextBlock Grid.Column="2"
@@ -65,21 +56,14 @@
                                        Foreground="{DynamicResource MutedTextBrush}"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
-                                       TextAlignment="Right"
-                                       Visibility="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                            <Border Grid.Column="3"
-                                    Margin="7,0,0,0"
-                                    Padding="5,1"
-                                    Background="{DynamicResource AccentWashBrush}"
-                                    CornerRadius="7"
-                                    ToolTip="{Binding UnreadCountAutomationName}">
-                                <Border.Style>
-                                    <Style TargetType="Border">
+                                       TextAlignment="Right">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
                                         <Setter Property="Visibility" Value="Collapsed" />
                                         <Style.Triggers>
                                             <MultiDataTrigger>
                                                 <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding HasUnreadCount}" Value="True" />
+                                                    <Condition Binding="{Binding Tag, ElementName=SidebarLinkRoot}" Value="True" />
                                                     <Condition Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                Value="True" />
                                                 </MultiDataTrigger.Conditions>
@@ -87,126 +71,190 @@
                                             </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </Border.Style>
-                                <TextBlock Text="{Binding UnreadCount}"
-                                           FontSize="10"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           AutomationProperties.Name="{Binding UnreadCountAutomationName}" />
-                            </Border>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </Grid>
                     </Button>
-                    <Button Width="28"
+                    <Button Grid.Column="0"
+                            Width="24"
                             Height="28"
-                            HorizontalAlignment="Right"
+                            Padding="0"
+                            Margin="{Binding IndentMargin}"
+                            HorizontalAlignment="Left"
                             VerticalAlignment="Center"
-                            Margin="0,0,6,0"
-                            Content="&#xE74D;"
-                            FontFamily="Segoe MDL2 Assets"
-                            FontSize="14"
-                            Foreground="{DynamicResource MutedTextBrush}"
+                            Panel.ZIndex="1"
+                            Style="{StaticResource SidebarIconButtonStyle}"
+                            Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Command="{Binding DataContext.ToggleSidebarFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            CommandParameter="{Binding}"
+                            ToolTip="Expand or collapse folder"
+                            AutomationProperties.Name="{Binding Label, StringFormat='Toggle folder {0}'}">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="9"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="&#xE76C;" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                            <Setter Property="Text" Value="&#xE70D;" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Button>
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Button Width="28"
+                                Height="28"
+                                Content="&#xE8D2;"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="14"
+                                Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Click="ManageFeedTags_Click"
+                                AutomationProperties.Name="{Binding Label, StringFormat='Manage tags for {0}'}"
+                                ToolTip="Manage feed tags">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
+                                    <Setter Property="Opacity" Value="0" />
+                                    <Setter Property="IsHitTestVisible" Value="False" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                            <Setter Property="Opacity" Value="1" />
+                                            <Setter Property="IsHitTestVisible" Value="True" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Width="28"
+                                Height="28"
+                                Margin="0,0,4,0"
+                                Content="&#xE74D;"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="14"
+                                Foreground="{DynamicResource DestructiveBrush}"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Command="{Binding DataContext.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                AutomationProperties.Name="Delete folder"
+                                ToolTip="Delete folder">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Opacity" Value="0" />
+                                    <Setter Property="IsHitTestVisible" Value="False" />
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="DeleteButtonBorder"
+                                                        Background="{TemplateBinding Background}"
+                                                        CornerRadius="4">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsPressed" Value="True">
+                                                        <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                            <Setter Property="Opacity" Value="1" />
+                                            <Setter Property="IsHitTestVisible" Value="True" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Width="28"
+                                Height="28"
+                                Margin="0,0,4,0"
+                                Content="&#xE738;"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="14"
+                                Foreground="{DynamicResource DestructiveBrush}"
+                                Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Command="{Binding DataContext.UnfollowFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                AutomationProperties.Name="{Binding Label, StringFormat='Unfollow {0}'}"
+                                ToolTip="Unfollow feed">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource DestructiveIconActionButtonStyle}">
+                                    <Setter Property="Opacity" Value="0" />
+                                    <Setter Property="IsHitTestVisible" Value="False" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
+                                            <Setter Property="Opacity" Value="1" />
+                                            <Setter Property="IsHitTestVisible" Value="True" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                    <Button Grid.Column="2"
+                            Padding="0"
                             Background="Transparent"
                             BorderThickness="0"
-                            Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}"
-                            Command="{Binding DataContext.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                            Focusable="False"
+                            Command="{Binding DataContext.ActivateSidebarLinkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                             CommandParameter="{Binding}"
-                            AutomationProperties.Name="Delete folder"
-                            ToolTip="Delete folder">
+                            ToolTip="{Binding UnreadCountAutomationName}"
+                            AutomationProperties.Name="{Binding UnreadCountAutomationName}">
                         <Button.Style>
                             <Style TargetType="Button">
-                                <Setter Property="Opacity" Value="0" />
-                                <Setter Property="IsHitTestVisible" Value="False" />
+                                <Setter Property="Visibility" Value="Collapsed" />
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
-                                            <Border x:Name="DeleteButtonBorder"
-                                                    Background="{TemplateBinding Background}"
-                                                    CornerRadius="4">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
-                                                    <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
-                                                </Trigger>
-                                                <Trigger Property="IsPressed" Value="True">
-                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Setter Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Setter Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding HasUnreadCount}" Value="True" />
+                                            <Condition Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                       Value="True" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
-                    </Button>
-                    <Button Width="28"
-                            Height="28"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Margin="0,0,38,0"
-                            Content="&#xE738;"
-                            FontFamily="Segoe MDL2 Assets"
-                            FontSize="14"
-                            Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
-                            Command="{Binding DataContext.UnfollowFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                            CommandParameter="{Binding}"
-                            AutomationProperties.Name="{Binding Label, StringFormat='Unfollow {0}'}"
-                            ToolTip="Unfollow feed">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
-                                <Setter Property="Opacity" Value="0" />
-                                <Setter Property="IsHitTestVisible" Value="False" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Setter Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Setter Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                    <Button Width="28"
-                            Height="28"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Margin="0,0,6,0"
-                            Content="&#xE8D2;"
-                            FontFamily="Segoe MDL2 Assets"
-                            FontSize="14"
-                            Visibility="{Binding IsFeedEntry, Converter={StaticResource BooleanToVisibilityConverter}}"
-                            Click="ManageFeedTags_Click"
-                            AutomationProperties.Name="{Binding Label, StringFormat='Manage tags for {0}'}"
-                            ToolTip="Manage feed tags">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
-                                <Setter Property="Opacity" Value="0" />
-                                <Setter Property="IsHitTestVisible" Value="False" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Setter Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}" Value="True">
-                                        <Setter Property="Opacity" Value="1" />
-                                        <Setter Property="IsHitTestVisible" Value="True" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
+                        <Border Margin="4,0,9,0"
+                                Padding="5,1"
+                                Background="{DynamicResource AccentWashBrush}"
+                                CornerRadius="7"
+                                ToolTip="{Binding UnreadCountAutomationName}">
+                            <TextBlock Text="{Binding UnreadCount}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       AutomationProperties.Name="{Binding UnreadCountAutomationName}" />
+                        </Border>
                     </Button>
                 </Grid>
             </DataTemplate>

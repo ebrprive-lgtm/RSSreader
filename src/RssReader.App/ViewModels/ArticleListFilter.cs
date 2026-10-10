@@ -78,6 +78,17 @@ internal static class ArticleListFilter
             articles = articles.Where(article => article.IsSaved);
         }
 
+        if (!activeRoute.StartsWith("feed:", StringComparison.Ordinal))
+        {
+            var candidateArticles = articles.ToArray();
+            var seenArticleIdentities = new HashSet<string>(StringComparer.Ordinal);
+            articles = candidateArticles.Where(article =>
+            {
+                var identity = GetDuplicateIdentity(article);
+                return identity is null || seenArticleIdentities.Add(identity);
+            }).ToArray();
+        }
+
         var topicScope = articles.ToArray();
         var topicOptions = BuildTopicOptions(topicScope);
         var resolvedTopic = ResolveSelectedTopic(selectedTopic, topicOptions);
@@ -98,6 +109,19 @@ internal static class ArticleListFilter
         }
 
         return new ArticleListFilterResult(articles.ToArray(), topicOptions, resolvedTopic);
+    }
+
+    internal static string? GetDuplicateIdentity(ArticleRowViewModel article)
+    {
+        if (Uri.TryCreate(article.Link, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            return $"url:{new UriBuilder(uri) { Fragment = string.Empty }.Uri.AbsoluteUri}";
+        }
+
+        return string.IsNullOrWhiteSpace(article.ExternalId)
+            ? null
+            : $"id:{article.FeedId}\0{article.ExternalId.Trim()}";
     }
 
     private static List<ArticleTopicOption> BuildTopicOptions(IReadOnlyList<ArticleRowViewModel> articles)

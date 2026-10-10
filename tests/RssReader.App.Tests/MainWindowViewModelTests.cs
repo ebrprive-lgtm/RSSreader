@@ -497,6 +497,55 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void SplitPaneToggleMovesBetweenFullPageReaderAndArticleList()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            viewModel.SelectArticleCommand.Execute(viewModel.VisibleArticles[0]);
+            var window = CreateTestMainWindow(viewModel);
+            window.Width = 1100;
+            window.Height = 760;
+            WpfTestHost.Application.MainWindow = window;
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+
+                var articleList = (ArticleListView)window.FindName("ArticleListView")!;
+                var articleReader = (ArticleReaderView)window.FindName("ArticleReaderView")!;
+                var listToggle = (Button)articleList.FindName("ArticleListSplitPaneToggleButton")!;
+                var readerToggle = (Button)articleReader.FindName("ReaderSplitPaneToggleButton")!;
+
+                Assert.IsTrue(articleReader.IsVisible);
+                Assert.AreEqual(Visibility.Visible, readerToggle.Visibility);
+                Assert.IsFalse(listToggle.IsVisible);
+
+                readerToggle.Command.Execute(readerToggle.CommandParameter);
+                window.UpdateLayout();
+
+                Assert.IsTrue(viewModel.IsSplitPaneActive);
+                Assert.IsFalse(readerToggle.IsVisible);
+                Assert.IsTrue(listToggle.IsVisible);
+
+                listToggle.Command.Execute(listToggle.CommandParameter);
+                window.UpdateLayout();
+
+                Assert.IsFalse(viewModel.IsSplitPaneActive);
+                Assert.IsTrue(articleReader.IsVisible);
+                Assert.IsTrue(readerToggle.IsVisible);
+                Assert.IsFalse(listToggle.IsVisible);
+            }
+            finally
+            {
+                window.Close();
+                WpfTestHost.Application.MainWindow = null;
+            }
+        });
+    }
+
+    [TestMethod]
     public void SplitPaneUsesAvailableWorkspaceWidthRatherThanWholeWindowWidth()
     {
         WpfTestHost.Run(() =>
@@ -601,6 +650,105 @@ public sealed class MainWindowViewModelTests
 
         viewModel.ToggleArticleSavedCommand.Execute(article);
         Assert.IsTrue(article.IsSaved);
+    }
+
+    [TestMethod]
+    public void SidebarFeedRowReservesActionSpaceOnlyWhileHovered()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            viewModel.IsListView = true;
+            var parentFolder = new SidebarLink("folder:Comics", "Comics", string.Empty, "(1)")
+            {
+                IsExpanded = true
+            };
+            viewModel.FeedLinks.Add(parentFolder);
+            var feedLink = new SidebarLink(
+                "feed:comics",
+                "Comics by Keith Knight",
+                "\uE774",
+                indentLevel: 2,
+                parentFolder: parentFolder)
+            {
+                UnreadCount = 95
+            };
+            viewModel.FeedLinks.Add(feedLink);
+            var window = CreateTestMainWindow(viewModel);
+            window.Width = 1100;
+            window.Height = 760;
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+
+                var feedRow = FindVisualChildren<Grid>(window)
+                    .Single(grid => grid.Name == "SidebarLinkRoot" && ReferenceEquals(grid.DataContext, feedLink));
+                var folderRow = FindVisualChildren<Grid>(window)
+                    .Single(grid => grid.Name == "SidebarLinkRoot" && ReferenceEquals(grid.DataContext, parentFolder));
+                var folderCount = FindVisualChildren<TextBlock>(folderRow)
+                    .Single(textBlock => textBlock.Text == parentFolder.Count);
+                var navigationButton = feedRow.Children.OfType<Button>()
+                    .Single(button => Grid.GetColumn(button) == 0 &&
+                                      ReferenceEquals(button.Command, viewModel.ActivateSidebarLinkCommand));
+                var unreadCountButton = feedRow.Children.OfType<Button>().Single(button => Grid.GetColumn(button) == 2);
+                var actionPanel = feedRow.Children.OfType<StackPanel>().Single();
+                var label = FindVisualChildren<TextBlock>(feedRow).Single(textBlock => textBlock.Text == feedLink.Label);
+                var unreadBadge = FindVisualChildren<Border>(feedRow)
+                    .Single(border => Equals(border.ToolTip, feedLink.UnreadCountAutomationName));
+
+                Assert.AreSame(navigationButton.Command, unreadCountButton.Command);
+                Assert.AreEqual(Visibility.Collapsed, folderCount.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, actionPanel.Visibility);
+                Assert.AreEqual(0, feedRow.ColumnDefinitions[1].ActualWidth, 0.1);
+                var labelWidthWithoutHover = label.ActualWidth;
+
+                static Rect GetBounds(FrameworkElement element, Visual relativeTo) =>
+                    element.TransformToVisual(relativeTo).TransformBounds(new Rect(new Point(), element.RenderSize));
+
+                var unreadBadgeBounds = GetBounds(unreadBadge, feedRow);
+                Assert.IsTrue(feedRow.ActualWidth - unreadBadgeBounds.Right < 20);
+
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Visible, folderCount.Visibility);
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Collapsed, folderCount.Visibility);
+
+                feedRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+                window.UpdateLayout();
+
+                Assert.AreEqual(Visibility.Visible, actionPanel.Visibility);
+                Assert.IsTrue(feedRow.ColumnDefinitions[1].ActualWidth > 0);
+                Assert.IsTrue(label.ActualWidth < labelWidthWithoutHover);
+                var tagButton = FindVisualChildren<Button>(actionPanel)
+                    .Single(button => AutomationProperties.GetName(button) == "Manage tags for Comics by Keith Knight");
+                var unfollowButton = FindVisualChildren<Button>(actionPanel)
+                    .Single(button => AutomationProperties.GetName(button) == "Unfollow Comics by Keith Knight");
+                var destructiveBrush = (SolidColorBrush)window.FindResource("DestructiveBrush");
+                Assert.AreEqual(destructiveBrush.Color, ((SolidColorBrush)unfollowButton.Foreground).Color);
+                Assert.IsTrue(GetBounds(tagButton, feedRow).Right <= GetBounds(unfollowButton, feedRow).Left);
+                Assert.IsTrue(GetBounds(unfollowButton, feedRow).Right <= GetBounds(unreadBadge, feedRow).Left);
+
+                feedRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+                window.UpdateLayout();
+
+                Assert.AreEqual(Visibility.Collapsed, actionPanel.Visibility);
+                Assert.AreEqual(0, feedRow.ColumnDefinitions[1].ActualWidth, 0.1);
+
+                var deleteButton = FindVisualChildren<Button>(folderRow)
+                    .Single(button => AutomationProperties.GetName(button) == "Delete folder");
+                folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+                window.UpdateLayout();
+                Assert.AreEqual(destructiveBrush.Color, ((SolidColorBrush)deleteButton.Foreground).Color);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
     [TestMethod]
@@ -855,12 +1003,19 @@ public sealed class MainWindowViewModelTests
 
         var mainViewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
         mainViewModel.IsListView = true;
+        var tagManagedParentFolder = new SidebarLink("folder:Gaming", "Gaming", string.Empty)
+        {
+            IsExpanded = true
+        };
         var tagManagedFeedLink = new SidebarLink(
             "feed:tag-feed",
             "Gaming News",
             "\uE774",
             indentLevel: 2,
-            parentFolder: new SidebarLink("folder:Gaming", "Gaming", string.Empty));
+            parentFolder: tagManagedParentFolder)
+        {
+            UnreadCount = 108
+        };
         mainViewModel.FeedLinks.Add(tagManagedFeedLink);
         mainViewModel.VisibleArticles.Add(new ArticleRowViewModel(
             "Tagged article",
@@ -893,6 +1048,24 @@ public sealed class MainWindowViewModelTests
         tagManagedFeedRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
         mainWindow.UpdateLayout();
         Assert.AreEqual(1, manageTagsButton.Opacity);
+        var unfollowFeedButton = FindVisualChildren<Button>(tagManagedFeedRow)
+            .Single(button => AutomationProperties.GetName(button) == "Unfollow Gaming News");
+        var unreadCountBadge = FindVisualChildren<Border>(tagManagedFeedRow)
+            .Single(border => Equals(border.ToolTip, tagManagedFeedLink.UnreadCountAutomationName));
+        Assert.AreEqual(Visibility.Visible, unreadCountBadge.Visibility);
+        Assert.AreEqual("108", FindVisualChildren<TextBlock>(unreadCountBadge).Single().Text);
+
+        static Rect GetBounds(FrameworkElement element, Visual relativeTo) =>
+            element.TransformToVisual(relativeTo).TransformBounds(new Rect(new Point(), element.RenderSize));
+
+        var unreadCountBounds = GetBounds(unreadCountBadge, tagManagedFeedRow);
+        Assert.IsTrue(unreadCountBounds.Width > 0 && unreadCountBounds.Height > 0);
+        Assert.IsFalse(
+            unreadCountBounds.IntersectsWith(GetBounds(manageTagsButton, tagManagedFeedRow)),
+            "The manage-tags action overlaps the unread-count badge.");
+        Assert.IsFalse(
+            unreadCountBounds.IntersectsWith(GetBounds(unfollowFeedButton, tagManagedFeedRow)),
+            "The unfollow action overlaps the unread-count badge.");
         var articleLabels = FindVisualChildren<TextBlock>(mainWindow)
             .Select(textBlock => string.Join(
                 " ",
@@ -2138,15 +2311,24 @@ public sealed class MainWindowViewModelTests
                 var folderRow = FindVisualChildren<Grid>(window)
                     .Single(grid => ReferenceEquals(grid.DataContext, folder) && grid.Name == "SidebarLinkRoot");
                 var folderButton = folderRow.Children.OfType<Button>().First();
-                var deleteFolderButton = folderRow.Children.OfType<Button>()
+                var toggleFolderButton = FindVisualChildren<Button>(folderRow)
+                    .Single(button => ReferenceEquals(button.Command, viewModel.ToggleSidebarFolderCommand));
+                var deleteFolderButton = FindVisualChildren<Button>(folderRow)
                     .Single(button => AutomationProperties.GetName(button) == "Delete folder");
                 Assert.AreEqual(0, deleteFolderButton.Opacity);
+                viewModel.ActivateSidebarLinkCommand.Execute(folder);
+                window.UpdateLayout();
+                Assert.IsFalse(folder.IsExpanded);
+                Assert.IsTrue(folder.IsSelected);
+                Assert.AreEqual("folder:Comics", viewModel.ActiveRoute);
+                var selectedBorder = FindVisualChildren<Border>(folderButton)
+                    .Single(border => border.Name == "ButtonBorder");
+                var selectedBrush = (SolidColorBrush)window.FindResource("NeutralPressedBrush");
+                Assert.AreEqual(selectedBrush.Color, ((SolidColorBrush)selectedBorder.Background).Color);
+
                 folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
                 window.UpdateLayout();
                 Assert.AreEqual(1, deleteFolderButton.Opacity);
-                viewModel.ActivateSidebarLinkCommand.Execute(folder);
-                window.UpdateLayout();
-                Assert.IsTrue(folder.IsExpanded);
                 folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
                 window.UpdateLayout();
                 Assert.AreEqual(0, deleteFolderButton.Opacity);
@@ -2161,12 +2343,19 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(folderButton.Focus());
                 window.UpdateLayout();
                 Assert.IsTrue(folderRow.IsKeyboardFocusWithin);
-                Assert.AreEqual(1, deleteFolderButton.Opacity);
-                Assert.AreEqual(40, folderButton.Padding.Right);
+                Assert.AreEqual(0, deleteFolderButton.Opacity);
 
-                viewModel.ActivateSidebarLinkCommand.Execute(folder);
+                Assert.AreEqual(0, deleteFolderButton.Opacity);
+                Assert.AreSame(viewModel.ToggleSidebarFolderCommand, toggleFolderButton.Command);
+                Assert.AreSame(folder, toggleFolderButton.CommandParameter);
+                toggleFolderButton.Command.Execute(toggleFolderButton.CommandParameter);
+                window.UpdateLayout();
+                Assert.IsTrue(folder.IsExpanded);
+                Assert.AreEqual("folder:Comics", viewModel.ActiveRoute);
+                toggleFolderButton.Command.Execute(toggleFolderButton.CommandParameter);
                 window.UpdateLayout();
                 Assert.IsFalse(folder.IsExpanded);
+                Assert.AreEqual("folder:Comics", viewModel.ActiveRoute);
                 window.Close();
                 window.Close();
             }
@@ -2243,6 +2432,108 @@ public sealed class MainWindowViewModelTests
             foreach (var descendant in FindVisualChildren<T>(child))
             {
                 yield return descendant;
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task IdenticalArticlesFromDifferentFeedsCollapseInCombinedViewsAndShareState()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"rss-reader-app-{Guid.NewGuid():N}.db");
+        try
+        {
+            var profileStore = new SqliteProfileStore(databasePath);
+            var catalogStore = new SqliteCatalogStore(databasePath);
+            var readerStore = new SqliteReaderStore(databasePath);
+            await profileStore.InitializeAsync();
+            await catalogStore.InitializeAsync();
+            await readerStore.InitializeAsync();
+
+            var profile = Profile.CreateRegular("Reader");
+            await profileStore.AddAsync(profile);
+            var firstFeed = new CatalogFeed("bbc-feed-1", "BBC World", "https://example.com/first.xml", "News", null);
+            var secondFeed = new CatalogFeed("bbc-feed-2", "BBC Headlines", "https://example.com/second.xml", "News", null);
+            await catalogStore.AddFeedAsync(firstFeed);
+            await catalogStore.AddFeedAsync(secondFeed);
+            await readerStore.AddFolderAsync(profile.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, firstFeed.Id, "News");
+            await readerStore.SubscribeAsync(profile.Id, secondFeed.Id, "News");
+
+            var publishedAt = DateTimeOffset.Parse("2026-10-10T05:00:18Z");
+            const string storyLink = "https://www.bbc.co.uk/news/articles/cm70pee7l57do?at_medium=RSS&at_campaign=rss";
+            const string storyGuid = "https://www.bbc.co.uk/news/articles/cm70pee7l57do#3";
+            const string storyTitle = "Queen reflects on reading 'forbidden' Lady Chatterley's Lover under the pillow";
+            const string storySummary =
+                "In BBC documentary The Book That Changed My Life, the Queen speaks about memorable moments in her own reading.";
+            var firstArticle = new FeedArticle(
+                "bbc-article-1",
+                firstFeed.Id,
+                storyGuid,
+                storyTitle,
+                storyLink,
+                publishedAt,
+                storySummary,
+                null);
+            var secondArticle = firstArticle with { Id = "bbc-article-2", FeedId = secondFeed.Id };
+            await readerStore.SaveArticlesAsync(firstFeed.Id, [firstArticle]);
+            await readerStore.SaveArticlesAsync(secondFeed.Id, [secondArticle]);
+            Assert.AreEqual(2, (await readerStore.GetArticlesAsync(profile.Id)).Count);
+
+            var viewModel = new MainWindowViewModel(
+                profile,
+                new CatalogService(catalogStore),
+                new ReadingService(readerStore, catalogStore),
+                null,
+                new ProfilePreferences(StartPage: ProfileStartPage.All));
+            await viewModel.InitializeAsync();
+
+            Assert.AreEqual(1, viewModel.VisibleArticles.Count);
+            Assert.AreEqual(storyLink, viewModel.VisibleArticles.Single().Link);
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "folder:News"));
+            Assert.AreEqual(1, viewModel.VisibleArticles.Count);
+
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == $"feed:{firstFeed.Id}"));
+            Assert.AreEqual("bbc-article-1", viewModel.VisibleArticles.Single().ArticleId);
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == $"feed:{secondFeed.Id}"));
+            Assert.AreEqual("bbc-article-2", viewModel.VisibleArticles.Single().ArticleId);
+
+            viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+            viewModel.VisibleArticles.Single().IsRead = true;
+            await WaitForArticleStateAsync(item => item.IsRead);
+            Assert.AreEqual(0, viewModel.FeedLinks.Single(link => link.Route == "All").UnreadCount);
+            viewModel.UnreadOnly = true;
+            Assert.AreEqual(0, viewModel.VisibleArticles.Count);
+
+            viewModel.UnreadOnly = false;
+            viewModel.VisibleArticles.Single().IsSaved = true;
+            await WaitForArticleStateAsync(item => item.IsSaved);
+            Assert.IsTrue((await readerStore.GetArticlesAsync(profile.Id)).All(item => item.IsSaved));
+
+            async Task WaitForArticleStateAsync(Func<ArticleForProfile, bool> stateIsSet)
+            {
+                for (var attempt = 0; attempt < 100; attempt++)
+                {
+                    var storedArticles = await readerStore.GetArticlesAsync(profile.Id);
+                    if (storedArticles.Count == 2 && storedArticles.All(stateIsSet))
+                    {
+                        return;
+                    }
+
+                    await Task.Delay(10);
+                }
+
+                Assert.Fail("The combined story state was not persisted to every feed copy.");
+            }
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
             }
         }
     }
@@ -2430,9 +2721,12 @@ public sealed class MainWindowViewModelTests
             Assert.IsFalse(folderLink.IsExpanded);
             Assert.AreSame(folderLink, feedLink.ParentFolder);
             viewModel.ActivateSidebarLinkCommand.Execute(folderLink);
+            Assert.IsFalse(folderLink.IsExpanded);
+            Assert.AreEqual("folder:Gaming", viewModel.ActiveRoute);
+            viewModel.ToggleSidebarFolderCommand.Execute(folderLink);
             Assert.IsTrue(folderLink.IsExpanded);
             Assert.AreEqual("folder:Gaming", viewModel.ActiveRoute);
-            viewModel.ActivateSidebarLinkCommand.Execute(folderLink);
+            viewModel.ToggleSidebarFolderCommand.Execute(folderLink);
             Assert.IsFalse(folderLink.IsExpanded);
             Assert.IsTrue(viewModel.TagLinks.Any(link => link.Route == "tag:Reviews"));
         }

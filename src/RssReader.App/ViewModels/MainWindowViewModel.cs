@@ -164,6 +164,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
         NavigateCommand = new RelayCommand<SidebarLink>(link => NavigateTo(link));
         ActivateSidebarLinkCommand = new RelayCommand<SidebarLink>(ActivateSidebarLink);
+        ToggleSidebarFolderCommand = new RelayCommand<SidebarLink>(
+            ToggleSidebarFolder,
+            link => link.IsFolder);
         SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(SelectArticleOrToggleBulkSelection);
         OpenArticleInReaderCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
         OpenArticleSourceCommand = new RelayCommand<ArticleRowViewModel>(
@@ -295,6 +298,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public RelayCommand<SidebarLink> NavigateCommand { get; }
     public RelayCommand<SidebarLink> ActivateSidebarLinkCommand { get; }
+    public RelayCommand<SidebarLink> ToggleSidebarFolderCommand { get; }
     public RelayCommand<ArticleRowViewModel> SelectArticleCommand { get; }
     public RelayCommand<ArticleRowViewModel> OpenArticleInReaderCommand { get; }
     public RelayCommand<ArticleRowViewModel> OpenArticleSourceCommand { get; }
@@ -1581,12 +1585,15 @@ public sealed class MainWindowViewModel : ObservableObject
             RecordCurrentNavigationState();
         }
 
+        NavigateTo(link, recordHistory: false);
+    }
+
+    private void ToggleSidebarFolder(SidebarLink link)
+    {
         if (link.IsFolder)
         {
             _sidebarFeedNavigation.ToggleFolder(link);
         }
-
-        NavigateTo(link, recordHistory: false);
     }
 
     private void OpenArticle(ArticleRowViewModel article)
@@ -1655,14 +1662,20 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             try
             {
-                if (_readingService is not null && article.ArticleId is { } articleId)
+                var relatedArticles = GetArticleStateGroup(article);
+                foreach (var relatedArticle in relatedArticles)
                 {
-                    if (isRead is { } readValue && article.IsRead != readValue)
+                    if (_readingService is null || relatedArticle.ArticleId is not { } articleId)
+                    {
+                        continue;
+                    }
+
+                    if (isRead is { } readValue && relatedArticle.IsRead != readValue)
                     {
                         await _readingService.MarkReadAsync(ActiveProfile, articleId, readValue);
                     }
 
-                    if (isSaved is { } savedValue && article.IsSaved != savedValue)
+                    if (isSaved is { } savedValue && relatedArticle.IsSaved != savedValue)
                     {
                         await _readingService.SetSavedAsync(ActiveProfile, articleId, savedValue);
                     }
@@ -1671,14 +1684,17 @@ public sealed class MainWindowViewModel : ObservableObject
                 _isApplyingBulkArticleState = true;
                 try
                 {
-                    if (isRead is { } readValue)
+                    foreach (var relatedArticle in relatedArticles)
                     {
-                        article.IsRead = readValue;
-                    }
+                        if (isRead is { } readValue)
+                        {
+                            relatedArticle.IsRead = readValue;
+                        }
 
-                    if (isSaved is { } savedValue)
-                    {
-                        article.IsSaved = savedValue;
+                        if (isSaved is { } savedValue)
+                        {
+                            relatedArticle.IsSaved = savedValue;
+                        }
                     }
                 }
                 finally
@@ -2472,6 +2488,39 @@ public sealed class MainWindowViewModel : ObservableObject
             UpdateUnreadCounts();
         }
 
+        var isReadChange = e.PropertyName == nameof(ArticleRowViewModel.IsRead);
+        var isSavedChange = e.PropertyName == nameof(ArticleRowViewModel.IsSaved);
+        var relatedArticles = !_isApplyingBulkArticleState && (isReadChange || isSavedChange)
+            ? GetArticleStateGroup(article)
+            : [article];
+        if (!_isApplyingBulkArticleState && relatedArticles.Length > 1)
+        {
+            _isApplyingBulkArticleState = true;
+            try
+            {
+                foreach (var relatedArticle in relatedArticles)
+                {
+                    if (ReferenceEquals(relatedArticle, article))
+                    {
+                        continue;
+                    }
+
+                    if (isReadChange)
+                    {
+                        relatedArticle.IsRead = article.IsRead;
+                    }
+                    else
+                    {
+                        relatedArticle.IsSaved = article.IsSaved;
+                    }
+                }
+            }
+            finally
+            {
+                _isApplyingBulkArticleState = false;
+            }
+        }
+
         if (_isApplyingBulkArticleState || article.ArticleId is null || _readingService is null)
         {
             return;
@@ -2479,17 +2528,21 @@ public sealed class MainWindowViewModel : ObservableObject
 
         try
         {
-            if (e.PropertyName == nameof(ArticleRowViewModel.IsRead))
+            foreach (var relatedArticle in relatedArticles)
             {
-                await _readingService.MarkReadAsync(ActiveProfile, article.ArticleId, article.IsRead);
-            }
-            else if (e.PropertyName == nameof(ArticleRowViewModel.IsSaved))
-            {
-                await _readingService.SetSavedAsync(ActiveProfile, article.ArticleId, article.IsSaved);
-            }
-            else
-            {
-                return;
+                if (relatedArticle.ArticleId is not { } relatedArticleId)
+                {
+                    continue;
+                }
+
+                if (isReadChange)
+                {
+                    await _readingService.MarkReadAsync(ActiveProfile, relatedArticleId, relatedArticle.IsRead);
+                }
+                else if (isSavedChange)
+                {
+                    await _readingService.SetSavedAsync(ActiveProfile, relatedArticleId, relatedArticle.IsSaved);
+                }
             }
 
             ApplyArticleFilters();
@@ -2498,6 +2551,23 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             StatusMessage = exception.Message;
         }
+    }
+
+    private ArticleRowViewModel[] GetArticleStateGroup(ArticleRowViewModel article)
+    {
+        if (ActiveRoute.StartsWith("feed:", StringComparison.Ordinal) ||
+            ArticleListFilter.GetDuplicateIdentity(article) is not { } identity)
+        {
+            return [article];
+        }
+
+        var relatedArticles = _allArticles
+            .Where(candidate => string.Equals(
+                ArticleListFilter.GetDuplicateIdentity(candidate),
+                identity,
+                StringComparison.Ordinal))
+            .ToArray();
+        return relatedArticles.Length == 0 ? [article] : relatedArticles;
     }
 
     private void ToggleSidebar()
