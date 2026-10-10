@@ -11,7 +11,9 @@ public sealed record FeedArticle(
     string? Content,
     string? ImageUrl = null,
     string? Author = null,
-    string? SourceXml = null)
+    string? SourceXml = null,
+    string? ExtractedContentHtml = null,
+    DateTimeOffset? ExtractedContentRetrievedAt = null)
 {
     public IReadOnlyList<ArticleCategory> Categories { get; init; } = [];
 }

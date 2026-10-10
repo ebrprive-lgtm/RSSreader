@@ -6,6 +6,23 @@ namespace RssReader.App;
 
 internal static class ArticleHtmlDocumentBuilder
 {
+    private static readonly string[] LazyImageSourceAttributes =
+    [
+        "data-src",
+        "data-lazy-src",
+        "data-original",
+        "data-original-src",
+        "data-url",
+        "data-fallback-src"
+    ];
+    private static readonly string[] ImageSourceSetAttributes =
+    [
+        "data-srcset",
+        "data-lazy-srcset",
+        "data-original-srcset",
+        "srcset"
+    ];
+
     private static string BuildReaderStyles(
         ProfileReaderTheme theme,
         ProfileReaderTextSize textSize,
@@ -57,6 +74,8 @@ internal static class ArticleHtmlDocumentBuilder
             .reader-feed-preview { max-width: 760px; margin: 0 auto; }
             .reader-feed-preview-image { margin: 0 0 20px; }
             .reader-feed-preview-image img { width: 100%; max-height: 360px; object-fit: cover; border-radius: 12px; }
+            .reader-leading-image { max-width: 760px; margin: 0 auto 20px; }
+            .reader-leading-image img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
             .reader-feed-preview-summary { font-size: 1.12em; }
             .reader-feed-preview-note { background: var(--reader-note); border-left: 3px solid var(--reader-border); border-radius: 4px; color: var(--reader-muted); margin-top: 22px; padding: 12px 16px; }
             .reader-feed-preview-link { font-weight: 600; }
@@ -80,16 +99,23 @@ internal static class ArticleHtmlDocumentBuilder
         var bodyFragment = string.IsNullOrWhiteSpace(content)
             ? $"<p>{EncodePlainText(summary)}</p>"
             : content;
+        bodyFragment = NormalizeArticleImageSources(bodyFragment, baseUrl);
         bodyFragment = RemoveDuplicateLeadingImage(bodyFragment, baseUrl);
         bodyFragment = PreserveCenteredImageAlignment(bodyFragment);
         var widthLimitStyle = limitArticleWidth
             ? "main { max-width: 900px; margin: 0 auto; }"
             : "main { max-width: none; margin: 0; }";
 
-        var sanitizedFragment = ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl);
+        var sanitizedFragment = RemoveUnusableImages(
+            ArticleHtmlSanitizer.SanitizeFragment(bodyFragment, baseUrl),
+            baseUrl);
         if (isFeedPreview)
         {
             sanitizedFragment = BuildFeedPreview(sanitizedFragment, imageUrl, articleUrl, baseUrl);
+        }
+        else
+        {
+            sanitizedFragment = AddLeadingThumbnail(sanitizedFragment, imageUrl, baseUrl);
         }
         var readerStyles = BuildReaderStyles(readerTheme, textSize, lineSpacing, fontFamily);
 
@@ -120,7 +146,7 @@ internal static class ArticleHtmlDocumentBuilder
         var baseUrl = GetWebUrl(articleUrl) ?? GetWebUrl(feedUrl);
         var document = new HtmlDocument();
         document.LoadHtml(content);
-        var images = document.DocumentNode.SelectNodes("//img[@src or @srcset]");
+        var images = document.DocumentNode.SelectNodes("//img");
         if (images is null)
         {
             return null;
@@ -145,7 +171,7 @@ internal static class ArticleHtmlDocumentBuilder
             .Replace("\r\n", "<br>", StringComparison.Ordinal)
             .Replace("\n", "<br>", StringComparison.Ordinal);
 
-    private static bool IsFeedPreview(string? content, string? summary)
+    internal static bool IsFeedPreview(string? content, string? summary)
     {
         if (string.IsNullOrWhiteSpace(summary))
         {
@@ -175,9 +201,7 @@ internal static class ArticleHtmlDocumentBuilder
         string? articleUrl,
         string? baseUrl)
     {
-        var document = new HtmlDocument();
-        document.LoadHtml(sanitizedContent);
-        var hasInlineImage = document.DocumentNode.SelectSingleNode("//img") is not null;
+        var hasInlineImage = FindFirstWebImageUrl(sanitizedContent, null, null) is not null;
         var resolvedImageUrl = hasInlineImage || string.IsNullOrWhiteSpace(imageUrl)
             ? null
             : GetWebUrl(NormalizeImageSource(imageUrl, baseUrl));
@@ -208,6 +232,54 @@ internal static class ArticleHtmlDocumentBuilder
             """;
     }
 
+    private static string AddLeadingThumbnail(
+            string sanitizedContent,
+            string? imageUrl,
+            string? baseUrl)
+    {
+            if (FindFirstWebImageUrl(sanitizedContent, null, null) is not null ||
+                string.IsNullOrWhiteSpace(imageUrl))
+            {
+                return sanitizedContent;
+            }
+
+            var resolvedImageUrl = GetWebUrl(NormalizeImageSource(imageUrl, baseUrl));
+            if (resolvedImageUrl is null)
+            {
+                return sanitizedContent;
+            }
+
+            return $"""
+                <figure class="reader-leading-image">
+                  <img src="{WebUtility.HtmlEncode(resolvedImageUrl)}" alt="Article image">
+                </figure>
+                {sanitizedContent}
+                """;
+    }
+
+    private static string RemoveUnusableImages(string fragment, string? baseUrl)
+    {
+        var document = new HtmlDocument();
+        document.LoadHtml(fragment);
+        var images = document.DocumentNode.SelectNodes("//img");
+        if (images is null)
+        {
+                return fragment;
+        }
+
+        foreach (var image in images.ToArray())
+        {
+                var hasUsableSource = GetImageSources(image, baseUrl)
+                    .Any(source => Uri.TryCreate(source, UriKind.Absolute, out var uri) && IsWebUri(uri));
+                if (!hasUsableSource)
+                {
+                    image.Remove();
+                }
+        }
+
+        return document.DocumentNode.InnerHtml;
+    }
+
     private static string NormalizeText(string text) =>
         string.Join(' ', WebUtility.HtmlDecode(text).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
@@ -234,6 +306,36 @@ internal static class ArticleHtmlDocumentBuilder
         }
 
         images[0].Remove();
+        return document.DocumentNode.InnerHtml;
+    }
+
+    private static string NormalizeArticleImageSources(string fragment, string? baseUrl)
+    {
+        var document = new HtmlDocument();
+        document.LoadHtml(fragment);
+        var images = document.DocumentNode.SelectNodes("//img");
+        if (images is null)
+        {
+            return fragment;
+        }
+
+        foreach (var image in images)
+        {
+            var source = GetLazyImageSources(image, baseUrl)
+                .FirstOrDefault(IsWebImageSource);
+            source ??= GetImageSource(image, "src", baseUrl);
+            if (!IsWebImageSource(source ?? string.Empty))
+            {
+                source = GetImageSourceSetCandidates(image, baseUrl)
+                    .LastOrDefault(IsWebImageSource);
+            }
+
+            if (source is not null)
+            {
+                image.SetAttributeValue("src", source);
+            }
+        }
+
         return document.DocumentNode.InnerHtml;
     }
 
@@ -266,29 +368,77 @@ internal static class ArticleHtmlDocumentBuilder
 
     private static IEnumerable<string> GetImageSources(HtmlNode image, string? baseUrl)
     {
-        var source = image.GetAttributeValue("src", string.Empty);
-        if (!string.IsNullOrWhiteSpace(source))
+        foreach (var source in GetDirectImageSources(image, baseUrl))
         {
-            yield return NormalizeImageSource(source, baseUrl);
+            yield return source;
         }
 
-        var sourceSet = image.GetAttributeValue("srcset", string.Empty);
-        if (string.IsNullOrWhiteSpace(sourceSet))
+        foreach (var source in GetImageSourceSetCandidates(image, baseUrl))
         {
-            yield break;
+            yield return source;
         }
 
-        foreach (var candidate in sourceSet.Split(',', StringSplitOptions.RemoveEmptyEntries))
+    }
+
+    private static IEnumerable<string> GetDirectImageSources(HtmlNode image, string? baseUrl)
+    {
+        foreach (var source in GetLazyImageSources(image, baseUrl))
         {
-            var candidateSource = candidate.Trim()
-                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(candidateSource))
+            yield return source;
+        }
+
+        var directSource = GetImageSource(image, "src", baseUrl);
+        if (directSource is not null)
+        {
+            yield return directSource;
+        }
+    }
+
+    private static IEnumerable<string> GetLazyImageSources(HtmlNode image, string? baseUrl)
+    {
+        foreach (var attribute in LazyImageSourceAttributes)
+        {
+            var source = GetImageSource(image, attribute, baseUrl);
+            if (source is not null)
             {
-                yield return NormalizeImageSource(candidateSource, baseUrl);
+                yield return source;
             }
         }
     }
+
+    private static string? GetImageSource(HtmlNode image, string attribute, string? baseUrl)
+    {
+        var source = image.GetAttributeValue(attribute, string.Empty);
+        return string.IsNullOrWhiteSpace(source)
+            ? null
+            : NormalizeImageSource(source, baseUrl);
+    }
+
+    private static IEnumerable<string> GetImageSourceSetCandidates(HtmlNode image, string? baseUrl)
+    {
+        foreach (var attribute in ImageSourceSetAttributes)
+        {
+            var sourceSet = image.GetAttributeValue(attribute, string.Empty);
+            if (string.IsNullOrWhiteSpace(sourceSet))
+            {
+                continue;
+            }
+
+            foreach (var candidate in sourceSet.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var candidateSource = candidate.Trim()
+                    .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                    .FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(candidateSource))
+                {
+                    yield return NormalizeImageSource(candidateSource, baseUrl);
+                }
+            }
+        }
+    }
+
+    private static bool IsWebImageSource(string source) =>
+        Uri.TryCreate(source, UriKind.Absolute, out var uri) && IsWebUri(uri);
 
     private static string NormalizeImageSource(string source, string? baseUrl)
     {

@@ -8,7 +8,7 @@ namespace RssReader.Infrastructure.Tests;
 public sealed class SqliteReaderStoreTests
 {
     [TestMethod]
-    public async Task InitializeMigratesSourceXmlColumnForExistingDatabases()
+    public async Task InitializeMigratesSourceXmlAndExtractedContentColumnsForExistingDatabases()
     {
         using var database = new TemporaryDatabase();
         await new SqliteProfileStore(database.Path).InitializeAsync();
@@ -43,12 +43,18 @@ public sealed class SqliteReaderStoreTests
         migratedCommand.CommandText = "PRAGMA table_info(Articles);";
         await using var migratedColumns = await migratedCommand.ExecuteReaderAsync();
         var hasSourceXml = false;
+        var hasExtractedContentHtml = false;
+        var hasExtractedContentRetrievedAt = false;
         while (await migratedColumns.ReadAsync())
         {
             hasSourceXml |= migratedColumns.GetString(1) == "SourceXml";
+            hasExtractedContentHtml |= migratedColumns.GetString(1) == "ExtractedContentHtml";
+            hasExtractedContentRetrievedAt |= migratedColumns.GetString(1) == "ExtractedContentRetrievedAt";
         }
 
         Assert.IsTrue(hasSourceXml);
+        Assert.IsTrue(hasExtractedContentHtml);
+        Assert.IsTrue(hasExtractedContentRetrievedAt);
     }
 
     [TestMethod]
@@ -73,10 +79,17 @@ public sealed class SqliteReaderStoreTests
         };
 
         Assert.AreEqual(1, await reader.SaveArticlesAsync(feed.Id, [article]));
+        var retrievedAt = DateTimeOffset.UtcNow;
+        const string extractedHtml = "<article><p>Publisher article body.</p></article>";
+        await reader.SaveExtractedArticleContentAsync(article.Id, extractedHtml, retrievedAt);
         Assert.AreEqual(0, await reader.SaveArticlesAsync(feed.Id, [article with { Title = "Updated headline" }]));
-        var storedArticle = (await reader.GetArticlesAsync(profile.Id)).Single().Article;
+        var reopenedReader = new SqliteReaderStore(database.Path);
+        await reopenedReader.InitializeAsync();
+        var storedArticle = (await reopenedReader.GetArticlesAsync(profile.Id)).Single().Article;
         Assert.AreEqual("Updated headline", storedArticle.Title);
         Assert.AreEqual(article.SourceXml, storedArticle.SourceXml);
+        Assert.AreEqual(extractedHtml, storedArticle.ExtractedContentHtml);
+        Assert.AreEqual(retrievedAt, storedArticle.ExtractedContentRetrievedAt);
     }
 
     [TestMethod]

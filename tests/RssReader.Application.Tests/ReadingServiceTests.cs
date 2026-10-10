@@ -74,6 +74,20 @@ public sealed class ReadingServiceTests
         Assert.AreEqual("article-1", result.Single().Article.Id);
     }
 
+    [TestMethod]
+    public async Task SaveExtractedArticleContentDelegatesToReaderStore()
+    {
+        var readerStore = new MemoryReaderStore();
+        var service = new ReadingService(readerStore, new MemoryCatalogStore([]));
+        var retrievedAt = DateTimeOffset.UtcNow;
+        const string html = "<article><p>Extracted article.</p></article>";
+
+        await service.SaveExtractedArticleContentAsync("article-1", html, retrievedAt);
+
+        Assert.AreEqual(html, readerStore.ExtractedContent["article-1"].Html);
+        Assert.AreEqual(retrievedAt, readerStore.ExtractedContent["article-1"].RetrievedAt);
+    }
+
     [DataTestMethod]
     [DataRow(575)]
     [DataRow(5000)]
@@ -168,6 +182,7 @@ public sealed class ReadingServiceTests
         public List<ProfileSubscription> Subscriptions { get; } = [];
         public List<ProfileFeedTag> Tags { get; } = [];
         public List<ArticleForProfile> Articles { get; } = [];
+        public Dictionary<string, (string Html, DateTimeOffset RetrievedAt)> ExtractedContent { get; } = [];
 
         public Task<IReadOnlyList<ProfileSubscription>> GetSubscriptionsAsync(string profileId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ProfileSubscription>>(Subscriptions.Where(item => item.ProfileId == profileId).ToArray());
@@ -190,6 +205,11 @@ public sealed class ReadingServiceTests
             Task.FromResult<IReadOnlyList<ArticleForProfile>>(Articles.Where(item => Subscriptions.Any(subscription =>
                 subscription.ProfileId == profileId && subscription.FeedId == item.Article.FeedId)).ToArray());
         public Task<int> SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default) => Task.FromResult(0);
+        public Task SaveExtractedArticleContentAsync(string articleId, string html, DateTimeOffset retrievedAt, CancellationToken cancellationToken = default)
+        {
+            ExtractedContent[articleId] = (html, retrievedAt);
+            return Task.CompletedTask;
+        }
         public Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default) =>

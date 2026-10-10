@@ -164,6 +164,17 @@ public sealed class ReadingService(IReaderStore store, ICatalogStore catalogStor
             .ToArray();
     }
 
+    public Task SaveExtractedArticleContentAsync(
+        string articleId,
+        string html,
+        DateTimeOffset retrievedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(articleId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(html);
+        return store.SaveExtractedArticleContentAsync(articleId, html, retrievedAt, cancellationToken);
+    }
+
     public Task MarkReadAsync(Profile profile, string articleId, bool isRead, CancellationToken cancellationToken = default)
     {
         return store.SetArticleReadAsync(profile.Id, articleId, isRead, cancellationToken);

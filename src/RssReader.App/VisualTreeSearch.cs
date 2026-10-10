@@ -23,4 +23,27 @@ internal static class VisualTreeSearch
 
         return null;
     }
+
+    internal static T? FindDescendant<T>(
+        DependencyObject parent,
+        Func<T, bool> predicate)
+        where T : DependencyObject
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        if (parent is T match && predicate(match))
+        {
+            return match;
+        }
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (FindDescendant(child, predicate) is { } descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
+    }
 }

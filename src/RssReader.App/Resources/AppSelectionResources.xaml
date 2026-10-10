@@ -90,15 +90,17 @@
                                    Focusable="False"
                                    IsOpen="{TemplateBinding IsDropDownOpen}"
                                    PopupAnimation="Fade">
-                                <Border Background="{DynamicResource ContentBrush}"
-                                        BorderBrush="{DynamicResource ControlBorderBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
-                                    <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}"
-                                                  CanContentScroll="True">
-                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
-                                    </ScrollViewer>
+                                <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                        Style="{StaticResource PopupOuterFrameStyle}">
+                                    <Border Background="{DynamicResource ContentBrush}"
+                                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                                            BorderThickness="2"
+                                            CornerRadius="4">
+                                        <ScrollViewer MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                                      CanContentScroll="True">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
                                 </Border>
                             </Popup>
                             <Border x:Name="FocusRing"

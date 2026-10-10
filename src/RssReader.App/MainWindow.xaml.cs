@@ -176,11 +176,20 @@ public partial class MainWindow : Window
         var message = feedCount == 0
             ? $"Delete the empty folder '{folderName}'?"
             : $"Delete folder '{folderName}' and unfollow its {feedCount} feed(s)?";
+        var ownerRelativeAnchor = SidebarView.TryGetFolderDeleteAnchor(
+            folderName,
+            this,
+            out var folderAnchor)
+            ? folderAnchor
+            : new Point(
+                (_viewModel?.SidebarPanelWidth ?? MainWindowViewModel.DefaultSidebarWidth) + 16,
+                ActualHeight / 2);
         var result = MessageDialogWindow.Show(
             this,
             message,
             MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
+            MessageBoxImage.Warning,
+            ownerRelativeAnchor);
         return Task.FromResult(result == MessageBoxResult.Yes);
     }
 

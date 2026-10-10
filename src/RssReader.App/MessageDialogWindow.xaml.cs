@@ -42,12 +42,35 @@ public partial class MessageDialogWindow : Window
         Window? owner,
         string message,
         MessageBoxButton buttons,
-        MessageBoxImage image)
+        MessageBoxImage image,
+        Point? ownerRelativeAnchor = null)
     {
         var dialog = new MessageDialogWindow(message, buttons, image);
         if (owner is not null)
         {
             dialog.Owner = owner;
+            if (ownerRelativeAnchor is { } anchor)
+            {
+                dialog.WindowStartupLocation = WindowStartupLocation.Manual;
+                dialog.Opacity = 0;
+                dialog.Loaded += (_, _) =>
+                {
+                    var minimumLeft = owner.Left + 12;
+                    var maximumLeft = Math.Max(
+                        minimumLeft,
+                        owner.Left + owner.ActualWidth - dialog.ActualWidth - 12);
+                    var minimumTop = owner.Top + 12;
+                    var maximumTop = Math.Max(
+                        minimumTop,
+                        owner.Top + owner.ActualHeight - dialog.ActualHeight - 12);
+                    dialog.Left = Math.Clamp(owner.Left + anchor.X, minimumLeft, maximumLeft);
+                    dialog.Top = Math.Clamp(
+                        owner.Top + anchor.Y - dialog.ActualHeight / 2,
+                        minimumTop,
+                        maximumTop);
+                    dialog.Opacity = 1;
+                };
+            }
         }
 
         dialog.ShowDialog();

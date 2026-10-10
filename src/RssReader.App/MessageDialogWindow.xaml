@@ -20,11 +20,9 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
     <Grid Margin="8">
-        <Border Background="{DynamicResource ContentBrush}"
-                BorderBrush="{DynamicResource ControlBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="20">
+        <Border Style="{StaticResource PopupOuterFrameStyle}">
+            <Border Style="{StaticResource PopupInnerFrameStyle}"
+                    Padding="20">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="30" />
@@ -77,6 +75,7 @@
                             Click="AcceptButton_Click" />
                 </StackPanel>
             </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

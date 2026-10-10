@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Net;
 using System.Windows;
 using System.Windows.Data;
 using RssReader.App.Commands;
@@ -35,6 +36,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private readonly FeedRefreshService? _feedRefreshService;
     private readonly ProfileFeedService? _profileFeedService;
     private readonly ProfileService? _profileService;
+    private readonly IArticleContentService? _articleContentService;
     private readonly SemaphoreSlim _profilePreferencesSaveGate = new(1, 1);
     private readonly CatalogFeedPreviewCache _catalogFeedPreviewCache = new();
     private readonly ReaderNavigationHistory _navigationHistory = new();
@@ -59,6 +61,11 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _hasLoadedInitialReaderData;
     private bool _hasAttemptedInitialReaderDataLoad;
     private string? _initialReaderDataLoadError;
+    private CancellationTokenSource? _selectedArticleContentLoad;
+    private string? _articleContentError;
+    private bool _isLoadingArticleContent;
+    private bool _isForbiddenArticleContentError;
+    private bool _isInAppPublisherBrowserVisible;
     private bool _isFeedWarningsPopupOpen;
     private bool _updatingArticleTopicOptions;
     private bool _isBulkSelectionMode;
@@ -86,7 +93,8 @@ public sealed class MainWindowViewModel : ObservableObject
         ProfilePreferences? profilePreferences = null,
         CatalogFeedPreviewService? catalogFeedPreviewService = null,
         ProfileFeedService? profileFeedService = null,
-        ProfileService? profileService = null)
+        ProfileService? profileService = null,
+        IArticleContentService? articleContentService = null)
     {
         ActiveProfile = profile;
         _hasAppliedStartPage = profile.IsCatalogMaster;
@@ -96,6 +104,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _feedRefreshService = feedRefreshService;
         _profileFeedService = profileFeedService;
         _profileService = profileService;
+        _articleContentService = articleContentService;
         _profilePreferences = profilePreferences ?? new ProfilePreferences();
         _catalogBrowser = new CatalogBrowserState(
             catalogService,
@@ -208,6 +217,14 @@ public sealed class MainWindowViewModel : ObservableObject
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
         ToggleReadCommand = new RelayCommand(ToggleRead);
         ToggleSplitPaneCommand = new AsyncCommand(ToggleSplitPaneAsync);
+        LoadFullArticleCommand = new AsyncCommand(LoadFullArticleAsync, CanLoadFullArticle);
+        ShowFeedPreviewCommand = new RelayCommand(ShowFeedPreview, CanShowFeedPreview);
+        OpenInAppPublisherBrowserCommand = new RelayCommand(
+            OpenInAppPublisherBrowser,
+            CanOpenInAppPublisherBrowser);
+        ReturnToArticleReaderCommand = new RelayCommand(
+            ReturnToArticleReader,
+            () => IsInAppPublisherBrowserVisible);
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
@@ -321,6 +338,10 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand ToggleSavedCommand { get; }
     public RelayCommand ToggleReadCommand { get; }
     public AsyncCommand ToggleSplitPaneCommand { get; }
+    public AsyncCommand LoadFullArticleCommand { get; }
+    public RelayCommand ShowFeedPreviewCommand { get; }
+    public RelayCommand OpenInAppPublisherBrowserCommand { get; }
+    public RelayCommand ReturnToArticleReaderCommand { get; }
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand ClearCatalogFiltersCommand { get; }
@@ -677,6 +698,8 @@ public sealed class MainWindowViewModel : ObservableObject
             HideFollowedCatalogFeeds = _catalogBrowser.HideFollowedCatalogFeeds,
             SplitPaneListRatio = NormalizeSplitPaneListRatio(preferences.SplitPaneListRatio)
         };
+        var autoLoadFullArticleEnabled =
+            !previousPreferences.AutoLoadFullArticle && _profilePreferences.AutoLoadFullArticle;
         var readingLayoutChanged = previousPreferences.ReadingLayout != _profilePreferences.ReadingLayout;
         var splitPaneListRatioChanged = previousPreferences.SplitPaneListRatio != _profilePreferences.SplitPaneListRatio;
         var densityChanged = previousPreferences.ArticleListDensity != _profilePreferences.ArticleListDensity;
@@ -777,6 +800,11 @@ public sealed class MainWindowViewModel : ObservableObject
         if (folderArticleLimitChanged)
         {
             ApplyArticleFilters();
+        }
+
+        if (autoLoadFullArticleEnabled && SelectedArticle is not null)
+        {
+            LoadFullArticleCommand.Execute(null);
         }
     }
 
@@ -1094,8 +1122,28 @@ public sealed class MainWindowViewModel : ObservableObject
         get => _selectedArticle;
         private set
         {
+            if (ReferenceEquals(_selectedArticle, value))
+            {
+                return;
+            }
+
+            IsInAppPublisherBrowserVisible = false;
+            if (_selectedArticle is not null)
+            {
+                _selectedArticle.PropertyChanged -= OnSelectedArticlePropertyChanged;
+            }
+
             if (SetProperty(ref _selectedArticle, value))
             {
+                if (_selectedArticle is not null)
+                {
+                    _selectedArticle.PropertyChanged += OnSelectedArticlePropertyChanged;
+                }
+
+                _selectedArticleContentLoad?.Cancel();
+                _selectedArticleContentLoad = null;
+                IsLoadingArticleContent = false;
+                ArticleContentError = null;
                 OnPropertyChanged(nameof(IsArticleListVisible));
                 OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
@@ -1109,9 +1157,18 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(HasSelectedArticleFeed));
                 OnPropertyChanged(nameof(SelectedArticleRefreshStatusMessage));
                 OnPropertyChanged(nameof(HasSelectedArticleRefreshState));
+                OnPropertyChanged(nameof(IsSelectedArticleFullArticleActionVisible));
+                OnPropertyChanged(nameof(FullArticleActionLabel));
+                OnPropertyChanged(nameof(IsOpenArticleInBrowserVisible));
+                OnPropertyChanged(nameof(IsOpenInAppPublisherBrowserVisible));
+                OnPropertyChanged(nameof(IsSelectedArticlePreviewCueVisible));
+                OnPropertyChanged(nameof(IsSelectedArticleShowingExtractedContent));
+                OnPropertyChanged(nameof(IsFeedPreviewActionVisible));
                 NotifyRefreshFailureContextChanged();
                 PreviousArticleCommand.NotifyCanExecuteChanged();
                 NextArticleCommand.NotifyCanExecuteChanged();
+                LoadFullArticleCommand.NotifyCanExecuteChanged();
+                ShowFeedPreviewCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -1216,6 +1273,85 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool CanGoBack => _navigationHistory.Count > 0;
     public bool IsRawFeedButtonVisible => _profilePreferences.ShowRawFeedButton && SelectedArticle?.FeedId is not null;
     public bool HasSelectedArticleFeed => SelectedArticle?.FeedId is not null;
+    public bool IsLoadingArticleContent
+    {
+        get => _isLoadingArticleContent;
+        private set
+        {
+            if (SetProperty(ref _isLoadingArticleContent, value))
+            {
+                LoadFullArticleCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+    public string? ArticleContentError
+    {
+        get => _articleContentError;
+        private set
+        {
+            if (value is null)
+            {
+                IsForbiddenArticleContentError = false;
+            }
+
+            if (SetProperty(ref _articleContentError, value))
+            {
+                OnPropertyChanged(nameof(FullArticleActionLabel));
+                OnPropertyChanged(nameof(IsOpenArticleInBrowserVisible));
+                OnPropertyChanged(nameof(IsOpenInAppPublisherBrowserVisible));
+                OpenInAppPublisherBrowserCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+    public bool IsForbiddenArticleContentError
+    {
+        get => _isForbiddenArticleContentError;
+        private set
+        {
+            if (SetProperty(ref _isForbiddenArticleContentError, value))
+            {
+                OnPropertyChanged(nameof(IsOpenInAppPublisherBrowserVisible));
+                OpenInAppPublisherBrowserCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+    public bool IsInAppPublisherBrowserVisible
+    {
+        get => _isInAppPublisherBrowserVisible;
+        private set
+        {
+            if (SetProperty(ref _isInAppPublisherBrowserVisible, value))
+            {
+                OnPropertyChanged(nameof(IsOpenInAppPublisherBrowserVisible));
+                OpenInAppPublisherBrowserCommand.NotifyCanExecuteChanged();
+                ReturnToArticleReaderCommand.NotifyCanExecuteChanged();
+            }
+        }
+    }
+    public bool IsOpenArticleInBrowserVisible =>
+        ArticleContentError is not null && SelectedArticle?.IsSourceLinkVisible == true;
+    public bool IsOpenInAppPublisherBrowserVisible =>
+        IsForbiddenArticleContentError &&
+        ArticleContentError is not null &&
+        !IsInAppPublisherBrowserVisible &&
+        SelectedArticle?.IsSourceLinkVisible == true;
+    public bool IsSelectedArticleFullArticleActionVisible =>
+        SelectedArticle is { } article &&
+        !article.IsShowingExtractedContent &&
+        (article.HasExtractedContent ||
+         (_articleContentService is not null && article.IsSourceLinkVisible));
+    public string FullArticleActionLabel =>
+        ArticleContentError is not null
+            ? "Retry full article"
+            : SelectedArticle?.HasExtractedContent == true
+                ? "Show full article"
+                : "Load full article";
+    public bool IsFeedPreviewActionVisible => IsSelectedArticleShowingExtractedContent;
+    public bool IsSelectedArticlePreviewCueVisible =>
+        SelectedArticle is { IsShowingExtractedContent: false } article &&
+        ArticleHtmlDocumentBuilder.IsFeedPreview(article.Content, article.Summary);
+    public bool IsSelectedArticleShowingExtractedContent =>
+        SelectedArticle?.IsShowingExtractedContent == true;
     public string? SelectedArticleRefreshStatusMessage
         => _feedRefreshStatus.GetSelectedArticleStatusMessage(SelectedArticle?.FeedId);
 
@@ -1605,6 +1741,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
         article.IsRead = true;
         SelectedArticle = article;
+        if (_profilePreferences.AutoLoadFullArticle)
+        {
+            LoadFullArticleCommand.Execute(null);
+        }
     }
 
     private void SelectArticleOrToggleBulkSelection(ArticleRowViewModel article)
@@ -2051,7 +2191,9 @@ public sealed class MainWindowViewModel : ObservableObject
                 item.Article.Categories,
                 subscriptionsByFeed.GetValueOrDefault(item.Article.FeedId)?.WebsiteUrl,
                 item.Article.Author,
-                item.Article.SourceXml);
+                item.Article.SourceXml,
+                item.Article.ExtractedContentHtml,
+                item.Article.ExtractedContentRetrievedAt);
             row.PropertyChanged += OnArticlePropertyChanged;
             _allArticles.Add(row);
         }
@@ -2474,6 +2616,13 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
+        if (e.PropertyName is (nameof(ArticleRowViewModel.ReaderContent) or
+            nameof(ArticleRowViewModel.HasExtractedContent) or
+            nameof(ArticleRowViewModel.IsShowingExtractedContent)))
+        {
+            return;
+        }
+
         if (e.PropertyName == nameof(ArticleRowViewModel.IsBulkSelected))
         {
             OnPropertyChanged(nameof(BulkSelectedArticleCount));
@@ -2550,6 +2699,130 @@ public sealed class MainWindowViewModel : ObservableObject
         catch (Exception exception)
         {
             StatusMessage = exception.Message;
+        }
+    }
+
+    private void OnSelectedArticlePropertyChanged(
+        object? sender,
+        System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is not ArticleRowViewModel article ||
+            !ReferenceEquals(article, SelectedArticle))
+        {
+            return;
+        }
+
+        if (e.PropertyName is nameof(ArticleRowViewModel.HasExtractedContent) or
+            nameof(ArticleRowViewModel.IsShowingExtractedContent))
+        {
+            OnPropertyChanged(nameof(IsSelectedArticleFullArticleActionVisible));
+            OnPropertyChanged(nameof(FullArticleActionLabel));
+            OnPropertyChanged(nameof(IsSelectedArticlePreviewCueVisible));
+            OnPropertyChanged(nameof(IsSelectedArticleShowingExtractedContent));
+            OnPropertyChanged(nameof(IsFeedPreviewActionVisible));
+            LoadFullArticleCommand.NotifyCanExecuteChanged();
+            ShowFeedPreviewCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanLoadFullArticle() =>
+        !IsLoadingArticleContent &&
+        SelectedArticle is { IsShowingExtractedContent: false } article &&
+        (article.HasExtractedContent ||
+         (_articleContentService is not null && article.IsSourceLinkVisible));
+
+    private bool CanShowFeedPreview() =>
+        SelectedArticle?.IsShowingExtractedContent == true;
+
+    private bool CanOpenInAppPublisherBrowser() =>
+        IsOpenInAppPublisherBrowserVisible;
+
+    private void OpenInAppPublisherBrowser() =>
+        IsInAppPublisherBrowserVisible = true;
+
+    private void ReturnToArticleReader() =>
+        IsInAppPublisherBrowserVisible = false;
+
+    private void ShowFeedPreview()
+    {
+        SelectedArticle?.ShowFeedPreview();
+        ArticleContentError = null;
+    }
+
+    private async Task LoadFullArticleAsync()
+    {
+        if (SelectedArticle is not { } article)
+        {
+            return;
+        }
+
+        if (article.HasExtractedContent)
+        {
+            article.ShowExtractedContent();
+            ArticleContentError = null;
+            return;
+        }
+
+        if (_articleContentService is null ||
+            !Uri.TryCreate(article.Link, UriKind.Absolute, out var articleUri) ||
+            (articleUri.Scheme != Uri.UriSchemeHttp && articleUri.Scheme != Uri.UriSchemeHttps))
+        {
+            ArticleContentError = "A publisher HTTP(S) link is required to load the full article.";
+            return;
+        }
+
+        var cancellationSource = new CancellationTokenSource();
+        _selectedArticleContentLoad = cancellationSource;
+        IsLoadingArticleContent = true;
+        ArticleContentError = null;
+        try
+        {
+            var extractedContent = await _articleContentService.ExtractAsync(
+                articleUri,
+                cancellationSource.Token);
+            if (cancellationSource.IsCancellationRequested ||
+                !ReferenceEquals(SelectedArticle, article))
+            {
+                return;
+            }
+
+            article.SetExtractedContent(extractedContent.Html, extractedContent.RetrievedAt);
+            if (_readingService is not null && article.ArticleId is { } articleId)
+            {
+                await _readingService.SaveExtractedArticleContentAsync(
+                    articleId,
+                    extractedContent.Html,
+                    extractedContent.RetrievedAt,
+                    cancellationSource.Token);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
+        {
+        }
+        catch (ArticleContentExtractionException exception)
+        {
+            if (ReferenceEquals(SelectedArticle, article))
+            {
+                IsForbiddenArticleContentError = exception.StatusCode == HttpStatusCode.Forbidden;
+                ArticleContentError = exception.Message;
+            }
+        }
+        catch (ArticleContentPersistenceException exception)
+        {
+            if (ReferenceEquals(SelectedArticle, article))
+            {
+                ArticleContentError = exception.Message;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_selectedArticleContentLoad, cancellationSource))
+            {
+                _selectedArticleContentLoad = null;
+                IsLoadingArticleContent = false;
+            }
+
+            cancellationSource.Dispose();
         }
     }
 

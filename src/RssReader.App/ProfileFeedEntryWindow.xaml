@@ -14,11 +14,9 @@
         Loaded="Window_Loaded"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Grid Margin="8">
-        <Border Background="{DynamicResource WindowBrush}"
-                BorderBrush="{DynamicResource ControlBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="22">
+        <Border Style="{StaticResource PopupOuterFrameStyle}">
+            <Border Style="{StaticResource PopupInnerFrameStyle}"
+                    Padding="22">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -74,6 +72,7 @@
                             Margin="8,0,0,0" />
                 </StackPanel>
             </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

@@ -104,13 +104,11 @@
     <Grid Background="{DynamicResource ModalScrimBrush}">
         <Border Width="600"
                 MaxHeight="430"
-                Padding="18"
                 VerticalAlignment="Top"
                 Margin="0,24,0,0"
-                Background="{DynamicResource ContentBrush}"
-                BorderBrush="{DynamicResource ControlBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6">
+                Style="{StaticResource PopupOuterFrameStyle}">
+            <Border Style="{StaticResource PopupInnerFrameStyle}"
+                    Padding="18">
             <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -158,6 +156,7 @@
                            FontSize="11"
                            Foreground="{DynamicResource MutedTextBrush}" />
             </StackPanel>
+            </Border>
         </Border>
     </Grid>
 </Window>

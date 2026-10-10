@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -61,11 +62,13 @@ public sealed class MainWindowViewModelTests
                 ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
                 ReaderFontFamily: ProfileReaderFontFamily.Serif,
                 ReadingLayout: ProfileReadingLayout.SplitPane,
-                SplitPaneListRatio: 0.63);
+                SplitPaneListRatio: 0.63,
+                AutoLoadFullArticle: false);
             var window = new PreferencesWindow(initialPreferences);
             Assert.IsNull(window.FindName("ReadingLayoutComboBox"));
             Assert.AreEqual(0, ((ComboBox)window.FindName("ArticleListDensityComboBox")!).SelectedIndex);
             Assert.AreEqual(0, ((ComboBox)window.FindName("ReaderThemeComboBox")!).SelectedIndex);
+            Assert.IsFalse(((CheckBox)window.FindName("AutoLoadFullArticleCheckBox")!).IsChecked);
             Assert.IsNull(window.FindName("ReaderTextSizeComboBox"));
             Assert.IsNull(window.FindName("ReaderLineSpacingComboBox"));
             Assert.IsNull(window.FindName("ReaderFontFamilyComboBox"));
@@ -76,6 +79,7 @@ public sealed class MainWindowViewModelTests
                 {
                     ((ComboBox)window.FindName("ArticleListDensityComboBox")!).SelectedIndex = 2;
                     ((ComboBox)window.FindName("ReaderThemeComboBox")!).SelectedIndex = 2;
+                    ((CheckBox)window.FindName("AutoLoadFullArticleCheckBox")!).IsChecked = true;
                     ((Button)window.FindName("SavePreferencesButton")!).RaiseEvent(
                         new RoutedEventArgs(Button.ClickEvent));
                 }));
@@ -89,7 +93,8 @@ public sealed class MainWindowViewModelTests
                     ReaderTheme: ProfileReaderTheme.Warm,
                     ReaderTextSize: ProfileReaderTextSize.Large,
                     ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
-                    ReaderFontFamily: ProfileReaderFontFamily.Serif),
+                    ReaderFontFamily: ProfileReaderFontFamily.Serif,
+                    AutoLoadFullArticle: true),
                 window.Preferences);
         });
     }
@@ -737,6 +742,17 @@ public sealed class MainWindowViewModelTests
 
                 Assert.AreEqual(Visibility.Collapsed, actionPanel.Visibility);
                 Assert.AreEqual(0, feedRow.ColumnDefinitions[1].ActualWidth, 0.1);
+
+                viewModel.SetSidebarPanelWidth(MainWindowViewModel.MinimumSidebarWidth);
+                window.Width = 900;
+                window.UpdateLayout();
+                feedRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+                window.UpdateLayout();
+                Assert.IsTrue(
+                    GetBounds(unfollowButton, feedRow).Right <= GetBounds(unreadBadge, feedRow).Left,
+                    "Feed actions must remain to the left of the unread badge at the narrow sidebar width.");
+                feedRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+                window.UpdateLayout();
 
                 var deleteButton = FindVisualChildren<Button>(folderRow)
                     .Single(button => AutomationProperties.GetName(button) == "Delete folder");
@@ -5381,6 +5397,26 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void ArticleHtmlDocumentBuilderRestoresLazyAndResponsiveImageSourcesBeforeSanitizing()
+    {
+        const string articleUrl = "https://news.example.com/articles/story";
+        var document = ArticleHtmlDocumentBuilder.Build(
+            """
+            <div><img src="data:image/gif;base64,AAAA" data-src="../images/lazy.jpg" alt="Lazy image"></div>
+            <img srcset="/images/small.jpg 480w, /images/large.jpg 1200w" alt="Responsive image">
+            """,
+            "Article summary",
+            articleUrl,
+            null);
+
+        StringAssert.Contains(document, "https://news.example.com/images/lazy.jpg");
+        StringAssert.Contains(document, "https://news.example.com/images/large.jpg");
+        Assert.IsFalse(document.Contains("data:image/", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(document.Contains("data-src=", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(document.Contains("srcset=", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
     public void ArticleHtmlDocumentBuilderRemovesDuplicateFeaturedImageWhenInlineImageUsesResizedSource()
     {
         const string fullImage = "https://armaghplanet.com/wp-content/uploads/2026/09/Christmas-Card-Competition.jpeg";
@@ -5451,6 +5487,9 @@ public sealed class MainWindowViewModelTests
         StringAssert.Contains(document, "class=\"reader-feed-preview\"");
         StringAssert.Contains(document, "class=\"reader-feed-preview-image\"");
         StringAssert.Contains(document, imageUrl);
+        Assert.IsTrue(
+            document.IndexOf(imageUrl, StringComparison.Ordinal) <
+            document.IndexOf(summary, StringComparison.Ordinal));
         StringAssert.Contains(document, "This feed provides a short preview.");
         StringAssert.Contains(document, $"href=\"{articleUrl}\"");
         StringAssert.Contains(document, "Open article on the publisher's site");
@@ -5466,6 +5505,279 @@ public sealed class MainWindowViewModelTests
             "https://example.test/rss/feed.xml");
 
         StringAssert.Contains(document, "https://example.test/images/panel.jpg");
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderPrependsThumbnailToFullContentOnlyWhenNoUsableInlineImageExists()
+    {
+        const string imageUrl = "https://example.test/images/thumbnail.jpg";
+        var document = ArticleHtmlDocumentBuilder.Build(
+            "<article><h2>Full article heading</h2><p>Full article body.</p></article>",
+            "A short feed preview.",
+            "https://example.test/story",
+            null,
+            imageUrl: "/images/thumbnail.jpg");
+
+        var imageIndex = document.IndexOf(imageUrl, StringComparison.Ordinal);
+        var textIndex = document.IndexOf("Full article heading", StringComparison.Ordinal);
+        Assert.IsTrue(imageIndex >= 0 && imageIndex < textIndex);
+
+        var inlineImageDocument = ArticleHtmlDocumentBuilder.Build(
+            "<p>Full article body.</p><img src=\"https://example.test/images/body.jpg\" alt=\"Body\">",
+            "A short feed preview.",
+            "https://example.test/story",
+            null,
+            imageUrl: imageUrl);
+
+        StringAssert.Contains(inlineImageDocument, "https://example.test/images/body.jpg");
+        Assert.IsFalse(inlineImageDocument.Contains("<figure class=\"reader-leading-image\">", StringComparison.Ordinal));
+        Assert.IsFalse(inlineImageDocument.Contains(imageUrl, StringComparison.Ordinal));
+
+        var resizedImageDocument = ArticleHtmlDocumentBuilder.Build(
+            "<p>Article body.</p><img src=\"https://example.test/images/thumbnail-300x200.jpg\" alt=\"Thumbnail\">",
+            "A separate preview.",
+            "https://example.test/story",
+            null,
+            imageUrl: imageUrl);
+        Assert.AreEqual(1, resizedImageDocument.Split("<img", StringSplitOptions.None).Length - 1);
+        StringAssert.Contains(resizedImageDocument, "thumbnail-300x200.jpg");
+        Assert.IsFalse(resizedImageDocument.Contains(imageUrl, StringComparison.Ordinal));
+
+        var relativeThumbnailDocument = ArticleHtmlDocumentBuilder.Build(
+            "<p>Another complete article body.</p>",
+            "A separate preview.",
+            null,
+            "https://example.test/rss/feed.xml",
+            imageUrl: "../images/relative-thumbnail.jpg");
+        StringAssert.Contains(relativeThumbnailDocument, "https://example.test/images/relative-thumbnail.jpg");
+
+        var unsupportedImageDocument = ArticleHtmlDocumentBuilder.Build(
+            "<p>Text survives an unusable inline image.<img src=\"file:///private/picture.jpg\"></p>",
+            "A separate preview.",
+            "https://example.test/story",
+            null,
+            imageUrl: "file:///private/thumbnail.jpg");
+        StringAssert.Contains(unsupportedImageDocument, "Text survives an unusable inline image.");
+        Assert.IsFalse(unsupportedImageDocument.Contains("<img ", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public async Task FullArticleActionLoadsExtractedContentAndCanReturnToCachedFeedPreview()
+    {
+        const string feedPreview = "A short feed preview.";
+        const string extractedHtml = "<article><h2>Full story</h2><p>Publisher article body.</p></article>";
+        var retrievedAt = DateTimeOffset.UtcNow;
+        var service = new StubArticleContentService(
+            (_, _) => Task.FromResult(new ExtractedArticleContent(
+                extractedHtml,
+                "Full story",
+                "Publisher Writer",
+                retrievedAt)));
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Feed title",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            feedPreview,
+            articleId: "article-1",
+            link: "https://example.test/story",
+            content: $"<p>{feedPreview}</p>");
+        viewModel.VisibleArticles.Add(article);
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        Assert.IsTrue(viewModel.IsSelectedArticlePreviewCueVisible);
+        Assert.IsTrue(viewModel.IsSelectedArticleFullArticleActionVisible);
+        Assert.AreEqual(0, service.RequestCount);
+        await viewModel.LoadFullArticleCommand.ExecuteAsync();
+
+        Assert.AreEqual(1, service.RequestCount);
+        Assert.AreEqual(extractedHtml, article.ReaderContent);
+        Assert.AreEqual(retrievedAt, article.ExtractedContentRetrievedAt);
+        Assert.IsTrue(viewModel.IsFeedPreviewActionVisible);
+        Assert.IsFalse(viewModel.IsSelectedArticlePreviewCueVisible);
+
+        viewModel.ShowFeedPreviewCommand.Execute(null);
+        Assert.AreEqual($"<p>{feedPreview}</p>", article.ReaderContent);
+        Assert.IsTrue(viewModel.IsSelectedArticlePreviewCueVisible);
+        await viewModel.LoadFullArticleCommand.ExecuteAsync();
+        Assert.AreEqual(1, service.RequestCount);
+        Assert.AreEqual(extractedHtml, article.ReaderContent);
+    }
+
+    [TestMethod]
+    public void AutoLoadFullArticleLoadsPublisherContentWhenArticleIsOpened()
+    {
+        const string extractedHtml = "<article><p>Automatically loaded publisher text.</p></article>";
+        var service = new StubArticleContentService(
+            (_, _) => Task.FromResult(new ExtractedArticleContent(
+                extractedHtml,
+                "Full story",
+                null,
+                DateTimeOffset.UtcNow)));
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            profilePreferences: new ProfilePreferences(AutoLoadFullArticle: true),
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Feed title",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "A short feed preview.",
+            link: "https://example.test/story",
+            content: "<p>A short feed preview.</p>");
+
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        Assert.AreEqual(1, service.RequestCount);
+        Assert.AreEqual(extractedHtml, article.ReaderContent);
+        Assert.IsTrue(viewModel.IsFeedPreviewActionVisible);
+    }
+
+    [TestMethod]
+    public async Task FullArticleFailureRetainsPreviewAndDisplaysRecoverableError()
+    {
+        const string feedPreview = "The original feed content remains available.";
+        var service = new StubArticleContentService(
+            (_, _) => Task.FromException<ExtractedArticleContent>(
+                new ArticleContentExtractionException("The publisher requires a browser challenge.")));
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Feed title",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            feedPreview,
+            link: "https://example.test/story",
+            content: $"<p>{feedPreview}</p>");
+        viewModel.VisibleArticles.Add(article);
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        await viewModel.LoadFullArticleCommand.ExecuteAsync();
+
+        Assert.AreEqual($"<p>{feedPreview}</p>", article.ReaderContent);
+        Assert.AreEqual("The publisher requires a browser challenge.", viewModel.ArticleContentError);
+        Assert.AreEqual("Retry full article", viewModel.FullArticleActionLabel);
+        Assert.IsTrue(viewModel.IsSelectedArticleFullArticleActionVisible);
+        Assert.IsTrue(viewModel.IsOpenArticleInBrowserVisible);
+        Assert.IsFalse(viewModel.IsOpenInAppPublisherBrowserVisible);
+
+        viewModel.ShowFeedPreviewCommand.Execute(null);
+        Assert.IsFalse(viewModel.IsOpenArticleInBrowserVisible);
+    }
+
+    [TestMethod]
+    public async Task ForbiddenFullArticleFailureOffersInAppBrowserAndCanReturnToReader()
+    {
+        var service = new StubArticleContentService(
+            (_, _) => Task.FromException<ExtractedArticleContent>(
+                new ArticleContentExtractionException(
+                    "The publisher denied the request (HTTP 403 Forbidden).",
+                    statusCode: HttpStatusCode.Forbidden,
+                    isCloudflareResponse: true)));
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Feed title",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "A short feed preview.",
+            link: "https://example.test/story",
+            content: "<p>A short feed preview.</p>");
+        viewModel.VisibleArticles.Add(article);
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        await viewModel.LoadFullArticleCommand.ExecuteAsync();
+
+        Assert.IsTrue(viewModel.IsOpenArticleInBrowserVisible);
+        Assert.IsTrue(viewModel.IsOpenInAppPublisherBrowserVisible);
+        Assert.IsTrue(viewModel.OpenInAppPublisherBrowserCommand.CanExecute(null));
+        Assert.IsFalse(viewModel.IsInAppPublisherBrowserVisible);
+
+        viewModel.OpenInAppPublisherBrowserCommand.Execute(null);
+
+        Assert.IsTrue(viewModel.IsInAppPublisherBrowserVisible);
+        Assert.IsFalse(viewModel.IsOpenInAppPublisherBrowserVisible);
+        Assert.IsTrue(viewModel.ReturnToArticleReaderCommand.CanExecute(null));
+
+        viewModel.ReturnToArticleReaderCommand.Execute(null);
+
+        Assert.IsFalse(viewModel.IsInAppPublisherBrowserVisible);
+        Assert.IsTrue(viewModel.IsOpenInAppPublisherBrowserVisible);
+    }
+
+    [TestMethod]
+    public async Task ChangingSelectionCancelsInFlightFullArticleLoad()
+    {
+        var requestStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StubArticleContentService(
+            async (_, cancellationToken) =>
+            {
+                requestStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException("Cancelled request unexpectedly completed.");
+            });
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "First article",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "First preview.",
+            link: "https://example.test/first",
+            content: "<p>First preview.</p>");
+        var nextArticle = new ArticleRowViewModel(
+            "Next article",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "Next preview.",
+            link: "https://example.test/next",
+            content: "<p>Next preview.</p>");
+        viewModel.VisibleArticles.Add(article);
+        viewModel.VisibleArticles.Add(nextArticle);
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        var loadTask = viewModel.LoadFullArticleCommand.ExecuteAsync();
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        viewModel.OpenArticleInReaderCommand.Execute(nextArticle);
+        await loadTask;
+
+        Assert.AreSame(nextArticle, viewModel.SelectedArticle);
+        Assert.IsFalse(viewModel.IsLoadingArticleContent);
+        Assert.IsNull(viewModel.ArticleContentError);
+        Assert.AreEqual("<p>First preview.</p>", article.ReaderContent);
     }
 
     [TestMethod]
@@ -5503,6 +5815,197 @@ public sealed class MainWindowViewModelTests
             }
         });
         Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
+    public void ArticleReaderRefreshesWhenFullArticleIsLoadedAndPreviewIsRestored()
+    {
+        Exception? failure = null;
+        WpfTestHost.Run(() =>
+        {
+            try
+            {
+                const string summary = "A short feed preview.";
+                var viewModel = new MainWindowViewModel(
+                    Profile.CreateRegular("Reader"),
+                    catalogService: null,
+                    readingService: null,
+                    feedRefreshService: null,
+                    articleContentService: new StubArticleContentService(
+                        (_, _) => Task.FromResult(new ExtractedArticleContent(
+                            "<article><script>alert('unsafe')</script><h2>Extracted story</h2><p>Full publisher text.</p></article>",
+                            "Extracted story",
+                            "Publisher Writer",
+                            DateTimeOffset.UtcNow))));
+                var window = CreateTestMainWindow(viewModel);
+                var article = new ArticleRowViewModel(
+                    "Feed title",
+                    "Example feed",
+                    DateTimeOffset.UtcNow,
+                    "News",
+                    [],
+                    summary,
+                    link: "https://example.test/story",
+                    content: $"<p>{summary}</p>");
+                viewModel.SelectArticleCommand.Execute(article);
+
+                var loadButton = FindReaderElement<Button>(window, "LoadFullArticleButton");
+                var previewButton = FindReaderElement<Button>(window, "ShowFeedPreviewButton");
+                Assert.IsFalse(viewModel.IsFeedPreviewActionVisible);
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Visible, loadButton.Visibility);
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    previewButton.Visibility,
+                    $"Preview action visibility did not follow the selected article state: {viewModel.SelectedArticle?.IsShowingExtractedContent}.");
+                var articleViewer = FindReaderElement<RssReader.App.ArticleHtmlViewer>(
+                    window,
+                    "SelectedArticleHtmlViewer");
+                StringAssert.Contains(articleViewer.CurrentDocument, summary);
+
+                var loadTask = viewModel.LoadFullArticleCommand.ExecuteAsync();
+                PumpDispatcherUntil(loadTask);
+                StringAssert.Contains(articleViewer.CurrentDocument, "Full publisher text.");
+                Assert.IsTrue(articleViewer.CurrentDocument.Contains("Extracted story", StringComparison.Ordinal));
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains("<script", StringComparison.OrdinalIgnoreCase));
+                Assert.AreEqual(Visibility.Collapsed, loadButton.Visibility);
+                Assert.AreEqual(Visibility.Visible, previewButton.Visibility);
+
+                viewModel.ShowFeedPreviewCommand.Execute(null);
+                StringAssert.Contains(articleViewer.CurrentDocument, summary);
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains("Full publisher text.", StringComparison.Ordinal));
+                Assert.AreEqual(Visibility.Visible, loadButton.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, previewButton.Visibility);
+                window.Close();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
+    public void ArticleReaderOffersBrowserLinkAfterFullArticleRequestFails()
+    {
+        Exception? failure = null;
+        WpfTestHost.Run(() =>
+        {
+            try
+            {
+                const string articleUrl = "https://example.test/story";
+                var viewModel = new MainWindowViewModel(
+                    Profile.CreateRegular("Reader"),
+                    catalogService: null,
+                    readingService: null,
+                    feedRefreshService: null,
+                    articleContentService: new StubArticleContentService(
+                        (_, _) => Task.FromException<ExtractedArticleContent>(
+                            new ArticleContentExtractionException(
+                                "The publisher blocked the app's request (HTTP 403 Forbidden).",
+                                statusCode: HttpStatusCode.Forbidden))));
+                var window = CreateTestMainWindow(viewModel);
+                var article = new ArticleRowViewModel(
+                    "Feed title",
+                    "Example feed",
+                    DateTimeOffset.UtcNow,
+                    "News",
+                    [],
+                    "A short feed preview.",
+                    link: articleUrl,
+                    content: "<p>A short feed preview.</p>");
+                viewModel.SelectArticleCommand.Execute(article);
+
+                var loadTask = viewModel.LoadFullArticleCommand.ExecuteAsync();
+                PumpDispatcherUntil(loadTask);
+                window.UpdateLayout();
+
+                var browserLinkText = FindReaderElement<TextBlock>(
+                    window,
+                    "OpenArticleInBrowserLink");
+                Assert.AreEqual(Visibility.Visible, browserLinkText.Visibility);
+                var browserLink = browserLinkText.Inlines.OfType<Hyperlink>().Single();
+                Assert.AreEqual(new Uri(articleUrl), browserLink.NavigateUri);
+                var inAppBrowserLink = FindReaderElement<TextBlock>(
+                    window,
+                    "OpenArticleInAppBrowserLink");
+                Assert.AreEqual(Visibility.Visible, inAppBrowserLink.Visibility);
+
+                viewModel.ShowFeedPreviewCommand.Execute(null);
+                window.UpdateLayout();
+                Assert.AreEqual(Visibility.Collapsed, browserLinkText.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, inAppBrowserLink.Visibility);
+                window.Close();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        });
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
+    public void FolderDeleteConfirmationOpensAtTheSelectedFolderAnchor()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            var owner = CreateTestMainWindow(viewModel);
+            owner.Left = 40;
+            owner.Top = 40;
+            owner.Width = 1000;
+            owner.Height = 700;
+            owner.Show();
+            owner.UpdateLayout();
+
+            var sidebar = (SidebarView)owner.FindName("SidebarView")!;
+            var folderName = viewModel.FeedLinks.First(link => link.IsFolder).Label;
+            Assert.IsTrue(sidebar.TryGetFolderDeleteAnchor(
+                folderName,
+                owner,
+                out var folderAnchor));
+
+            double? dialogLeft = null;
+            double? dialogTop = null;
+            double? dialogHeight = null;
+            var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher.CurrentDispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(50)
+            };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                var dialog = System.Windows.Application.Current.Windows.OfType<MessageDialogWindow>().Single();
+                dialogLeft = dialog.Left;
+                dialogTop = dialog.Top;
+                dialogHeight = dialog.ActualHeight;
+                ((Button)dialog.FindName("NoButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            };
+            timer.Start();
+
+            try
+            {
+                var result = MessageDialogWindow.Show(
+                    owner,
+                    $"Delete folder '{folderName}' and unfollow its feeds?",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning,
+                    ownerRelativeAnchor: folderAnchor);
+
+                Assert.AreEqual(MessageBoxResult.No, result);
+                Assert.AreEqual(owner.Left + folderAnchor.X, dialogLeft);
+                Assert.AreEqual(
+                    owner.Top + folderAnchor.Y - dialogHeight!.Value / 2,
+                    dialogTop!.Value,
+                    1);
+            }
+            finally
+            {
+                owner.Close();
+            }
+        });
     }
 
     private static async Task WaitForRefreshCompletionAsync(MainWindowViewModel viewModel)
@@ -5594,6 +6097,20 @@ public sealed class MainWindowViewModelTests
         {
             RequestedRawXmlFeedIds.Enqueue(feed.Id);
             return Task.FromResult(RawFeedXmlToReturn);
+        }
+    }
+
+    private sealed class StubArticleContentService(
+        Func<Uri, CancellationToken, Task<ExtractedArticleContent>> extract) : IArticleContentService
+    {
+        public int RequestCount { get; private set; }
+
+        public Task<ExtractedArticleContent> ExtractAsync(
+            Uri articleUri,
+            CancellationToken cancellationToken = default)
+        {
+            RequestCount++;
+            return extract(articleUri, cancellationToken);
         }
     }
 }

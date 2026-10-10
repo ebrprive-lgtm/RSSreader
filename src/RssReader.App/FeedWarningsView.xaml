@@ -26,12 +26,10 @@
                StaysOpen="False"
                AllowsTransparency="True"
                PopupAnimation="Fade">
-            <Border Width="440"
-                    Padding="14"
-                    Background="{DynamicResource ContentBrush}"
-                    BorderBrush="{DynamicResource ControlBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
+            <Border Style="{StaticResource PopupOuterFrameStyle}">
+                <Border Width="440"
+                        Padding="14"
+                        Style="{StaticResource PopupInnerFrameStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -137,6 +135,7 @@
                                 AutomationProperties.Name="Retry feed with warning" />
                     </DockPanel>
                 </Grid>
+                </Border>
             </Border>
         </Popup>
     </Grid>

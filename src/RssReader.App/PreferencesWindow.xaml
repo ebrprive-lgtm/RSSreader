@@ -124,10 +124,8 @@
         </Style>
     </Window.Resources>
     <Grid Margin="8">
-        <Border Background="{DynamicResource ContentBrush}"
-                BorderBrush="{DynamicResource ControlBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6">
+        <Border Style="{StaticResource PopupOuterFrameStyle}">
+            <Border Style="{StaticResource PopupInnerFrameStyle}">
         <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="232" />
@@ -254,6 +252,18 @@
                                   FontSize="13"
                                   Padding="2" />
                         <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <TextBlock Text="Full articles" FontSize="13" FontWeight="SemiBold" />
+                        <CheckBox x:Name="AutoLoadFullArticleCheckBox"
+                                  Content="Auto-Load article"
+                                  AutomationProperties.Name="Auto-Load article"
+                                  FontSize="13"
+                                  Margin="0,10,0,0"
+                                  Padding="2" />
+                        <TextBlock Text="Automatically load the publisher's full article when you open an article."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="24,3,0,12"
+                                   TextWrapping="Wrap" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Folder article limit" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Maximum articles shown per feed inside a folder."
                                    Foreground="{DynamicResource MutedTextBrush}"
@@ -335,6 +345,7 @@
                 shell:WindowChrome.IsHitTestVisibleInChrome="True"
                 Click="CloseWindow_Click" />
         </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

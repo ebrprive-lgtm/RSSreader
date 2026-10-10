@@ -19,11 +19,8 @@
                             GlassFrameThickness="0"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
-        <Border Margin="6"
-            Background="{DynamicResource ContentBrush}"
-            BorderBrush="{DynamicResource ControlBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="6">
+    <Border Margin="6" Style="{StaticResource PopupOuterFrameStyle}">
+        <Border Style="{StaticResource PopupInnerFrameStyle}">
         <Grid Margin="22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -213,5 +210,6 @@
                     Click="ShowRawXmlButton_Click" />
         </Grid>
     </Grid>
+    </Border>
     </Border>
 </Window>

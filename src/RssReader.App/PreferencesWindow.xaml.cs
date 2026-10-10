@@ -28,6 +28,7 @@ public partial class PreferencesWindow : Window
             .First(item => int.Parse((string)item.Tag, CultureInfo.InvariantCulture) == preferences.AutoRefreshIntervalMinutes);
         SelectOption(ArticleListDensityComboBox, preferences.ArticleListDensity);
         SelectOption(ReaderThemeComboBox, preferences.ReaderTheme);
+        AutoLoadFullArticleCheckBox.IsChecked = preferences.AutoLoadFullArticle;
     }
 
     public ProfilePreferences Preferences { get; private set; }
@@ -88,7 +89,8 @@ public partial class PreferencesWindow : Window
             Preferences.ReaderTextSize,
             Preferences.ReaderLineSpacing,
             Preferences.ReaderFontFamily,
-            Preferences.SplitPaneListRatio);
+            Preferences.SplitPaneListRatio,
+            AutoLoadFullArticle: AutoLoadFullArticleCheckBox.IsChecked == true);
         DialogResult = true;
     }
 

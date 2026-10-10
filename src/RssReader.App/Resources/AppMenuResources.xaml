@@ -13,13 +13,15 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ContextMenu}">
                         <Border x:Name="MenuFrame"
-                            Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="5"
-                                Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True">
-                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                Style="{StaticResource PopupOuterFrameStyle}">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="5"
+                                    Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                            </Border>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
@@ -73,14 +75,16 @@
                                    Focusable="False"
                                    IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
                                    PopupAnimation="Fade">
-                                <Border Background="{DynamicResource ContentBrush}"
-                                        BorderBrush="{DynamicResource ControlBorderBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="5"
-                                        Padding="4">
-                                    <ScrollViewer CanContentScroll="True">
-                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
-                                    </ScrollViewer>
+                                <Border Style="{StaticResource PopupOuterFrameStyle}">
+                                    <Border Background="{DynamicResource ContentBrush}"
+                                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                                            BorderThickness="2"
+                                            CornerRadius="5"
+                                            Padding="4">
+                                        <ScrollViewer CanContentScroll="True">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                        </ScrollViewer>
+                                    </Border>
                                 </Border>
                             </Popup>
                         </Grid>

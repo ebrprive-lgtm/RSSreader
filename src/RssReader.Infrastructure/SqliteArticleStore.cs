@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Data.Sqlite;
 using RssReader.Application;
 using RssReader.Domain;
 
@@ -54,7 +55,8 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
             SELECT article.Id, article.FeedId, article.ExternalId, article.Title, article.Link,
                      article.PublishedAt, article.Summary, article.Content, article.ImageUrl, feed.Name,
                    subscription.FolderName, state.IsRead, state.IsSaved
-                   , article.Author, article.SourceXml
+                   , article.Author, article.SourceXml, article.ExtractedContentHtml,
+                     article.ExtractedContentRetrievedAt
             FROM Articles AS article
             INNER JOIN ProfileSubscriptions AS subscription ON subscription.FeedId = article.FeedId
             INNER JOIN CatalogFeeds AS feed ON feed.Id = article.FeedId
@@ -91,7 +93,11 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
             {
                 Categories = categoriesByArticle.GetValueOrDefault(reader.GetString(0)) ?? [],
                 Author = reader.IsDBNull(13) ? null : reader.GetString(13),
-                SourceXml = reader.IsDBNull(14) ? null : reader.GetString(14)
+                SourceXml = reader.IsDBNull(14) ? null : reader.GetString(14),
+                ExtractedContentHtml = reader.IsDBNull(15) ? null : reader.GetString(15),
+                ExtractedContentRetrievedAt = reader.IsDBNull(16)
+                    ? null
+                    : DateTimeOffset.Parse(reader.GetString(16), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
             };
             articles.Add(new ArticleForProfile(
                 article,
@@ -190,6 +196,41 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
 
         await transaction.CommitAsync(cancellationToken);
         return addedCount;
+    }
+
+    public async Task SaveExtractedArticleContentAsync(
+        string articleId,
+        string html,
+        DateTimeOffset retrievedAt,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var connection = await connections.OpenConnectionAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE Articles
+                SET ExtractedContentHtml = $html,
+                    ExtractedContentRetrievedAt = $retrievedAt
+                WHERE Id = $articleId;
+                """;
+            command.Parameters.AddWithValue("$articleId", articleId);
+            command.Parameters.AddWithValue("$html", html);
+            command.Parameters.AddWithValue(
+                "$retrievedAt",
+                retrievedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                throw new ArticleContentPersistenceException(
+                    "The full article was loaded, but its offline cache could not be saved because the feed item no longer exists.");
+            }
+        }
+        catch (SqliteException exception)
+        {
+            throw new ArticleContentPersistenceException(
+                "The full article was loaded, but its offline cache could not be saved.",
+                exception);
+        }
     }
 
     public Task SetArticleReadAsync(

@@ -43,6 +43,8 @@ public partial class App : System.Windows.Application
 					services.AddSingleton<IReaderStore>(provider => provider.GetRequiredService<SqliteReaderStore>());
 					services.AddSingleton(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(30) });
 					services.AddSingleton<IFeedDownloader, SyndicationFeedDownloader>();
+					services.AddSingleton<IArticleHostAddressResolver, DnsArticleHostAddressResolver>();
+					services.AddSingleton<IArticleContentService, HttpArticleContentService>();
 					services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 					services.AddSingleton<ProfileService>();
 					services.AddSingleton<CatalogService>();
@@ -139,7 +141,8 @@ public partial class App : System.Windows.Application
 				preferences,
 				catalogFeedPreviewService,
 				_host.Services.GetRequiredService<ProfileFeedService>(),
-				profileService);
+				profileService,
+				_host.Services.GetRequiredService<IArticleContentService>());
 			readerWindow = new MainWindow(viewModel);
 			readerWindow.LogoutRequested += LogOut;
 			readerWindow.PreferencesRequested += () => ShowPreferences(readerWindow, viewModel);

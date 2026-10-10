@@ -23,6 +23,35 @@ public partial class SidebarView : UserControl
 
     public event Action? PreferencesRequested;
 
+    public bool TryGetFolderDeleteAnchor(
+        string folderName,
+        FrameworkElement relativeTo,
+        out Point anchor)
+    {
+        ArgumentNullException.ThrowIfNull(relativeTo);
+        var folderRow = VisualTreeSearch.FindDescendant<Grid>(
+            SidebarPanel,
+            grid => grid.Name == "SidebarLinkRoot" &&
+                grid.DataContext is SidebarLink { IsFolder: true } link &&
+                string.Equals(link.Label, folderName, StringComparison.OrdinalIgnoreCase));
+        if (folderRow is null ||
+            SidebarPanel.ActualWidth <= 0 ||
+            folderRow.ActualHeight <= 0)
+        {
+            anchor = default;
+            return false;
+        }
+
+        var treeRight = SidebarPanel.TranslatePoint(
+            new Point(SidebarPanel.ActualWidth + 12, 0),
+            relativeTo);
+        var folderCenter = folderRow.TranslatePoint(
+            new Point(0, folderRow.ActualHeight / 2),
+            relativeTo);
+        anchor = new Point(treeRight.X, folderCenter.Y);
+        return true;
+    }
+
     public void UpdatePresentation()
     {
         if (DataContext is not MainWindowViewModel viewModel)

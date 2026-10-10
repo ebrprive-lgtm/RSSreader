@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style x:Key="PopupOuterFrameStyle" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource WindowBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="Padding" Value="1" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+    <Style x:Key="PopupInnerFrameStyle" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource ContentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+</ResourceDictionary>

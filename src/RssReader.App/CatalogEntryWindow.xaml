@@ -16,11 +16,8 @@
                             GlassFrameThickness="0"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
-        <Border Margin="8"
-            Background="{DynamicResource ContentBrush}"
-            BorderBrush="{DynamicResource ControlBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="6">
+    <Border Margin="8" Style="{StaticResource PopupOuterFrameStyle}">
+        <Border Style="{StaticResource PopupInnerFrameStyle}">
         <Grid Margin="24">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -107,6 +104,7 @@
                 <Button x:Name="SubmitButton" Content="Add" IsDefault="True" Style="{StaticResource PrimaryActionButtonStyle}" Click="SubmitButton_Click" MinWidth="82" Padding="10,7" />
             </StackPanel>
         </Grid>
-    </Grid>
+        </Grid>
+        </Border>
     </Border>
 </Window>

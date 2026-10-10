@@ -2,7 +2,7 @@
 
 ## Status
 
-Planning only. No implementation changes have been made.
+Implemented. SmartReader 0.11.1 was selected after static-fixture extraction tests; the existing feed-row action layout was verified and extended with narrow-width coverage.
 
 ## Goals
 
@@ -16,7 +16,7 @@ Planning only. No implementation changes have been made.
 - Keep the feed-provided content and summary intact. Show extracted content as a separate view/state with an obvious **Show feed preview** action.
 - Reuse a stored extraction when available; allow the reader to retry fetching it. If extraction fails, keep the feed preview available and offer the existing publisher link.
 - For article rendering, use the supplied thumbnail as a leading image only when there is no valid inline image in the body. Do not show the same image twice.
-- In the expanded feed list, reserve a distinct trailing layout area for the unread count and hover/focus actions. Never place the tag or unfollow actions over the count.
+- In the expanded feed list, reserve a distinct trailing layout area for the unread count and hover-only actions. Never place the tag or unfollow actions over the count.
 
 ## Implementation plan
 
@@ -55,41 +55,51 @@ Planning only. No implementation changes have been made.
 
 - Restructure the feed-entry row in [SidebarView.xaml](./../src/RssReader.App/SidebarView.xaml) and its layout styles in [MainWindowSidebarResources.xaml](./../src/RssReader.App/Resources/MainWindowSidebarResources.xaml).
 - Replace overlay positioning of the hover/focus tag-management and unfollow buttons with an explicit trailing action area. Reserve enough room for those actions while keeping the unread badge in its own non-overlapping column.
-- Preserve the current compact/collapsed sidebar behavior, folder-row delete action, hover/focus visibility, click targets, tooltips, and accessibility names.
+- Preserve the current compact/collapsed sidebar behavior, folder-row delete action, hover-only visibility, click targets, tooltips, and accessibility names.
 - Keep the fix within the shared palette and sizing guidance in [Styling.MD](./Styling.MD).
 
 ## Checks and acceptance criteria
 
 ### Article fetching and extraction
 
-- [ ] A fixture with article text plus navigation, sidebar, footer, and ad elements displays the article body without those surrounding elements.
-- [ ] Fixtures cover headings, paragraphs, lists, blockquotes, tables, images, captions, and relative links/images.
-- [ ] Malformed HTML, empty extraction, missing pages, paywall/challenge pages, and non-HTML responses produce a visible, recoverable failure and retain the feed preview.
-- [ ] HTTP(S) validation rejects unsupported schemes and local/private destinations; redirect handling rejects a redirect to a blocked destination.
-- [ ] Cancellation, timeout, and response-size limits are enforced and tested.
-- [ ] The WebView displays sanitized extracted output without running page scripts or navigating to the publisher in-process.
-- [ ] Reopening an article reuses stored extracted content; routine feed refresh does not erase or replace it.
-- [ ] SQLite migration is tested against an existing database without the new columns.
-- [ ] Unit tests use local HTTP handlers/HTML fixtures and do not require live websites.
+- [x] A fixture with article text plus navigation, sidebar, footer, and ad elements displays the article body without those surrounding elements.
+- [x] Fixtures cover headings, paragraphs, lists, blockquotes, tables, images, captions, and relative links/images.
+- [x] Malformed HTML, empty extraction, missing pages, paywall/challenge pages, and non-HTML responses produce a visible, recoverable failure and retain the feed preview.
+- [x] HTTP(S) validation rejects unsupported schemes and local/private destinations; redirect handling rejects a redirect to a blocked destination.
+- [x] Cancellation, timeout, and response-size limits are enforced and tested.
+- [x] The WebView displays sanitized extracted output without running page scripts or navigating to the publisher in-process.
+- [x] Reopening an article reuses stored extracted content; routine feed refresh does not erase or replace it.
+- [x] SQLite migration is tested against an existing database without the new columns.
+- [x] Unit tests use local HTTP handlers/HTML fixtures and do not require live websites.
 
 ### Thumbnail placement
 
-- [ ] A full article with no inline image and a valid thumbnail displays the thumbnail before the article text.
-- [ ] A summary-only preview with no inline image continues to display its thumbnail at the beginning.
-- [ ] An article with one or more inline images does not gain a duplicate leading thumbnail.
-- [ ] Duplicate/resized thumbnail and inline-image variants are covered where they can be matched.
-- [ ] Missing, invalid, or unsupported-scheme thumbnail URLs do not create broken images or alter text rendering.
-- [ ] Relative thumbnails resolve against the article URL, or the feed URL if the article URL is unavailable.
-- [ ] Existing image-centering, sanitization, theme, typography, and article-width tests continue to pass.
+- [x] A full article with no inline image and a valid thumbnail displays the thumbnail before the article text.
+- [x] A summary-only preview with no inline image continues to display its thumbnail at the beginning.
+- [x] An article with one or more inline images does not gain a duplicate leading thumbnail.
+- [x] Duplicate/resized thumbnail and inline-image variants are covered where they can be matched.
+- [x] Missing, invalid, or unsupported-scheme thumbnail URLs do not create broken images or alter text rendering.
+- [x] Relative thumbnails resolve against the article URL, or the feed URL if the article URL is unavailable.
+- [x] Existing image-centering, sanitization, theme, typography, and article-width tests continue to pass.
 
 ### Feed list hover layout
 
-- [ ] In an expanded feed row with an unread badge, the badge does not intersect the tag-management or unfollow button bounds on hover or keyboard focus.
-- [ ] The unread count remains visible and readable while either hover action is shown.
-- [ ] Tag management and unfollow actions remain clickable, retain their existing commands, and do not activate the feed row.
-- [ ] Verify the layout at the normal and narrow supported sidebar widths, including the collapsed sidebar state.
-- [ ] Folder rows retain their existing expand/delete behavior and do not gain feed-only actions.
-- [ ] XAML/UI tests verify visibility, automation names, and non-overlapping bounds; run the App test suite for regressions.
+- [x] In an expanded feed row with an unread badge, the badge does not intersect the tag-management or unfollow button bounds on hover.
+- [x] The unread count remains visible and readable while either hover action is shown.
+- [x] Tag management and unfollow actions retain their existing commands and do not activate the feed row.
+- [x] Verify the layout at normal and narrow supported sidebar widths; existing coverage also verifies the collapsed sidebar state.
+- [x] Folder rows retain their existing expand/delete behavior and do not gain feed-only actions.
+- [x] XAML/UI tests verify visibility, automation names, and non-overlapping bounds; the full App test suite passes.
+
+### Publisher pages returning HTTP 403
+
+- [x] Preserve the feed preview and explain that a 403 is the publisher denying the extraction request.
+- [x] Offer a user-initiated in-app browser only for HTTP 403 failures, while retaining the regular-browser link.
+- [x] Use a separate WebView2 profile; do not share browser cookies or automate publisher challenge solving.
+- [x] Limit in-app browser navigation and popups to HTTP(S), block non-user-initiated popups, and provide a clear return-to-reader action.
+- [x] Report only allowlisted response-header indicators (Cloudflare markers) and the HTTP status; never retain or display denial-page HTML or arbitrary response headers.
+- [x] Surface WebView initialization and navigation failures, including a second 403, without removing the feed preview.
+- [x] Cover provider-marker and generic 403 diagnostics, in-app action availability and return state, and regular-browser fallback in tests.
 
 ## Likely change areas
 

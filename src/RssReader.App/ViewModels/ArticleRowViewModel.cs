@@ -28,11 +28,16 @@ public sealed class ArticleRowViewModel(
     IReadOnlyList<ArticleCategory>? topics = null,
     string? websiteUrl = null,
     string? author = null,
-    string? sourceXml = null) : ObservableObject
+    string? sourceXml = null,
+    string? extractedContentHtml = null,
+    DateTimeOffset? extractedContentRetrievedAt = null) : ObservableObject
 {
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
     private bool _isBulkSelected;
+    private string? _extractedContentHtml = extractedContentHtml;
+    private DateTimeOffset? _extractedContentRetrievedAt = extractedContentRetrievedAt;
+    private bool _isShowingExtractedContent = !string.IsNullOrWhiteSpace(extractedContentHtml);
 
     public string Title { get; } = FeedTextEncodingRepair.Repair(title);
     public string Source { get; } = FeedTextEncodingRepair.Repair(source);
@@ -67,6 +72,11 @@ public sealed class ArticleRowViewModel(
         ? null
         : FeedTextEncodingRepair.Repair(author.Trim());
     public string? SourceXml { get; } = sourceXml;
+    public string? ExtractedContentHtml => _extractedContentHtml;
+    public DateTimeOffset? ExtractedContentRetrievedAt => _extractedContentRetrievedAt;
+    public bool HasExtractedContent => !string.IsNullOrWhiteSpace(_extractedContentHtml);
+    public bool IsShowingExtractedContent => _isShowingExtractedContent;
+    public string? ReaderContent => IsShowingExtractedContent ? _extractedContentHtml : Content;
     public bool HasAuthor => !string.IsNullOrWhiteSpace(Author);
     public string ReadLaterAutomationName => IsSaved ? "Remove from read later" : "Add to read later";
     public string BulkSelectionAutomationName =>
@@ -103,6 +113,37 @@ public sealed class ArticleRowViewModel(
         PublishedAt >= DateTimeOffset.Now.AddHours(-24);
     public string FreshnessLabel => IsFresh ? $"New · {AgeLabel}" : AgeLabel;
     public string PublishedDateLabel => PublishedAt.ToLocalTime().ToString("MMM d, yyyy");
+
+    public void SetExtractedContent(string html, DateTimeOffset retrievedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(html);
+        if (SetProperty(ref _extractedContentHtml, html, nameof(ExtractedContentHtml)))
+        {
+            OnPropertyChanged(nameof(HasExtractedContent));
+        }
+
+        SetProperty(
+            ref _extractedContentRetrievedAt,
+            retrievedAt,
+            nameof(ExtractedContentRetrievedAt));
+        ShowExtractedContent();
+    }
+
+    public void ShowExtractedContent()
+    {
+        if (HasExtractedContent && SetProperty(ref _isShowingExtractedContent, true, nameof(IsShowingExtractedContent)))
+        {
+            OnPropertyChanged(nameof(ReaderContent));
+        }
+    }
+
+    public void ShowFeedPreview()
+    {
+        if (SetProperty(ref _isShowingExtractedContent, false, nameof(IsShowingExtractedContent)))
+        {
+            OnPropertyChanged(nameof(ReaderContent));
+        }
+    }
 
     private static readonly HashSet<string> IgnoredSourceWords = new(StringComparer.OrdinalIgnoreCase)
     {

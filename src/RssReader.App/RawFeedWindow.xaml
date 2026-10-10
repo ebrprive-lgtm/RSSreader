@@ -19,11 +19,8 @@
                             GlassFrameThickness="0"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
-        <Border Margin="8"
-            Background="{DynamicResource ContentBrush}"
-            BorderBrush="{DynamicResource ControlBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="6">
+    <Border Margin="8" Style="{StaticResource PopupOuterFrameStyle}">
+        <Border Style="{StaticResource PopupInnerFrameStyle}">
         <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -124,6 +121,7 @@
             <Button Content="Close" IsCancel="True" Style="{StaticResource SecondaryActionButtonStyle}" MinWidth="84" Padding="12,7" Click="CloseWindow_Click" />
             </StackPanel>
         </Grid>
-    </Grid>
+        </Grid>
+        </Border>
     </Border>
 </Window>

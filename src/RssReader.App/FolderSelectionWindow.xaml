@@ -42,14 +42,12 @@
         </Style>
     </Window.Resources>
     <Grid Margin="8">
-        <Border Background="{DynamicResource WindowBrush}"
-                BorderBrush="{DynamicResource ControlBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="9">
+        <Border Style="{StaticResource PopupOuterFrameStyle}">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.16" />
             </Border.Effect>
+            <Border Style="{StaticResource PopupInnerFrameStyle}"
+                    Padding="9">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="46" />
@@ -125,6 +123,7 @@
                     </StackPanel>
                 </Button>
             </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

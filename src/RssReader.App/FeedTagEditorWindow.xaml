@@ -14,14 +14,12 @@
         Foreground="{DynamicResource TextBrush}"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Grid Margin="8">
-        <Border Background="{DynamicResource WindowBrush}"
-                BorderBrush="{DynamicResource ControlBorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="20">
+        <Border Style="{StaticResource PopupOuterFrameStyle}">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.16" />
             </Border.Effect>
+            <Border Style="{StaticResource PopupInnerFrameStyle}"
+                    Padding="20">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -120,6 +118,7 @@
                             Margin="8,0,0,0" />
                 </StackPanel>
             </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

@@ -278,6 +278,7 @@ public sealed class FeedRefreshServiceTests
 
             return Task.FromResult(addedCount);
         }
+        public Task SaveExtractedArticleContentAsync(string articleId, string html, DateTimeOffset retrievedAt, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetArticleReadAsync(string profileId, string articleId, bool isRead, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task SetArticleSavedAsync(string profileId, string articleId, bool isSaved, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default) =>

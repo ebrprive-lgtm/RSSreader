@@ -17,11 +17,8 @@
                             GlassFrameThickness="0"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
-    <Border Margin="8"
-            Background="{DynamicResource ContentBrush}"
-            BorderBrush="{DynamicResource ControlBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="8">
+    <Border Margin="8" Style="{StaticResource PopupOuterFrameStyle}">
+        <Border Style="{StaticResource PopupInnerFrameStyle}">
         <Grid Margin="24">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -159,5 +156,6 @@
                 </StackPanel>
             </Grid>
         </Grid>
+        </Border>
     </Border>
 </Window>

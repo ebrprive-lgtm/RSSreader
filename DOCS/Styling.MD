@@ -61,7 +61,7 @@ Article text size, line spacing, and font family are selected from the article v
 - The navigation sidebar can be resized between 220 px and 480 px using its splitter; persist the chosen width with main-window placement.
 - Use compact control heights around 32-38 px; keep icon buttons on stable square dimensions.
 - Use small corner radii: 3-5 px for controls and 5-7 px for dialogs. The main reader window is an exception with an 18 px radius.
-- Dialog boxes use a visible, subtle border around the surface, using `ControlBorderBrush` and a 5-7 px corner radius.
+- All application-owned dialog and popup surfaces use a layered frame: a very slim 1 px outer border and a 2 px inner border, both using `ControlBorderBrush`, with a 1 px inset and 5-7 px corner radii. Reuse `PopupOuterFrameStyle` and `PopupInnerFrameStyle` for dialog windows, floating panels, menus, and dropdowns.
 - Align counts and secondary values to the right while preserving space for the primary label.
 
 ## Window Chrome
@@ -86,7 +86,7 @@ Article text size, line spacing, and font family are selected from the article v
 - Use RadioButtons for mutually exclusive choices, with a clear selected indicator and visible hover, disabled, and keyboard-focus states.
 - Tab controls distinguish selected, unselected, hover, and keyboard-focus states using the shared accent and neutral resources; avoid native raised gray tab chrome.
 - ComboBox selected values use `DisplayMemberPath` or an explicit `ItemTemplate` for model objects; do not display record/type `ToString()` output.
-- Popup menus use a white surface, subtle border and shadow, compact padding, neutral hover, accent submenu selection, and a custom separator. Avoid native gray menu gutters and borders.
+- Popup menus and dropdowns use the shared layered frame around their white surface, subtle shadow, compact padding, neutral hover, accent submenu selection, and custom separator. Avoid native gray menu gutters and borders.
 - Scrollbars use a slim rounded thumb with neutral, hover, and drag states. Keep a 2 px inset between the scrollbar and the viewport edge so it does not touch the content frame.
 - Preferences actions use the shared primary, secondary, and icon action styles; do not fall back to native gray button chrome.
 - Avoid the default gray WPF button appearance: apply an explicit shared or feature-level button style.

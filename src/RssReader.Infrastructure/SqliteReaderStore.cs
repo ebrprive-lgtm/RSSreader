@@ -62,6 +62,8 @@ public sealed class SqliteReaderStore : IReaderStore
                 ImageUrl TEXT NULL,
                 Author TEXT NULL,
                 SourceXml TEXT NULL,
+                ExtractedContentHtml TEXT NULL,
+                ExtractedContentRetrievedAt TEXT NULL,
                 UNIQUE (FeedId, ExternalId)
             );
             CREATE TABLE IF NOT EXISTS ArticleCategories (
@@ -99,11 +101,15 @@ public sealed class SqliteReaderStore : IReaderStore
         var hasImageUrl = false;
         var hasAuthor = false;
         var hasSourceXml = false;
+        var hasExtractedContentHtml = false;
+        var hasExtractedContentRetrievedAt = false;
         while (await columnsReader.ReadAsync(cancellationToken))
         {
             hasImageUrl |= columnsReader.GetString(1) == "ImageUrl";
             hasAuthor |= columnsReader.GetString(1) == "Author";
             hasSourceXml |= columnsReader.GetString(1) == "SourceXml";
+            hasExtractedContentHtml |= columnsReader.GetString(1) == "ExtractedContentHtml";
+            hasExtractedContentRetrievedAt |= columnsReader.GetString(1) == "ExtractedContentRetrievedAt";
         }
 
         await columnsReader.DisposeAsync();
@@ -125,6 +131,20 @@ public sealed class SqliteReaderStore : IReaderStore
         {
             await using var migrationCommand = connection.CreateCommand();
             migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN SourceXml TEXT NULL;";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!hasExtractedContentHtml)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN ExtractedContentHtml TEXT NULL;";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!hasExtractedContentRetrievedAt)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN ExtractedContentRetrievedAt TEXT NULL;";
             await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 
@@ -239,6 +259,13 @@ public sealed class SqliteReaderStore : IReaderStore
         IReadOnlyList<FeedArticle> articles,
         CancellationToken cancellationToken = default) =>
         _articles.SaveArticlesAsync(feedId, articles, cancellationToken);
+
+    public Task SaveExtractedArticleContentAsync(
+        string articleId,
+        string html,
+        DateTimeOffset retrievedAt,
+        CancellationToken cancellationToken = default) =>
+        _articles.SaveExtractedArticleContentAsync(articleId, html, retrievedAt, cancellationToken);
 
     public Task SetArticleReadAsync(
         string profileId,

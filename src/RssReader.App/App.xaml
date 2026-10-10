@@ -5,6 +5,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/PopupFrameResources.xaml" />
                 <ResourceDictionary Source="Resources/AppThemeResources.xaml" />
                 <ResourceDictionary Source="Resources/AppMenuResources.xaml" />
                 <ResourceDictionary Source="Resources/AppScrollBarResources.xaml" />

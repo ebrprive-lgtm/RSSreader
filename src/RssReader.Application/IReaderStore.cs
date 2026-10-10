@@ -16,6 +16,11 @@ public interface IReaderStore
     Task RemoveFeedTagAsync(string profileId, string feedId, string tagName, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ArticleForProfile>> GetArticlesAsync(string profileId, CancellationToken cancellationToken = default);
     Task<int> SaveArticlesAsync(string feedId, IReadOnlyList<FeedArticle> articles, CancellationToken cancellationToken = default);
+    Task SaveExtractedArticleContentAsync(
+        string articleId,
+        string html,
+        DateTimeOffset retrievedAt,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ProfileFeedRefreshState>> GetFeedRefreshStatesAsync(string profileId, CancellationToken cancellationToken = default);
     Task ClearFeedRefreshFailureAsync(string profileId, string feedId, CancellationToken cancellationToken = default);
     Task ClearFeedRefreshFailuresAsync(string profileId, CancellationToken cancellationToken = default);
