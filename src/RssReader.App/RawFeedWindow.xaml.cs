@@ -16,11 +16,12 @@ public partial class RawFeedWindow : Window
     private static readonly Regex HtmlBreakTag = new(@"<br\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly string _rawContent;
 
-    public RawFeedWindow(string feedSource, string rawContent)
+    public RawFeedWindow(string feedSource, string rawContent, bool isCached = false)
     {
         InitializeComponent();
         _rawContent = rawContent;
         FeedSourceText.Text = feedSource;
+        CachedSourceBadge.Visibility = isCached ? Visibility.Visible : Visibility.Collapsed;
         RawContentTreeView.ItemsSource = CreateTree(rawContent);
     }
 

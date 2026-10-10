@@ -9,7 +9,7 @@
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        Background="White">
+        Background="{DynamicResource ContentBrush}">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="42"
                             ResizeBorderThickness="0"
@@ -17,8 +17,8 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
         <Border Margin="8"
-            Background="{StaticResource ContentBrush}"
-            BorderBrush="{StaticResource ControlBorderBrush}"
+            Background="{DynamicResource ContentBrush}"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
             BorderThickness="1"
             CornerRadius="6">
         <Grid Margin="24">
@@ -46,7 +46,7 @@
             Margin="8,0,0,0"
             Background="Transparent"
             BorderThickness="0"
-            Foreground="{StaticResource MutedTextBrush}"
+            Foreground="{DynamicResource MutedTextBrush}"
             Style="{StaticResource IconActionButtonStyle}"
             AutomationProperties.Name="Close dialog"
             ToolTip="Close"
@@ -84,7 +84,7 @@
         <TextBlock Grid.Row="2"
                Grid.ColumnSpan="2"
                    Text="{Binding ErrorMessage}"
-                   Foreground="{StaticResource DestructiveBrush}"
+                   Foreground="{DynamicResource DestructiveBrush}"
                    Margin="0,12,0,0"
                    TextWrapping="Wrap" />
         <Grid Grid.Row="3" Grid.ColumnSpan="2" Margin="0,22,0,0">

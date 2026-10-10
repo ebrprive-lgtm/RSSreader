@@ -113,7 +113,8 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) :
         var baseUri = new Uri(feed.FeedUrl, UriKind.Absolute);
         var selectedArticle = RawFeedArticleSelector.Select(root, externalId, link, title, baseUri);
 
-        return selectedArticle?.ToString(SaveOptions.None)
-            ?? throw new InvalidDataException("The selected article could not be found in the current feed.");
+        return selectedArticle is null
+            ? throw new InvalidDataException("The selected article could not be found in the current feed.")
+            : RawFeedArticleSelector.Serialize(selectedArticle);
     }
 }

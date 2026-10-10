@@ -38,6 +38,27 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("RSS headline", items[0].Title);
         Assert.AreEqual("https://example.test/story", items[0].Link);
         Assert.AreEqual("Feed summary", items[0].Summary);
+        StringAssert.Contains(items[0].SourceXml!, "<item>");
+        StringAssert.Contains(items[0].SourceXml!, "<guid>rss-item-1</guid>");
+    }
+
+    [TestMethod]
+    public async Task Download_StoresDistinctSourceXmlForItemsWithDuplicateTitles()
+    {
+        const string xml = """
+            <rss version="2.0"><channel><title>Sample feed</title>
+              <item><title>Repeated headline</title><description>First story</description></item>
+              <item><title>Repeated headline</title><description>Second story</description></item>
+            </channel></rss>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var items = await downloader.DownloadAsync(CreateFeed());
+
+        Assert.AreEqual(2, items.Count);
+        StringAssert.Contains(items[0].SourceXml!, "First story");
+        StringAssert.Contains(items[1].SourceXml!, "Second story");
     }
 
     [TestMethod]
@@ -262,6 +283,10 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("Atom headline", items[0].Title);
         Assert.AreEqual("Atom summary", items[0].Summary);
         Assert.AreEqual("Atom body", items[0].Content);
+        using var sourceXmlReader = XmlReader.Create(new StringReader(items[0].SourceXml!));
+        var sourceXml = XDocument.Load(sourceXmlReader);
+        Assert.AreEqual("entry", sourceXml.Root!.Name.LocalName);
+        Assert.AreEqual("http://www.w3.org/2005/Atom", sourceXml.Root.Name.NamespaceName);
     }
 
         [TestMethod]
@@ -332,6 +357,47 @@ public sealed class SyndicationFeedDownloaderTests
                 Assert.AreEqual(
                     "https://images.example.test/lead.jpg?format=jpeg",
                     item.ImageUrl);
+    }
+
+    [TestMethod]
+    public async Task Download_AtomMediaGroupUsesDescriptionAndThumbnailAsArticlePreview()
+    {
+        const string xml = """
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <title>Associated Press Video</title>
+              <entry>
+                <id>yt:video:EnFUAITkXP0</id>
+                <title>Trump veers into Nobel Prize grievances during upstate New York rally</title>
+                <link rel="alternate" href="https://www.youtube.com/watch?v=EnFUAITkXP0" />
+                <author><name>Associated Press</name></author>
+                <published>2026-10-10T06:55:42+00:00</published>
+                <media:group xmlns:media="http://search.yahoo.com/mrss/">
+                  <media:title>Trump veers into Nobel Prize grievances during upstate New York rally</media:title>
+                  <media:content url="https://www.youtube.com/v/EnFUAITkXP0?version=3" type="application/x-shockwave-flash" width="640" height="390" />
+                  <media:thumbnail url="https://i2.ytimg.com/vi/EnFUAITkXP0/hqdefault.jpg" width="480" height="360" />
+                  <media:description>President Donald Trump lashed out at the Norwegian Nobel Committee during a rally in Syracuse, New York, after being passed over for the Nobel Peace Prize. He argued that he deserved the award for his claimed diplomatic achievements, calling the decision “an indelible stain on the country of Norway.”
+
+            Subscribe: http://smarturl.it/AssociatedPress
+            Read more: https://apnews.com
+
+            This video may be available for archive licensing via https://newsroom.ap.org/home</media:description>
+                </media:group>
+              </entry>
+            </feed>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+        Assert.AreEqual("Trump veers into Nobel Prize grievances during upstate New York rally", item.Title);
+        Assert.AreEqual("Associated Press", item.Author);
+        Assert.AreEqual("https://www.youtube.com/watch?v=EnFUAITkXP0", item.Link);
+        Assert.IsNull(item.Content);
+        StringAssert.Contains(item.Summary!, "President Donald Trump lashed out at the Norwegian Nobel Committee");
+        StringAssert.Contains(item.Summary!, "Subscribe: http://smarturl.it/AssociatedPress");
+        StringAssert.Contains(item.Summary!, "https://newsroom.ap.org/home");
+        Assert.AreEqual("https://i2.ytimg.com/vi/EnFUAITkXP0/hqdefault.jpg", item.ImageUrl);
     }
 
                 [TestMethod]

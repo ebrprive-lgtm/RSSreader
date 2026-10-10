@@ -5,12 +5,15 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/MainWindowSharedResources.xaml" />
                 <ResourceDictionary Source="Resources/ArticlePresentationResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <local:OptionalUriConverter x:Key="OptionalUriConverter" />
             <Geometry x:Key="BackTrailIconGeometry">M 8,3 L 4,7 L 8,11 M 4,7 L 10,7 M 12,3 L 17,3 M 12,7 L 17,7 M 12,11 L 17,11</Geometry>
         </ResourceDictionary>
     </UserControl.Resources>
-        <Grid Visibility="{Binding IsReadingViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Background="{DynamicResource ContentBrush}"
+              Visibility="{Binding IsReadingViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -34,7 +37,7 @@
                 <Button x:Name="BackButton"
                         Grid.Column="0"
                         Margin="0,0,8,0"
-                        Foreground="{StaticResource AccentBrush}"
+                        Foreground="{DynamicResource AccentBrush}"
                         Style="{StaticResource IconActionButtonStyle}"
                         ToolTip="Back to previous view (Esc)"
                         AutomationProperties.Name="Go back to previous view"
@@ -43,7 +46,7 @@
                     <Path Width="18"
                           Height="18"
                           Data="{StaticResource BackTrailIconGeometry}"
-                          Stroke="{StaticResource AccentBrush}"
+                          Stroke="{DynamicResource AccentBrush}"
                           StrokeThickness="1.6"
                           StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round"
@@ -62,9 +65,9 @@
                                Visibility="{Binding SelectedArticle.IsWebsiteLinkVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
                                ToolTip="Open publisher website"
                                AutomationProperties.Name="Open publisher website">
-                        <Hyperlink NavigateUri="{Binding SelectedArticle.WebsiteUrl}"
+                        <Hyperlink NavigateUri="{Binding SelectedArticle.WebsiteUrl, Mode=OneWay, Converter={StaticResource OptionalUriConverter}}"
                                    RequestNavigate="SourceLink_RequestNavigate"
-                                   Foreground="{StaticResource AccentBrush}"
+                                   Foreground="{DynamicResource AccentBrush}"
                                    TextDecorations="{x:Null}"
                                    Cursor="Hand">
                             <Run Text="&#xE774;" FontFamily="Segoe MDL2 Assets" FontSize="16" />
@@ -75,12 +78,13 @@
                                VerticalAlignment="Center"
                                FontSize="22"
                                FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextBrush}"
                                TextTrimming="CharacterEllipsis"
                                TextWrapping="NoWrap"
                                ToolTip="Open article source">
-                        <Hyperlink NavigateUri="{Binding SelectedArticle.Link}"
+                        <Hyperlink NavigateUri="{Binding SelectedArticle.Link, Mode=OneWay, Converter={StaticResource OptionalUriConverter}}"
                                    RequestNavigate="SourceLink_RequestNavigate"
-                                   Foreground="{StaticResource TextBrush}"
+                                   Foreground="{DynamicResource TextBrush}"
                                    TextDecorations="{x:Null}"
                                    Cursor="Hand">
                             <Run Text="{Binding SelectedArticle.Title, Mode=OneWay}" />
@@ -96,9 +100,9 @@
                            TextTrimming="CharacterEllipsis"
                            TextWrapping="NoWrap"
                            Visibility="{Binding HasSelectedArticleFeed, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <Run Text="Feed: " Foreground="{StaticResource MutedTextBrush}" />
+                    <Run Text="Feed: " Foreground="{DynamicResource MutedTextBrush}" />
                     <Hyperlink Command="{Binding NavigateToSelectedArticleFeedCommand}"
-                               Foreground="{StaticResource AccentBrush}"
+                               Foreground="{DynamicResource AccentBrush}"
                                TextDecorations="Underline"
                                Cursor="Hand"
                                ToolTip="Show articles from this feed"
@@ -112,7 +116,7 @@
                            Grid.ColumnSpan="2"
                            Margin="0,2,0,0"
                            FontSize="12"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            TextWrapping="Wrap"
                            Visibility="{Binding SelectedArticle.HasAuthor, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Run Text="By: " FontWeight="SemiBold" />
@@ -159,7 +163,7 @@
                            Grid.ColumnSpan="2"
                            Margin="0,4,0,0"
                            FontSize="11"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            Text="{Binding SelectedArticleRefreshStatusMessage, Mode=OneWay}"
                            TextWrapping="Wrap"
                            AutomationProperties.Name="Selected feed refresh history"
@@ -202,6 +206,45 @@
                             </Style>
                         </Button.Style>
                     </Button>
+                    <Button x:Name="ReaderTypographyButton"
+                            Width="32"
+                            Height="32"
+                            Padding="0"
+                            Margin="0,0,4,0"
+                            Style="{StaticResource IconActionButtonStyle}"
+                            Click="ReaderTypographyButton_Click"
+                            ToolTip="Adjust reader typography"
+                            AutomationProperties.Name="Adjust reader typography">
+                        <TextBlock Text="&#xE8D2;" FontFamily="Segoe MDL2 Assets" />
+                    </Button>
+                        <Button x:Name="ReaderSplitPaneToggleButton"
+                                Margin="0,0,4,0"
+                                Style="{StaticResource SplitPaneToggleButtonStyle}"
+                                Command="{Binding ToggleSplitPaneCommand}"
+                                Visibility="{Binding IsFullPageReadingViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                AutomationProperties.Name="Toggle split view">
+                            <Path Width="18"
+                                  Height="16"
+                                  Data="{StaticResource SplitPaneIconGeometry}"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                                  StrokeThickness="1.5"
+                                  StrokeLineJoin="Round"
+                                  IsHitTestVisible="False" />
+                        </Button>
+                        <Button x:Name="SelectedArticleActionsButton"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                Margin="0,0,6,0"
+                                Style="{StaticResource IconActionButtonStyle}"
+                                DataContext="{Binding SelectedArticle}"
+                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                                ContextMenu="{StaticResource ArticleActionsContextMenu}"
+                                Click="OpenSelectedArticleActions_Click"
+                                ToolTip="More article actions"
+                                AutomationProperties.Name="More article actions">
+                            <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" />
+                        </Button>
                         <Button x:Name="PreviousArticleButton"
                             Width="32"
                             Height="32"
@@ -237,5 +280,66 @@
                                      Grid.Row="1"
                                      HorizontalAlignment="Stretch"
                                      VerticalAlignment="Stretch" />
+        <Popup x:Name="ReaderTypographyPopup"
+               Grid.RowSpan="2"
+               PlacementTarget="{Binding ElementName=ReaderTypographyButton}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade">
+            <Border Width="238"
+                    Padding="14"
+                    Background="{DynamicResource ContentBrush}"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="7">
+                <Border.Resources>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                    </Style>
+                    <Style TargetType="ComboBox">
+                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                        <Setter Property="Background" Value="{DynamicResource ContentBrush}" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
+                    </Style>
+                </Border.Resources>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity="0.18" />
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Reader typography"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8" />
+                    <TextBlock Text="Font size" FontSize="11" FontWeight="SemiBold" Margin="0,5,0,4" />
+                    <ComboBox x:Name="ReaderTextSizeComboBox"
+                              AutomationProperties.Name="Reader font size"
+                              SelectionChanged="ReaderTypographyComboBox_SelectionChanged"
+                              Padding="6">
+                        <ComboBoxItem Content="Small" Tag="0" />
+                        <ComboBoxItem Content="Medium" Tag="1" />
+                        <ComboBoxItem Content="Large" Tag="2" />
+                    </ComboBox>
+                    <TextBlock Text="Font type" FontSize="11" FontWeight="SemiBold" Margin="0,9,0,4" />
+                    <ComboBox x:Name="ReaderFontFamilyComboBox"
+                              AutomationProperties.Name="Reader font type"
+                              SelectionChanged="ReaderTypographyComboBox_SelectionChanged"
+                              Padding="6">
+                        <ComboBoxItem Content="Sans serif" Tag="0" />
+                        <ComboBoxItem Content="Serif" Tag="1" />
+                        <ComboBoxItem Content="Monospace" Tag="2" />
+                    </ComboBox>
+                    <TextBlock Text="Line spacing" FontSize="11" FontWeight="SemiBold" Margin="0,9,0,4" />
+                    <ComboBox x:Name="ReaderLineSpacingComboBox"
+                              AutomationProperties.Name="Reader line spacing"
+                              SelectionChanged="ReaderTypographyComboBox_SelectionChanged"
+                              Padding="6">
+                        <ComboBoxItem Content="Compact" Tag="0" />
+                        <ComboBoxItem Content="Normal" Tag="1" />
+                        <ComboBoxItem Content="Relaxed" Tag="2" />
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+        </Popup>
         </Grid>
 </UserControl>

@@ -8,8 +8,8 @@
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="True"
-        Background="{StaticResource WindowBrush}"
-        Foreground="{StaticResource TextBrush}">
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}">
     <Grid Margin="32">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -19,7 +19,7 @@
         <TextBlock Text="RSS READER"
                    FontSize="11"
                    FontWeight="Bold"
-                   Foreground="{StaticResource AccentBrush}" />
+                   Foreground="{DynamicResource AccentBrush}" />
         <StackPanel Grid.Row="1" VerticalAlignment="Center">
             <TextBlock Text="RSS Reader"
                        FontSize="25"
@@ -28,14 +28,14 @@
                        Text="Starting..."
                        Margin="0,8,0,0"
                        FontSize="13"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        TextWrapping="Wrap" />
         </StackPanel>
         <ProgressBar Grid.Row="2"
                      Height="4"
                      IsIndeterminate="True"
                      BorderThickness="0"
-                     Foreground="{StaticResource AccentBrush}" />
+                     Foreground="{DynamicResource AccentBrush}" />
         <Button Content="&#xE711;"
             Style="{StaticResource DestructiveIconActionButtonStyle}"
             HorizontalAlignment="Right"

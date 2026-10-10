@@ -27,10 +27,12 @@ public sealed class ArticleRowViewModel(
     string? feedUrl = null,
     IReadOnlyList<ArticleCategory>? topics = null,
     string? websiteUrl = null,
-    string? author = null) : ObservableObject
+    string? author = null,
+    string? sourceXml = null) : ObservableObject
 {
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
+    private bool _isBulkSelected;
 
     public string Title { get; } = FeedTextEncodingRepair.Repair(title);
     public string Source { get; } = FeedTextEncodingRepair.Repair(source);
@@ -64,8 +66,11 @@ public sealed class ArticleRowViewModel(
     public string? Author { get; } = string.IsNullOrWhiteSpace(author)
         ? null
         : FeedTextEncodingRepair.Repair(author.Trim());
+    public string? SourceXml { get; } = sourceXml;
     public bool HasAuthor => !string.IsNullOrWhiteSpace(Author);
     public string ReadLaterAutomationName => IsSaved ? "Remove from read later" : "Add to read later";
+    public string BulkSelectionAutomationName =>
+        IsBulkSelected ? $"Deselect {Title}" : $"Select {Title}";
     public string SourceInitials
     {
         get
@@ -93,6 +98,10 @@ public sealed class ArticleRowViewModel(
         Uri.TryCreate(WebsiteUrl, UriKind.Absolute, out var websiteUri) &&
         (websiteUri.Scheme == Uri.UriSchemeHttp || websiteUri.Scheme == Uri.UriSchemeHttps);
     public string AgeLabel => FormatAge(PublishedAt, DateTimeOffset.Now);
+    public bool IsFresh =>
+        PublishedAt <= DateTimeOffset.Now.AddMinutes(5) &&
+        PublishedAt >= DateTimeOffset.Now.AddHours(-24);
+    public string FreshnessLabel => IsFresh ? $"New · {AgeLabel}" : AgeLabel;
     public string PublishedDateLabel => PublishedAt.ToLocalTime().ToString("MMM d, yyyy");
 
     private static readonly HashSet<string> IgnoredSourceWords = new(StringComparer.OrdinalIgnoreCase)
@@ -206,6 +215,18 @@ public sealed class ArticleRowViewModel(
             if (SetProperty(ref _isSaved, value))
             {
                 OnPropertyChanged(nameof(ReadLaterAutomationName));
+            }
+        }
+    }
+
+    public bool IsBulkSelected
+    {
+        get => _isBulkSelected;
+        set
+        {
+            if (SetProperty(ref _isBulkSelected, value))
+            {
+                OnPropertyChanged(nameof(BulkSelectionAutomationName));
             }
         }
     }

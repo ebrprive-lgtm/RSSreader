@@ -42,7 +42,7 @@
                                     Click="AddFeed_Click" />
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Catalog Master" FontSize="21" FontWeight="SemiBold" />
-                                <TextBlock Text="Shared feed catalog" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" />
+                                <TextBlock Text="Shared feed catalog" Margin="0,4,0,0" Foreground="{DynamicResource MutedTextBrush}" />
                                 <ProgressBar x:Name="CatalogManagementLoadProgressBar"
                                              Height="2"
                                              Margin="0,6,0,0"
@@ -59,7 +59,7 @@
                                         Command="{Binding RetryCatalogLoadCommand}"
                                         Padding="9,5" />
                                 <TextBlock Text="{Binding CatalogLoadErrorMessage}"
-                                           Foreground="{StaticResource DestructiveBrush}"
+                                           Foreground="{DynamicResource DestructiveBrush}"
                                            Margin="0,0,10,0"
                                            VerticalAlignment="Center"
                                            TextWrapping="Wrap" />
@@ -70,7 +70,7 @@
                                           HorizontalScrollBarVisibility="Disabled">
                                 <TextBlock x:Name="CatalogFeedCheckErrorText"
                                            Text="{Binding CatalogManagement.ErrorMessage}"
-                                           Foreground="{StaticResource DestructiveBrush}"
+                                           Foreground="{DynamicResource DestructiveBrush}"
                                            TextWrapping="Wrap">
                                     <TextBlock.ContextMenu>
                                         <ContextMenu DataContext="{Binding PlacementTarget, RelativeSource={RelativeSource Self}}">
@@ -92,7 +92,7 @@
                                               HorizontalScrollBarVisibility="Disabled">
                                     <TextBlock x:Name="CatalogImportReportText"
                                                Text="{Binding CatalogManagement.ImportMessage}"
-                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Foreground="{DynamicResource MutedTextBrush}"
                                                TextWrapping="Wrap" />
                                 </ScrollViewer>
                                 <Button x:Name="DismissCatalogImportReportButton"
@@ -166,13 +166,13 @@
                                         <TextBlock Text="{Binding CatalogManagement.FeedResultsSummary}"
                                                    VerticalAlignment="Center"
                                                    FontSize="12"
-                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                                   Foreground="{DynamicResource MutedTextBrush}" />
                                         <TextBlock DockPanel.Dock="Right"
                                                    Text="{Binding CatalogManagement.MetadataReviewSummary}"
                                                    Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
                                                    FontSize="12"
-                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                                   Foreground="{DynamicResource MutedTextBrush}" />
                                     </DockPanel>
                                     <Grid Grid.Row="3">
                                         <ListBox x:Name="CatalogManagementFeedList"
@@ -194,7 +194,7 @@
                                             </ListBox.ItemContainerStyle>
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border BorderBrush="#B8C5BE" BorderThickness="0,0,0,1" Padding="0,4">
+                                                    <Border BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,4">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*" />
@@ -206,19 +206,19 @@
                                                                                Text="{Binding CategoryName, TargetNullValue=Uncategorized}"
                                                                                Margin="8,0,0,0"
                                                                                FontSize="11"
-                                                                               Foreground="{StaticResource AccentBrush}"
+                                                                               Foreground="{DynamicResource AccentBrush}"
                                                                                TextTrimming="CharacterEllipsis" />
                                                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                                                         <TextBlock Text="{Binding SameNameDisplay}"
                                                                                    Margin="0,0,8,0"
                                                                                    FontSize="10"
-                                                                                   Foreground="{StaticResource WarningBrush}"
+                                                                                   Foreground="{DynamicResource WarningBrush}"
                                                                                    Visibility="{Binding HasSameName, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                                         <TextBlock Text="&#xE7BA;"
                                                                                    Margin="0,0,8,0"
                                                                                    FontFamily="Segoe MDL2 Assets"
                                                                                    FontSize="13"
-                                                                                   Foreground="{StaticResource WarningBrush}"
+                                                                                   Foreground="{DynamicResource WarningBrush}"
                                                                                    ToolTip="{Binding MetadataReviewDisplay}"
                                                                                    AutomationProperties.Name="{Binding MetadataReviewDisplay}"
                                                                                    Visibility="{Binding HasMetadataGaps, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -229,7 +229,7 @@
                                                                             <TextBlock.Style>
                                                                                 <Style TargetType="TextBlock">
                                                                                     <Setter Property="Text" Value="&#xE73E;" />
-                                                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
                                                                                     <Setter Property="Visibility" Value="Collapsed" />
                                                                                     <Style.Triggers>
                                                                                         <DataTrigger Binding="{Binding HasHealthCheck}" Value="True">
@@ -237,7 +237,7 @@
                                                                                         </DataTrigger>
                                                                                         <DataTrigger Binding="{Binding LastHealthCheckSucceeded}" Value="False">
                                                                                             <Setter Property="Text" Value="&#xE711;" />
-                                                                                            <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
+                                                                                            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
                                                                                         </DataTrigger>
                                                                                     </Style.Triggers>
                                                                                 </Style>
@@ -253,7 +253,7 @@
                                                                 <TextBlock Text="{Binding Description}"
                                                                            Margin="0,1,8,0"
                                                                            FontSize="11"
-                                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                                           Foreground="{DynamicResource MutedTextBrush}"
                                                                            TextTrimming="CharacterEllipsis"
                                                                            ToolTip="{Binding Description}"
                                                                            AutomationProperties.Name="Catalog feed description"
@@ -264,25 +264,25 @@
                                                                         <ColumnDefinition Width="*" />
                                                                     </Grid.ColumnDefinitions>
                                                                     <TextBlock FontSize="10"
-                                                                               Foreground="{StaticResource MutedTextBrush}"
+                                                                               Foreground="{DynamicResource MutedTextBrush}"
                                                                                TextTrimming="CharacterEllipsis"
                                                                                ToolTip="{Binding FeedUrl}">
                                                                         <Hyperlink NavigateUri="{Binding FeedUrl, Mode=OneWay, Converter={StaticResource OptionalUriConverter}}"
                                                                                    RequestNavigate="SourceLink_RequestNavigate"
-                                                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                                                   Foreground="{DynamicResource MutedTextBrush}"
                                                                                    TextDecorations="None">
                                                                             <Run Text="{Binding FeedUrl, Mode=OneWay}" />
                                                                         </Hyperlink>
                                                                     </TextBlock>
                                                                     <TextBlock Grid.Column="1"
                                                                                FontSize="10"
-                                                                               Foreground="{StaticResource AccentBrush}"
+                                                                               Foreground="{DynamicResource AccentBrush}"
                                                                                TextAlignment="Right"
                                                                                TextTrimming="CharacterEllipsis"
                                                                                ToolTip="{Binding WebsiteUrl}">
                                                                         <Hyperlink NavigateUri="{Binding WebsiteUrl, Mode=OneWay, Converter={StaticResource OptionalUriConverter}}"
                                                                                    RequestNavigate="SourceLink_RequestNavigate"
-                                                                                   Foreground="{StaticResource AccentBrush}"
+                                                                                   Foreground="{DynamicResource AccentBrush}"
                                                                                    TextDecorations="None">
                                                                             <Run Text="{Binding PublisherWebsiteDisplay, Mode=OneWay}" />
                                                                         </Hyperlink>
@@ -299,7 +299,7 @@
                                                                         BorderThickness="0"
                                                                         ToolTip="Preview feed"
                                                                         AutomationProperties.Name="Preview feed">
-                                                                    <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#2673B8" />
+                                                                    <TextBlock Text="&#xE890;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource AccentBrush}" />
                                                                 </Button>
                                                                 <Button Click="EditFeed_Click"
                                                                         Width="32"
@@ -310,7 +310,7 @@
                                                                         BorderThickness="0"
                                                                         ToolTip="Edit feed"
                                                                         AutomationProperties.Name="Edit feed">
-                                                                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#2673B8" />
+                                                                    <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource AccentBrush}" />
                                                                 </Button>
                                                                 <Button Click="ManageFeedCollections_Click"
                                                                         MinWidth="82"
@@ -332,7 +332,7 @@
                                                                         BorderThickness="0"
                                                                         ToolTip="Check feed"
                                                                         AutomationProperties.Name="Check feed">
-                                                                    <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource SuccessBrush}" />
+                                                                    <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource SuccessBrush}" />
                                                                 </Button>
                                                                 <Button Command="{Binding DataContext.CatalogManagement.DeleteFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                         CommandParameter="{Binding}"
@@ -344,7 +344,7 @@
                                                                         BorderThickness="0"
                                                                         ToolTip="Remove feed"
                                                                         AutomationProperties.Name="Remove feed">
-                                                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{StaticResource DestructiveBrush}" />
+                                                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource DestructiveBrush}" />
                                                                 </Button>
                                                             </StackPanel>
                                                         </Grid>
@@ -356,7 +356,7 @@
                                                    Margin="12,16,12,0"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Top"
-                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
                                                    IsHitTestVisible="False"
                                                    Panel.ZIndex="1"
                                                    Visibility="{Binding CatalogManagement.IsFeedResultsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
@@ -410,7 +410,7 @@
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </DataTemplate.Resources>
-                                                        <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
+                                                        <Border Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*" />
@@ -422,14 +422,14 @@
                                                                             Click="RenameCategory_Click"
                                                                             ToolTip="Rename category"
                                                                             AutomationProperties.Name="Rename category">
-                                                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#2673B8" />
+                                                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{DynamicResource AccentBrush}" />
                                                                     </Button>
                                                                     <Button Style="{StaticResource TaxonomyHoverActionStyle}"
                                                                             Command="{Binding DataContext.CatalogManagement.DeleteCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}"
                                                                             ToolTip="Remove category"
                                                                             AutomationProperties.Name="Remove category">
-                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource DestructiveBrush}" />
+                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{DynamicResource DestructiveBrush}" />
                                                                     </Button>
                                                                 </StackPanel>
                                                             </Grid>
@@ -462,7 +462,7 @@
                                                    Text="Curated by Catalog Master"
                                                    Margin="0,0,0,8"
                                                    FontSize="12"
-                                                   Foreground="{StaticResource MutedTextBrush}" />
+                                                   Foreground="{DynamicResource MutedTextBrush}" />
                                         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding CatalogManagement.Collections}">
                                                 <ItemsControl.ItemTemplate>
@@ -486,7 +486,7 @@
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </DataTemplate.Resources>
-                                                        <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
+                                                        <Border Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*" />
@@ -498,20 +498,20 @@
                                                                             Click="ManageCollectionFeeds_Click"
                                                                             ToolTip="Add or remove feeds"
                                                                             AutomationProperties.Name="Manage feeds in collection">
-                                                                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#2673B8" />
+                                                                        <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{DynamicResource AccentBrush}" />
                                                                     </Button>
                                                                     <Button Style="{StaticResource TaxonomyHoverActionStyle}"
                                                                             Click="RenameCollection_Click"
                                                                             ToolTip="Rename collection"
                                                                             AutomationProperties.Name="Rename collection">
-                                                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="#2673B8" />
+                                                                        <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{DynamicResource AccentBrush}" />
                                                                     </Button>
                                                                     <Button Style="{StaticResource TaxonomyHoverActionStyle}"
                                                                             Command="{Binding DataContext.CatalogManagement.DeleteCollectionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}"
                                                                             ToolTip="Remove collection"
                                                                             AutomationProperties.Name="Remove collection">
-                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{StaticResource DestructiveBrush}" />
+                                                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="15" Foreground="{DynamicResource DestructiveBrush}" />
                                                                     </Button>
                                                                 </StackPanel>
                                                             </Grid>

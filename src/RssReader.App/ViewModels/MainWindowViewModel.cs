@@ -21,6 +21,10 @@ public sealed class MainWindowViewModel : ObservableObject
     public const double DefaultSidebarWidth = 286;
     public const double MinimumSidebarWidth = 220;
     public const double MaximumSidebarWidth = 480;
+    public const double MinimumSplitPaneListWidth = 300;
+    public const double MinimumSplitPaneReaderWidth = 340;
+    public const double MinimumSplitPaneListRatio = 0.30;
+    public const double MaximumSplitPaneListRatio = 0.70;
     private readonly List<ArticleRowViewModel> _allArticles;
     private readonly CatalogBrowserState _catalogBrowser;
     private readonly SidebarFeedNavigation _sidebarFeedNavigation;
@@ -53,8 +57,15 @@ public sealed class MainWindowViewModel : ObservableObject
     private double _sidebarWidth = DefaultSidebarWidth;
     private bool _hasAppliedStartPage;
     private bool _hasLoadedInitialReaderData;
+    private bool _hasAttemptedInitialReaderDataLoad;
+    private string? _initialReaderDataLoadError;
     private bool _isFeedWarningsPopupOpen;
     private bool _updatingArticleTopicOptions;
+    private bool _isBulkSelectionMode;
+    private bool _isApplyingBulkArticleState;
+    private bool _isSplitPaneViewportWide;
+    private bool _unreadCountsDirty = true;
+
     private int _articleListScrollToTopRequest;
     private int _selectedFeedWarningIndex = -1;
     private int _folderArticlesPerFeedLimit;
@@ -141,6 +152,11 @@ public sealed class MainWindowViewModel : ObservableObject
             new("The small tools making a big difference", "The Register", now.AddDays(-1), "tech", ["Reviews"], "A roundup of focused utilities for a more productive desktop." , isSaved: true),
             new("Why open standards still matter", "Wired", now.AddDays(-2), "tech", ["Analysis"], "A look at interoperability and the long life of open formats." , isRead: true, isSaved: true)
         ] : [];
+        foreach (var article in _allArticles)
+        {
+            article.PropertyChanged += OnArticlePropertyChanged;
+        }
+
         VisibleArticles = _visibleArticles;
         FolderSortedArticleListView = CreateArticleListView(sortByDate: false);
         DateSortedArticleListView = CreateArticleListView(sortByDate: true);
@@ -148,7 +164,36 @@ public sealed class MainWindowViewModel : ObservableObject
 
         NavigateCommand = new RelayCommand<SidebarLink>(link => NavigateTo(link));
         ActivateSidebarLinkCommand = new RelayCommand<SidebarLink>(ActivateSidebarLink);
-        SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
+        SelectArticleCommand = new RelayCommand<ArticleRowViewModel>(SelectArticleOrToggleBulkSelection);
+        OpenArticleInReaderCommand = new RelayCommand<ArticleRowViewModel>(OpenArticle);
+        OpenArticleSourceCommand = new RelayCommand<ArticleRowViewModel>(
+            OpenArticleSource,
+            article => article.IsSourceLinkVisible);
+        ToggleArticleReadCommand = new RelayCommand<ArticleRowViewModel>(ToggleReadArticle);
+        ToggleArticleSavedCommand = new RelayCommand<ArticleRowViewModel>(ToggleSavedArticle);
+        NavigateToArticleFeedCommand = new RelayCommand<ArticleRowViewModel>(
+            NavigateToArticleFeed,
+            article => article.FeedId is not null);
+        ToggleBulkSelectionModeCommand = new RelayCommand(
+            () => IsBulkSelectionMode = !IsBulkSelectionMode);
+        SelectAllVisibleArticlesCommand = new RelayCommand(
+            SelectAllVisibleArticles,
+            () => IsBulkSelectionMode && VisibleArticles.Count > 0);
+        ClearBulkSelectionCommand = new RelayCommand(
+            ClearBulkSelection,
+            () => IsBulkSelectionMode && HasBulkSelectedArticles);
+        BulkMarkReadCommand = new AsyncCommand(
+            () => ApplyBulkArticleStateAsync(isRead: true),
+            () => IsBulkSelectionMode && HasBulkSelectedArticles);
+        BulkMarkUnreadCommand = new AsyncCommand(
+            () => ApplyBulkArticleStateAsync(isRead: false),
+            () => IsBulkSelectionMode && HasBulkSelectedArticles);
+        BulkSaveCommand = new AsyncCommand(
+            () => ApplyBulkArticleStateAsync(isSaved: true),
+            () => IsBulkSelectionMode && HasBulkSelectedArticles);
+        BulkUnsaveCommand = new AsyncCommand(
+            () => ApplyBulkArticleStateAsync(isSaved: false),
+            () => IsBulkSelectionMode && HasBulkSelectedArticles);
         SelectArticleTopicCommand = new RelayCommand<ArticleTopicChip>(
             SelectArticleTopic,
             CanSelectArticleTopic);
@@ -159,6 +204,7 @@ public sealed class MainWindowViewModel : ObservableObject
         BackCommand = new RelayCommand(GoBack, () => CanGoBack);
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
         ToggleReadCommand = new RelayCommand(ToggleRead);
+        ToggleSplitPaneCommand = new AsyncCommand(ToggleSplitPaneAsync);
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
@@ -166,6 +212,11 @@ public sealed class MainWindowViewModel : ObservableObject
             () => SearchQuery = string.Empty,
             () => HasSearchQuery);
         ClearArticleTopicCommand = new RelayCommand(ClearArticleTopicFilter);
+        ClearArticleFiltersCommand = new RelayCommand(ClearArticleFilters);
+        EmptyStateActionCommand = new RelayCommand(RunEmptyStateAction, () => IsEmptyStateActionVisible);
+        RetryInitialReaderDataLoadCommand = new AsyncCommand(
+            RetryInitialReaderDataLoadAsync,
+            () => InitialReaderDataLoadError is not null && !IsArticleListLoading);
         RetryCatalogLoadCommand = new AsyncCommand(() => LoadCatalogAsync(CancellationToken.None), () => !IsCatalogLoading);
         FollowSelectedCatalogFeedsCommand = new AsyncCommand(FollowSelectedCatalogFeedsAsync);
         ToggleVisibleCatalogFeedSelectionCommand = new RelayCommand(ToggleVisibleCatalogFeedSelection);
@@ -245,6 +296,18 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<SidebarLink> NavigateCommand { get; }
     public RelayCommand<SidebarLink> ActivateSidebarLinkCommand { get; }
     public RelayCommand<ArticleRowViewModel> SelectArticleCommand { get; }
+    public RelayCommand<ArticleRowViewModel> OpenArticleInReaderCommand { get; }
+    public RelayCommand<ArticleRowViewModel> OpenArticleSourceCommand { get; }
+    public RelayCommand<ArticleRowViewModel> ToggleArticleReadCommand { get; }
+    public RelayCommand<ArticleRowViewModel> ToggleArticleSavedCommand { get; }
+    public RelayCommand<ArticleRowViewModel> NavigateToArticleFeedCommand { get; }
+    public RelayCommand ToggleBulkSelectionModeCommand { get; }
+    public RelayCommand SelectAllVisibleArticlesCommand { get; }
+    public RelayCommand ClearBulkSelectionCommand { get; }
+    public AsyncCommand BulkMarkReadCommand { get; }
+    public AsyncCommand BulkMarkUnreadCommand { get; }
+    public AsyncCommand BulkSaveCommand { get; }
+    public AsyncCommand BulkUnsaveCommand { get; }
     public RelayCommand<ArticleTopicChip> SelectArticleTopicCommand { get; }
     public RelayCommand<ArticleFeedTagChip> SelectFeedTagCommand { get; }
     public RelayCommand PreviousArticleCommand { get; }
@@ -253,11 +316,15 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand BackCommand { get; }
     public RelayCommand ToggleSavedCommand { get; }
     public RelayCommand ToggleReadCommand { get; }
+    public AsyncCommand ToggleSplitPaneCommand { get; }
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand ClearCatalogFiltersCommand { get; }
     public RelayCommand ClearSearchQueryCommand { get; }
     public RelayCommand ClearArticleTopicCommand { get; }
+    public RelayCommand ClearArticleFiltersCommand { get; }
+    public RelayCommand EmptyStateActionCommand { get; }
+    public AsyncCommand RetryInitialReaderDataLoadCommand { get; }
     public AsyncCommand RetryCatalogLoadCommand { get; }
     public AsyncCommand FollowSelectedCatalogFeedsCommand { get; }
     public RelayCommand ToggleVisibleCatalogFeedSelectionCommand { get; }
@@ -275,7 +342,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncCommand RetryCurrentFeedWarningCommand { get; }
     public AsyncCommand<CatalogFeedListItem> ToggleSubscriptionCommand { get; }
 
-    public Task<string> GetRawArticleContentAsync(
+    public Task<RawArticleContent> GetRawArticleContentAsync(
         ArticleRowViewModel article,
         CancellationToken cancellationToken = default)
     {
@@ -296,6 +363,7 @@ public sealed class MainWindowViewModel : ObservableObject
             article.ExternalId,
             article.Link,
             article.Title,
+            article.SourceXml,
             cancellationToken);
     }
 
@@ -365,6 +433,54 @@ public sealed class MainWindowViewModel : ObservableObject
     }
 
     public event Action? ProfileSwitchRequested;
+    public event Action<Uri>? OriginalArticleRequested;
+
+    public IReadOnlyList<CommandPaletteItem> CreateCommandPaletteItems()
+    {
+        var items = new List<CommandPaletteItem>();
+        foreach (var link in PrimaryLinks.Concat(ReadingLinks).Concat(FeedLinks).Concat(TagLinks).Concat(AdminLinks))
+        {
+            items.Add(new CommandPaletteItem(
+                $"Go to {link.Label}",
+                link.IsFeedEntry || link.IsFolder ? "Source and folder navigation" : "Navigate to view",
+                () => NavigateTo(link)));
+        }
+
+        items.Add(new CommandPaletteItem(
+            "Refresh feeds",
+            "Check followed sources for new articles",
+            () => RefreshCommand.Execute(null)));
+        items.Add(new CommandPaletteItem(
+            "Toggle article selection mode",
+            "Select visible articles for bulk actions",
+            () => ToggleBulkSelectionModeCommand.Execute(null)));
+        items.Add(new CommandPaletteItem("Show cards", "Change article presentation", () => IsCardsView = true));
+        items.Add(new CommandPaletteItem("Show title-only list", "Change article presentation", () => IsListView = true));
+        items.Add(new CommandPaletteItem("Show magazine view", "Change article presentation", () => IsMagazineView = true));
+
+        if (CanGoBack)
+        {
+            items.Add(new CommandPaletteItem("Go back", "Return to the previous view", () => BackCommand.Execute(null)));
+        }
+
+        if (SelectedArticle is { } article)
+        {
+            items.Add(new CommandPaletteItem(
+                "Open selected article source",
+                article.Title,
+                () => OpenArticleSource(article)));
+            items.Add(new CommandPaletteItem(
+                article.IsRead ? "Mark selected article unread" : "Mark selected article read",
+                article.Title,
+                () => ToggleReadArticle(article)));
+            items.Add(new CommandPaletteItem(
+                article.IsSaved ? "Remove selected article from saved" : "Save selected article",
+                article.Title,
+                () => ToggleSavedArticle(article)));
+        }
+
+        return items;
+    }
 
     public string CatalogSearchQuery
     {
@@ -448,12 +564,53 @@ public sealed class MainWindowViewModel : ObservableObject
                 await LoadCatalogAsync(cancellationToken);
             }
         }
+        catch (Exception exception) when (_readingService is not null && !_hasLoadedInitialReaderData)
+        {
+            _initialReaderDataLoadError = exception.Message;
+            OnPropertyChanged(nameof(InitialReaderDataLoadError));
+            OnPropertyChanged(nameof(ArticleListEmptyTitle));
+            OnPropertyChanged(nameof(ArticleListEmptyMessage));
+            StatusMessage = $"Could not load your library: {exception.Message}";
+            throw;
+        }
         finally
         {
+            _hasAttemptedInitialReaderDataLoad = true;
+            NotifyEmptyStateChanged();
             if (showLoadingStatus && StatusMessage == "Loading your library...")
             {
                 StatusMessage = string.Empty;
             }
+        }
+    }
+
+    private async Task RetryInitialReaderDataLoadAsync()
+    {
+        if (_readingService is null)
+        {
+            return;
+        }
+
+        _initialReaderDataLoadError = null;
+        _hasAttemptedInitialReaderDataLoad = false;
+        OnPropertyChanged(nameof(InitialReaderDataLoadError));
+        NotifyEmptyStateChanged();
+        StatusMessage = "Loading your library...";
+        try
+        {
+            await LoadProfileReaderDataAsync(CancellationToken.None);
+            StatusMessage = string.Empty;
+        }
+        catch (Exception exception)
+        {
+            _initialReaderDataLoadError = exception.Message;
+            StatusMessage = $"Could not load your library: {exception.Message}";
+            OnPropertyChanged(nameof(InitialReaderDataLoadError));
+        }
+        finally
+        {
+            _hasAttemptedInitialReaderDataLoad = true;
+            NotifyEmptyStateChanged();
         }
     }
 
@@ -501,8 +658,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public void ApplyPreferences(ProfilePreferences preferences)
     {
         ArgumentNullException.ThrowIfNull(preferences);
+        var previousPreferences = _profilePreferences;
+        var startPageChanged = previousPreferences.StartPage != preferences.StartPage;
         var destinationRoute = GetStartPageRoute(preferences.StartPage);
-        if (SelectedArticle is null &&
+        if (startPageChanged &&
+            SelectedArticle is null &&
             !string.Equals(ActiveRoute, destinationRoute, StringComparison.Ordinal))
         {
             RecordCurrentNavigationState();
@@ -510,13 +670,86 @@ public sealed class MainWindowViewModel : ObservableObject
 
         _profilePreferences = preferences with
         {
-            HideFollowedCatalogFeeds = _catalogBrowser.HideFollowedCatalogFeeds
+            HideFollowedCatalogFeeds = _catalogBrowser.HideFollowedCatalogFeeds,
+            SplitPaneListRatio = NormalizeSplitPaneListRatio(preferences.SplitPaneListRatio)
         };
+        var readingLayoutChanged = previousPreferences.ReadingLayout != _profilePreferences.ReadingLayout;
+        var splitPaneListRatioChanged = previousPreferences.SplitPaneListRatio != _profilePreferences.SplitPaneListRatio;
+        var densityChanged = previousPreferences.ArticleListDensity != _profilePreferences.ArticleListDensity;
+        var themeChanged = previousPreferences.ReaderTheme != _profilePreferences.ReaderTheme;
+        var readerContentPreferencesChanged =
+            previousPreferences.LimitArticleWidth != _profilePreferences.LimitArticleWidth ||
+            themeChanged ||
+            previousPreferences.ReaderTextSize != _profilePreferences.ReaderTextSize ||
+            previousPreferences.ReaderLineSpacing != _profilePreferences.ReaderLineSpacing ||
+            previousPreferences.ReaderFontFamily != _profilePreferences.ReaderFontFamily;
+        if (readingLayoutChanged)
+        {
+            OnPropertyChanged(nameof(ReadingLayout));
+            OnPropertyChanged(nameof(IsSplitPaneEnabled));
+            NotifySplitPaneLayoutChanged();
+        }
+
+        if (splitPaneListRatioChanged)
+        {
+            OnPropertyChanged(nameof(SplitPaneListRatio));
+        }
+
+        if (densityChanged)
+        {
+            OnPropertyChanged(nameof(ArticleListDensity));
+            OnPropertyChanged(nameof(ArticleCardItemSize));
+            OnPropertyChanged(nameof(ArticleCardItemWidth));
+        }
+
+        if (themeChanged)
+        {
+            OnPropertyChanged(nameof(ReaderTheme));
+        }
+
+        if (previousPreferences.ReaderTextSize != _profilePreferences.ReaderTextSize)
+        {
+            OnPropertyChanged(nameof(ReaderTextSize));
+        }
+
+        if (previousPreferences.ReaderLineSpacing != _profilePreferences.ReaderLineSpacing)
+        {
+            OnPropertyChanged(nameof(ReaderLineSpacing));
+        }
+
+        if (previousPreferences.ReaderFontFamily != _profilePreferences.ReaderFontFamily)
+        {
+            OnPropertyChanged(nameof(ReaderFontFamily));
+        }
+
+        var folderArticleLimitChanged =
+            _folderArticlesPerFeedLimit != preferences.FolderArticleLimitPerFeed;
         _folderArticlesPerFeedLimit = preferences.FolderArticleLimitPerFeed;
-        OnPropertyChanged(nameof(RefreshFeedsWhenOpened));
-        OnPropertyChanged(nameof(AutoRefreshIntervalMinutes));
-        OnPropertyChanged(nameof(IsRawFeedButtonVisible));
-        OnPropertyChanged(nameof(LimitArticleWidth));
+        if (previousPreferences.RefreshFeedsWhenOpened != _profilePreferences.RefreshFeedsWhenOpened)
+        {
+            OnPropertyChanged(nameof(RefreshFeedsWhenOpened));
+        }
+
+        if (previousPreferences.AutoRefreshIntervalMinutes != _profilePreferences.AutoRefreshIntervalMinutes)
+        {
+            OnPropertyChanged(nameof(AutoRefreshIntervalMinutes));
+        }
+
+        if (previousPreferences.ShowRawFeedButton != _profilePreferences.ShowRawFeedButton)
+        {
+            OnPropertyChanged(nameof(IsRawFeedButtonVisible));
+        }
+
+        if (previousPreferences.LimitArticleWidth != _profilePreferences.LimitArticleWidth)
+        {
+            OnPropertyChanged(nameof(LimitArticleWidth));
+        }
+
+        if (readerContentPreferencesChanged)
+        {
+            OnPropertyChanged(nameof(ReaderContentPreferences));
+        }
+
         SetArticleViewModeIfSelected(
             true,
             preferences.Presentation == ProfileArticlePresentation.Cards,
@@ -531,9 +764,71 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         UnreadOnly = preferences.HideReadArticles;
-        ActiveRoute = GetStartPageRoute();
+        if (startPageChanged)
+        {
+            ActiveRoute = GetStartPageRoute();
+        }
+
         UpdateSelectedLinks();
-        ApplyArticleFilters();
+        if (folderArticleLimitChanged)
+        {
+            ApplyArticleFilters();
+        }
+    }
+
+    public async Task ApplyReaderTypographyAsync(
+        ProfileReaderTextSize textSize,
+        ProfileReaderLineSpacing lineSpacing,
+        ProfileReaderFontFamily fontFamily)
+    {
+        var preferences = _profilePreferences with
+        {
+            ReaderTextSize = textSize,
+            ReaderLineSpacing = lineSpacing,
+            ReaderFontFamily = fontFamily
+        };
+        if (preferences == _profilePreferences)
+        {
+            return;
+        }
+
+        ApplyPreferences(preferences);
+        await PersistProfilePreferencesAsync();
+    }
+
+    public async Task UpdateSplitPaneListRatioAsync(double ratio)
+    {
+        var normalizedRatio = NormalizeSplitPaneListRatio(ratio);
+        if (Math.Abs(normalizedRatio - _profilePreferences.SplitPaneListRatio) < 0.001)
+        {
+            return;
+        }
+
+        _profilePreferences = _profilePreferences with { SplitPaneListRatio = normalizedRatio };
+        OnPropertyChanged(nameof(SplitPaneListRatio));
+        await PersistProfilePreferencesAsync();
+    }
+
+    private async Task ToggleSplitPaneAsync()
+    {
+        var preferences = _profilePreferences with
+        {
+            ReadingLayout = IsSplitPaneEnabled
+                ? ProfileReadingLayout.FullPage
+                : ProfileReadingLayout.SplitPane
+        };
+        ApplyPreferences(preferences);
+        await PersistProfilePreferencesAsync();
+    }
+
+    private static double NormalizeSplitPaneListRatio(double ratio)
+    {
+        if (!double.IsFinite(ratio))
+        {
+            throw new ArgumentOutOfRangeException(nameof(ratio), "The split-pane ratio must be finite.");
+        }
+
+        return Math.Clamp(ratio, MinimumSplitPaneListRatio, MaximumSplitPaneListRatio);
     }
 
     public string ActiveRoute
@@ -543,6 +838,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _activeRoute, value))
             {
+                ClearBulkSelection();
                 OnPropertyChanged(nameof(WorkspaceTitle));
                 OnPropertyChanged(nameof(IsSearchRoute));
                 OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
@@ -568,6 +864,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _searchQuery, value))
             {
+                ClearBulkSelection();
                 OnPropertyChanged(nameof(HasSearchQuery));
                 ClearSearchQueryCommand.NotifyCanExecuteChanged();
                 ApplyArticleFilters();
@@ -589,6 +886,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
             if (SetProperty(ref _selectedArticleTopic, value))
             {
+                ClearBulkSelection();
                 OnPropertyChanged(nameof(IsArticleTopicFilterActive));
                 ApplyArticleFilters();
             }
@@ -665,6 +963,8 @@ public sealed class MainWindowViewModel : ObservableObject
             if (_feedRefreshStatus.SetIsRefreshing(value))
             {
                 OnPropertyChanged(nameof(IsRefreshing));
+                OnPropertyChanged(nameof(IsArticleListLoading));
+                OnPropertyChanged(nameof(IsArticleListEmpty));
                 RefreshCommand.NotifyCanExecuteChanged();
                 RetryFailedFeedsCommand.NotifyCanExecuteChanged();
             }
@@ -678,6 +978,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _unreadOnly, value))
             {
+                ClearBulkSelection();
                 ApplyArticleFilters();
             }
         }
@@ -690,6 +991,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _savedOnly, value))
             {
+                ClearBulkSelection();
                 ApplyArticleFilters();
             }
         }
@@ -720,6 +1022,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (value && SetProperty(ref _isSortByDate, true))
             {
+                ClearBulkSelection();
                 OnPropertyChanged(nameof(IsSortByFolder));
                 ConfigureArticleListView();
                 ApplyArticleFilters();
@@ -734,6 +1037,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (value && SetProperty(ref _isSortByDate, false))
             {
+                ClearBulkSelection();
                 OnPropertyChanged(nameof(IsSortByDate));
                 ConfigureArticleListView();
                 ApplyArticleFilters();
@@ -791,7 +1095,11 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsArticleListVisible));
                 OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
+                OnPropertyChanged(nameof(ArticleListEmptyTitle));
+                OnPropertyChanged(nameof(ArticleListEmptyMessage));
+                OnPropertyChanged(nameof(EmptyStateActionLabel));
                 OnPropertyChanged(nameof(IsReadingViewVisible));
+                NotifySplitPaneLayoutChanged();
                 SelectArticleTopicCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(IsRawFeedButtonVisible));
                 OnPropertyChanged(nameof(HasSelectedArticleFeed));
@@ -802,6 +1110,82 @@ public sealed class MainWindowViewModel : ObservableObject
                 NextArticleCommand.NotifyCanExecuteChanged();
             }
         }
+    }
+
+    public bool IsBulkSelectionMode
+    {
+        get => _isBulkSelectionMode;
+        set
+        {
+            if (SetProperty(ref _isBulkSelectionMode, value))
+            {
+                if (!value)
+                {
+                    ClearBulkSelection();
+                }
+
+                OnPropertyChanged(nameof(HasBulkSelectedArticles));
+                NotifyBulkSelectionCommandStates();
+            }
+        }
+    }
+
+    public int BulkSelectedArticleCount => _allArticles.Count(article => article.IsBulkSelected);
+    public bool HasBulkSelectedArticles => BulkSelectedArticleCount > 0;
+
+    public ProfileReadingLayout ReadingLayout => _profilePreferences.ReadingLayout;
+    public double SplitPaneListRatio => _profilePreferences.SplitPaneListRatio;
+    public bool IsSplitPaneEnabled => ReadingLayout == ProfileReadingLayout.SplitPane;
+    public ProfileArticleListDensity ArticleListDensity => _profilePreferences.ArticleListDensity;
+    public ProfileReaderTheme ReaderTheme => _profilePreferences.ReaderTheme;
+    public ProfileReaderTextSize ReaderTextSize => _profilePreferences.ReaderTextSize;
+    public ProfileReaderLineSpacing ReaderLineSpacing => _profilePreferences.ReaderLineSpacing;
+    public ProfileReaderFontFamily ReaderFontFamily => _profilePreferences.ReaderFontFamily;
+    public ProfilePreferences ReaderContentPreferences => _profilePreferences;
+    public bool IsSplitPaneViewportWide => _isSplitPaneViewportWide;
+    public Size ArticleCardItemSize => ArticleListDensity switch
+    {
+        ProfileArticleListDensity.Compact => new Size(286, 346),
+        ProfileArticleListDensity.Spacious => new Size(346, 410),
+        _ => new Size(322, 382)
+    };
+    public double ArticleCardItemWidth => ArticleCardItemSize.Width;
+    public bool IsSplitPaneActive =>
+        ReadingLayout == ProfileReadingLayout.SplitPane &&
+        _isSplitPaneViewportWide;
+    public bool IsSplitPaneEmptyReaderPlaceholderVisible =>
+        IsSplitPaneActive && SelectedArticle is null;
+    public bool IsFullPageReadingViewVisible => IsReadingViewVisible && !IsSplitPaneActive;
+    public int ArticleListGridColumnSpan => IsSplitPaneActive ? 1 : 3;
+    public int ArticleReaderGridColumn => IsSplitPaneActive ? 2 : 0;
+    public int ArticleReaderGridColumnSpan => IsSplitPaneActive ? 1 : 3;
+    public GridLength SplitPaneDividerColumnWidth => IsSplitPaneActive ? new GridLength(18) : new GridLength(0);
+    public double SplitPaneListMinimumWidth => IsSplitPaneActive ? MinimumSplitPaneListWidth : 0;
+    public double SplitPaneReaderMinimumWidth => IsSplitPaneActive ? MinimumSplitPaneReaderWidth : 0;
+
+    public void UpdateSplitPaneViewportWidth(double width)
+    {
+        var isWideEnough = double.IsFinite(width) && width >= 680;
+        if (SetProperty(ref _isSplitPaneViewportWide, isWideEnough, nameof(IsSplitPaneViewportWide)))
+        {
+            NotifySplitPaneLayoutChanged();
+        }
+    }
+
+    private void NotifySplitPaneLayoutChanged()
+    {
+        OnPropertyChanged(nameof(IsSplitPaneActive));
+        OnPropertyChanged(nameof(IsSplitPaneEmptyReaderPlaceholderVisible));
+        OnPropertyChanged(nameof(IsFullPageReadingViewVisible));
+        OnPropertyChanged(nameof(ArticleListGridColumnSpan));
+        OnPropertyChanged(nameof(ArticleReaderGridColumn));
+        OnPropertyChanged(nameof(ArticleReaderGridColumnSpan));
+        OnPropertyChanged(nameof(SplitPaneDividerColumnWidth));
+        OnPropertyChanged(nameof(SplitPaneListMinimumWidth));
+        OnPropertyChanged(nameof(SplitPaneReaderMinimumWidth));
+        OnPropertyChanged(nameof(IsArticleListVisible));
+        OnPropertyChanged(nameof(IsArticleSearchBoxVisible));
+        OnPropertyChanged(nameof(IsArticleCountVisible));
     }
 
     public string WorkspaceTitle => ActiveRoute switch
@@ -819,7 +1203,10 @@ public sealed class MainWindowViewModel : ObservableObject
     public int AutoRefreshIntervalMinutes => _profilePreferences.AutoRefreshIntervalMinutes;
     public bool LimitArticleWidth => _profilePreferences.LimitArticleWidth;
     public bool IsArticleCountVisible => IsArticleListVisible;
-    public bool IsArticleListVisible => SelectedArticle is null && !IsCatalogBrowserVisible && !IsCatalogAdminVisible;
+    public bool IsArticleListVisible =>
+        (SelectedArticle is null || IsSplitPaneActive) &&
+        !IsCatalogBrowserVisible &&
+        !IsCatalogAdminVisible;
     public bool IsArticleSearchBoxVisible => IsArticleListVisible && !IsSearchRoute;
     public bool IsReadingViewVisible => SelectedArticle is not null;
     public bool CanGoBack => _navigationHistory.Count > 0;
@@ -831,8 +1218,27 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool HasSelectedArticleRefreshState => SelectedArticleRefreshStatusMessage is not null;
     public bool IsCatalogBrowserVisible => ActiveRoute == "Follow sources";
     public bool IsCatalogAdminVisible => IsCatalogMaster && ActiveRoute == "Manage catalog";
-    public bool IsArticleListEmpty => VisibleArticles.Count == 0;
-    public string ArticleListEmptyMessage => ActiveRoute switch
+    public bool IsArticleListLoading =>
+        (_readingService is not null && !_hasAttemptedInitialReaderDataLoad) ||
+        (IsRefreshing && VisibleArticles.Count == 0);
+    public bool IsArticleListEmpty => VisibleArticles.Count == 0 && !IsArticleListLoading;
+    public string? InitialReaderDataLoadError => _initialReaderDataLoadError;
+    public string ArticleListEmptyTitle => InitialReaderDataLoadError is not null
+        ? "Could not load your library"
+        : IsNoSubscriptionsEmptyState
+            ? "Start following sources"
+            : ActiveRoute switch
+        {
+            "Search" when string.IsNullOrWhiteSpace(SearchQuery) => "Search your library",
+            "Search" => "No matching articles",
+            "Read later" => "Nothing saved yet",
+            "Recently read" => "No recently read articles",
+            _ => "No articles here"
+        };
+    public string ArticleListEmptyMessage => InitialReaderDataLoadError ??
+        (IsNoSubscriptionsEmptyState
+            ? "Follow a feed to build your reading list."
+            : ActiveRoute switch
     {
         "Search" when string.IsNullOrWhiteSpace(SearchQuery) => "Enter a search term to find articles.",
         "Search" => "No articles match this search.",
@@ -842,7 +1248,21 @@ public sealed class MainWindowViewModel : ObservableObject
         _ when ActiveRoute.StartsWith("folder:", StringComparison.Ordinal) => "No articles in this folder.",
         _ when ActiveRoute.StartsWith("tag:", StringComparison.Ordinal) => "No articles with this feed tag.",
         _ => "No articles in this view."
-    };
+    });
+    public bool IsNoSubscriptionsEmptyState =>
+        _readingService is not null &&
+        _hasLoadedInitialReaderData &&
+        _subscribedFeedIds.Count == 0 &&
+        ActiveRoute is "Today" or "All";
+    public string EmptyStateActionLabel =>
+        InitialReaderDataLoadError is not null ? "Retry loading" :
+        IsNoSubscriptionsEmptyState ? "Browse sources" :
+        ActiveRoute == "Search" ? HasSearchQuery ? "Clear search" : string.Empty :
+        ActiveRoute is "Read later" or "Recently read" ? "Browse all articles" :
+        UnreadOnly || SavedOnly || IsArticleTopicFilterActive ? "Clear filters" :
+        _feedRefreshService is not null ? "Refresh feeds" :
+        string.Empty;
+    public bool IsEmptyStateActionVisible => !string.IsNullOrEmpty(EmptyStateActionLabel);
 
     private string[] GetSuggestedFolders(IEnumerable<string?> relatedCategoryNames)
     {
@@ -1077,7 +1497,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            StatusMessage = $"Could not save the Hide followed preference: {exception.Message}";
+            StatusMessage = $"Could not save profile preferences: {exception.Message}";
         }
         finally
         {
@@ -1178,6 +1598,111 @@ public sealed class MainWindowViewModel : ObservableObject
 
         article.IsRead = true;
         SelectedArticle = article;
+    }
+
+    private void SelectArticleOrToggleBulkSelection(ArticleRowViewModel article)
+    {
+        if (IsBulkSelectionMode)
+        {
+            article.IsBulkSelected = !article.IsBulkSelected;
+            return;
+        }
+
+        OpenArticle(article);
+    }
+
+    private void SelectAllVisibleArticles()
+    {
+        foreach (var article in VisibleArticles)
+        {
+            article.IsBulkSelected = true;
+        }
+    }
+
+    private void ClearBulkSelection()
+    {
+        foreach (var article in _allArticles.Where(article => article.IsBulkSelected).ToArray())
+        {
+            article.IsBulkSelected = false;
+        }
+
+        OnPropertyChanged(nameof(BulkSelectedArticleCount));
+        OnPropertyChanged(nameof(HasBulkSelectedArticles));
+        NotifyBulkSelectionCommandStates();
+    }
+
+    private void NotifyBulkSelectionCommandStates()
+    {
+        SelectAllVisibleArticlesCommand.NotifyCanExecuteChanged();
+        ClearBulkSelectionCommand.NotifyCanExecuteChanged();
+        BulkMarkReadCommand.NotifyCanExecuteChanged();
+        BulkMarkUnreadCommand.NotifyCanExecuteChanged();
+        BulkSaveCommand.NotifyCanExecuteChanged();
+        BulkUnsaveCommand.NotifyCanExecuteChanged();
+    }
+
+    private async Task ApplyBulkArticleStateAsync(bool? isRead = null, bool? isSaved = null)
+    {
+        var selectedArticles = VisibleArticles.Where(article => article.IsBulkSelected).ToArray();
+        if (selectedArticles.Length == 0)
+        {
+            return;
+        }
+
+        var updatedCount = 0;
+        var failures = new List<string>();
+        foreach (var article in selectedArticles)
+        {
+            try
+            {
+                if (_readingService is not null && article.ArticleId is { } articleId)
+                {
+                    if (isRead is { } readValue && article.IsRead != readValue)
+                    {
+                        await _readingService.MarkReadAsync(ActiveProfile, articleId, readValue);
+                    }
+
+                    if (isSaved is { } savedValue && article.IsSaved != savedValue)
+                    {
+                        await _readingService.SetSavedAsync(ActiveProfile, articleId, savedValue);
+                    }
+                }
+
+                _isApplyingBulkArticleState = true;
+                try
+                {
+                    if (isRead is { } readValue)
+                    {
+                        article.IsRead = readValue;
+                    }
+
+                    if (isSaved is { } savedValue)
+                    {
+                        article.IsSaved = savedValue;
+                    }
+                }
+                finally
+                {
+                    _isApplyingBulkArticleState = false;
+                }
+
+                updatedCount++;
+            }
+            catch (Exception exception)
+            {
+                failures.Add($"{article.Title}: {exception.Message}");
+            }
+        }
+
+        ClearBulkSelection();
+        _unreadCountsDirty = true;
+        ApplyArticleFilters();
+        var articleNoun = selectedArticles.Length == 1 ? "article" : "articles";
+        var actionSummary = $"Updated {updatedCount} of {selectedArticles.Length} selected {articleNoun}.";
+        StatusMessage = failures.Count == 0
+            ? actionSummary
+            : $"{actionSummary} {string.Join(" ", failures.Take(3))}" +
+              (failures.Count > 3 ? $" And {failures.Count - 3} more failed." : string.Empty);
     }
 
     private static bool IsSameArticle(ArticleRowViewModel? current, ArticleRowViewModel target) =>
@@ -1329,16 +1854,39 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void NavigateToSelectedArticleFeed()
     {
-        if (SelectedArticle?.FeedId is not { } feedId)
+        if (SelectedArticle is { } selectedArticle)
+        {
+            NavigateToArticleFeed(selectedArticle);
+        }
+    }
+
+    private void NavigateToArticleFeed(ArticleRowViewModel article)
+    {
+        if (article.FeedId is not { } feedId)
         {
             return;
         }
 
-        var feedLink = FeedLinks.FirstOrDefault(link =>
-            string.Equals(link.Route, $"feed:{feedId}", StringComparison.Ordinal));
+        var feedLink = FeedLinks.FirstOrDefault(link => string.Equals(
+            link.Route,
+            $"feed:{feedId}",
+            StringComparison.Ordinal));
         if (feedLink is not null)
         {
             NavigateTo(feedLink);
+        }
+    }
+
+    private void OpenArticleSource(ArticleRowViewModel article)
+    {
+        if (Uri.TryCreate(article.Link, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            OriginalArticleRequested?.Invoke(uri);
+        }
+        else
+        {
+            StatusMessage = "This article does not have a valid web link.";
         }
     }
 
@@ -1384,6 +1932,12 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private void ToggleSavedArticle(ArticleRowViewModel article)
+    {
+        article.IsSaved = !article.IsSaved;
+        ApplyArticleFilters();
+    }
+
     private void ToggleRead()
     {
         if (SelectedArticle is not null)
@@ -1391,6 +1945,12 @@ public sealed class MainWindowViewModel : ObservableObject
             SelectedArticle.IsRead = !SelectedArticle.IsRead;
             ApplyArticleFilters();
         }
+    }
+
+    private void ToggleReadArticle(ArticleRowViewModel article)
+    {
+        article.IsRead = !article.IsRead;
+        ApplyArticleFilters();
     }
 
     private async Task LoadProfileReaderDataAsync(CancellationToken cancellationToken)
@@ -1451,6 +2011,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         _catalogBrowser.UpdateSubscriptions(_subscribedFeedIds);
 
+        ClearBulkSelection();
+        _unreadCountsDirty = true;
         _allArticles.Clear();
         foreach (var item in articles)
         {
@@ -1472,7 +2034,8 @@ public sealed class MainWindowViewModel : ObservableObject
                 subscriptionsByFeed.GetValueOrDefault(item.Article.FeedId)?.FeedUrl,
                 item.Article.Categories,
                 subscriptionsByFeed.GetValueOrDefault(item.Article.FeedId)?.WebsiteUrl,
-                item.Article.Author);
+                item.Article.Author,
+                item.Article.SourceXml);
             row.PropertyChanged += OnArticlePropertyChanged;
             _allArticles.Add(row);
         }
@@ -1890,7 +2453,26 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private async void OnArticlePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (sender is not ArticleRowViewModel article || article.ArticleId is null || _readingService is null)
+        if (sender is not ArticleRowViewModel article)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(ArticleRowViewModel.IsBulkSelected))
+        {
+            OnPropertyChanged(nameof(BulkSelectedArticleCount));
+            OnPropertyChanged(nameof(HasBulkSelectedArticles));
+            NotifyBulkSelectionCommandStates();
+            return;
+        }
+
+        if (e.PropertyName == nameof(ArticleRowViewModel.IsRead))
+        {
+            _unreadCountsDirty = true;
+            UpdateUnreadCounts();
+        }
+
+        if (_isApplyingBulkArticleState || article.ArticleId is null || _readingService is null)
         {
             return;
         }
@@ -1962,10 +2544,11 @@ public sealed class MainWindowViewModel : ObservableObject
             IsSortByFolder,
             _folderArticlesPerFeedLimit);
         UpdateArticleTopicOptions(result);
+        UpdateUnreadCounts();
         _visibleArticles.ReplaceAll(result.VisibleArticles);
+        SelectAllVisibleArticlesCommand.NotifyCanExecuteChanged();
 
-        OnPropertyChanged(nameof(IsArticleListEmpty));
-        OnPropertyChanged(nameof(ArticleListEmptyMessage));
+        NotifyEmptyStateChanged();
         NotifyRefreshFailureContextChanged();
         PreviousArticleCommand.NotifyCanExecuteChanged();
         NextArticleCommand.NotifyCanExecuteChanged();
@@ -1992,8 +2575,101 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private void UpdateUnreadCounts()
+    {
+        if (!_unreadCountsDirty)
+        {
+            return;
+        }
+
+        var unreadArticles = _allArticles.Where(article => !article.IsRead).ToArray();
+        var unreadByFeed = unreadArticles
+            .Where(article => article.FeedId is not null)
+            .GroupBy(article => article.FeedId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+        var unreadByFolder = unreadArticles
+            .GroupBy(article => article.Folder, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        var unreadByTag = unreadArticles
+            .SelectMany(article => article.Tags.Distinct(StringComparer.OrdinalIgnoreCase))
+            .GroupBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var link in FeedLinks.Concat(TagLinks))
+        {
+            var unreadCount = link.Route switch
+            {
+                "All" => unreadArticles.Length,
+                _ when link.Route.StartsWith("feed:", StringComparison.Ordinal) =>
+                    unreadByFeed.GetValueOrDefault(link.Route["feed:".Length..]),
+                _ when link.Route.StartsWith("folder:", StringComparison.Ordinal) =>
+                    unreadByFolder.GetValueOrDefault(link.Route["folder:".Length..]),
+                _ when link.Route.StartsWith("tag:", StringComparison.Ordinal) =>
+                    unreadByTag.GetValueOrDefault(link.Route["tag:".Length..]),
+                _ => 0
+            };
+            link.UnreadCount = unreadCount;
+        }
+
+        _unreadCountsDirty = false;
+    }
     private void ClearArticleTopicFilter() =>
         SelectedArticleTopic = ArticleTopicOptions.FirstOrDefault(option => option.Term is null);
+
+    private void ClearArticleFilters()
+    {
+        UnreadOnly = false;
+        SavedOnly = false;
+        SelectedArticleTopic = ArticleTopicOptions.FirstOrDefault(option => option.Term is null);
+    }
+
+    private void RunEmptyStateAction()
+    {
+        if (InitialReaderDataLoadError is not null)
+        {
+            RetryInitialReaderDataLoadCommand.Execute(null);
+        }
+        else if (IsNoSubscriptionsEmptyState)
+        {
+            var browseSources = PrimaryLinks.FirstOrDefault(link => link.Route == "Follow sources");
+            if (browseSources is not null)
+            {
+                NavigateTo(browseSources);
+            }
+        }
+        else if (ActiveRoute == "Search" && HasSearchQuery)
+        {
+            ClearSearchQueryCommand.Execute(null);
+        }
+        else if (ActiveRoute is "Read later" or "Recently read")
+        {
+            var allArticles = FeedLinks.FirstOrDefault(link => link.Route == "All");
+            if (allArticles is not null)
+            {
+                NavigateTo(allArticles);
+            }
+        }
+        else if (UnreadOnly || SavedOnly || IsArticleTopicFilterActive)
+        {
+            ClearArticleFilters();
+        }
+        else
+        {
+            RefreshCommand.Execute(null);
+        }
+    }
+
+    private void NotifyEmptyStateChanged()
+    {
+        OnPropertyChanged(nameof(IsArticleListLoading));
+        OnPropertyChanged(nameof(IsArticleListEmpty));
+        OnPropertyChanged(nameof(ArticleListEmptyTitle));
+        OnPropertyChanged(nameof(ArticleListEmptyMessage));
+        OnPropertyChanged(nameof(EmptyStateActionLabel));
+        OnPropertyChanged(nameof(IsEmptyStateActionVisible));
+        EmptyStateActionCommand.NotifyCanExecuteChanged();
+        RetryInitialReaderDataLoadCommand.NotifyCanExecuteChanged();
+    }
 
     private string GetStartPageRoute() => GetStartPageRoute(_profilePreferences.StartPage);
 

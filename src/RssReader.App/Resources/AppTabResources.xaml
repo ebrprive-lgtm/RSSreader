@@ -2,8 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:RssReader.App">
         <Style TargetType="{x:Type TabControl}">
-            <Setter Property="Background" Value="{StaticResource ContentBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource ControlBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ContentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="10" />
             <Setter Property="Template">
@@ -34,7 +34,7 @@
         </Style>
 
         <Style TargetType="{x:Type TabItem}">
-            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="Margin" Value="0,0,4,0" />
             <Setter Property="Template">
@@ -54,7 +54,7 @@
                             </Border>
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderBrush="{DynamicResource AccentBrush}"
                                     BorderThickness="2"
                                     CornerRadius="5"
                                     Opacity="0"
@@ -62,19 +62,19 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="TabSurface" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource AccentWashBrush}" />
-                                <Setter TargetName="TabSurface" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="TabSurface" Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                                <Setter TargetName="TabSurface" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

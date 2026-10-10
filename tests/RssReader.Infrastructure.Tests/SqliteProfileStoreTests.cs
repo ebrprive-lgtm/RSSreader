@@ -59,7 +59,14 @@ public sealed class SqliteProfileStoreTests
             60,
             true,
             false,
-            true);
+            true,
+            ReadingLayout: ProfileReadingLayout.SplitPane,
+            ArticleListDensity: ProfileArticleListDensity.Compact,
+            ReaderTheme: ProfileReaderTheme.Warm,
+            ReaderTextSize: ProfileReaderTextSize.Large,
+            ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
+            ReaderFontFamily: ProfileReaderFontFamily.Monospace,
+            SplitPaneListRatio: 0.63);
 
         await store.SavePreferencesAsync(firstProfile.Id, preferences);
         var reopenedStore = new SqliteProfileStore(database.Path);
@@ -145,6 +152,7 @@ public sealed class SqliteProfileStoreTests
         Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).ShowRawFeedButton);
         Assert.IsTrue((await store.GetPreferencesAsync("profile-1")).LimitArticleWidth);
         Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).HideFollowedCatalogFeeds);
+        Assert.AreEqual(new ProfilePreferences(), await store.GetPreferencesAsync("profile-1"));
     }
 
     [TestMethod]

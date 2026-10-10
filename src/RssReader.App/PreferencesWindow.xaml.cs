@@ -26,6 +26,8 @@ public partial class PreferencesWindow : Window
         AutoRefreshIntervalComboBox.SelectedItem = AutoRefreshIntervalComboBox.Items
             .OfType<System.Windows.Controls.ComboBoxItem>()
             .First(item => int.Parse((string)item.Tag, CultureInfo.InvariantCulture) == preferences.AutoRefreshIntervalMinutes);
+        SelectOption(ArticleListDensityComboBox, preferences.ArticleListDensity);
+        SelectOption(ReaderThemeComboBox, preferences.ReaderTheme);
     }
 
     public ProfilePreferences Preferences { get; private set; }
@@ -79,7 +81,28 @@ public partial class PreferencesWindow : Window
             int.Parse((string)((System.Windows.Controls.ComboBoxItem)AutoRefreshIntervalComboBox.SelectedItem).Tag, CultureInfo.InvariantCulture),
             ShowRawFeedButtonCheckBox.IsChecked == true,
             LimitArticleWidthCheckBox.IsChecked == true,
-            Preferences.HideFollowedCatalogFeeds);
+            Preferences.HideFollowedCatalogFeeds,
+            Preferences.ReadingLayout,
+            GetSelectedOption<ProfileArticleListDensity>(ArticleListDensityComboBox),
+            GetSelectedOption<ProfileReaderTheme>(ReaderThemeComboBox),
+            Preferences.ReaderTextSize,
+            Preferences.ReaderLineSpacing,
+            Preferences.ReaderFontFamily,
+            Preferences.SplitPaneListRatio);
         DialogResult = true;
     }
+
+    private static void SelectOption<T>(System.Windows.Controls.ComboBox comboBox, T value)
+        where T : struct, Enum =>
+        comboBox.SelectedItem = comboBox.Items
+            .OfType<System.Windows.Controls.ComboBoxItem>()
+            .First(item => int.Parse((string)item.Tag, CultureInfo.InvariantCulture) == Convert.ToInt32(value, CultureInfo.InvariantCulture));
+
+    private static T GetSelectedOption<T>(System.Windows.Controls.ComboBox comboBox)
+        where T : struct, Enum =>
+        (T)Enum.ToObject(
+            typeof(T),
+            int.Parse(
+                (string)((System.Windows.Controls.ComboBoxItem)comboBox.SelectedItem).Tag,
+                CultureInfo.InvariantCulture));
 }

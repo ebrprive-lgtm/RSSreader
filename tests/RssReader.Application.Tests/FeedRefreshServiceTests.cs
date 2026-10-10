@@ -33,7 +33,8 @@ public sealed class FeedRefreshServiceTests
                     "Summary",
                     "Content",
                     Categories: [new ArticleCategory("Press Releases")],
-                    Author: "Example Author")
+                    Author: "Example Author",
+                    SourceXml: "<item><guid>external-1</guid></item>")
             ],
             [secondFeed.Id] = () => throw new HttpRequestException("Feed unavailable"),
             [timeoutFeed.Id] = () => throw new TimeoutException("Feed timed out"),
@@ -63,6 +64,9 @@ public sealed class FeedRefreshServiceTests
         Assert.IsTrue(readerStore.SavedArticles.All(item => item.FeedId == "feed-1" && item.Article.FeedId == "feed-1"));
         Assert.AreEqual("Press Releases", readerStore.SavedArticles.First().Article.Categories.Single().Term);
         Assert.AreEqual("Example Author", readerStore.SavedArticles.First().Article.Author);
+        Assert.AreEqual(
+            "<item><guid>external-1</guid></item>",
+            readerStore.SavedArticles.First().Article.SourceXml);
         var refreshStates = readerStore.RefreshStates.ToDictionary(state => state.FeedId, StringComparer.Ordinal);
         Assert.IsNotNull(refreshStates[firstFeed.Id].LastSuccessfulAt);
         Assert.IsNull(refreshStates[firstFeed.Id].LastFailure);
@@ -137,7 +141,8 @@ public sealed class FeedRefreshServiceTests
             "https://example.com/story-1",
             "Example story");
 
-        Assert.AreEqual("<item><guid>story-1</guid></item>", rawContent);
+        Assert.AreEqual("<item><guid>story-1</guid></item>", rawContent.Xml);
+        Assert.IsFalse(rawContent.IsCached);
         Assert.AreEqual("story-1", downloader.ExternalId);
         Assert.AreEqual("https://example.com/story-1", downloader.Link);
         Assert.AreEqual("Example story", downloader.Title);
@@ -150,6 +155,35 @@ public sealed class FeedRefreshServiceTests
                 "Example story"));
     }
 
+    [TestMethod]
+    public async Task GetRawArticleContent_UsesCachedXmlWhenLiveArticleIsUnavailable()
+    {
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        var readerStore = new ReaderStoreStub(
+            [new ProfileSubscription("profile-1", feed.Id, feed.Name, feed.FeedUrl, "News")]);
+        const string cachedXml = "<entry><id>story-1</id><title>Cached story</title></entry>";
+        foreach (var remoteFailure in new Exception[]
+                 {
+                     new InvalidDataException("The selected article could not be found in the current feed."),
+                     new HttpRequestException("Feed unavailable")
+                 })
+        {
+            var downloader = new RawFeedDownloaderStub(string.Empty, remoteFailure);
+            var service = new FeedRefreshService(readerStore, new CatalogStoreStub([feed]), downloader);
+
+            var result = await service.GetRawArticleContentAsync(
+                "profile-1",
+                feed.Id,
+                "story-1",
+                null,
+                "Cached story",
+                cachedXml);
+
+            Assert.AreEqual(cachedXml, result.Xml);
+            Assert.IsTrue(result.IsCached);
+        }
+    }
+
     private sealed class FeedDownloaderStub(
         IReadOnlyDictionary<string, Func<IReadOnlyList<DownloadedFeedItem>>> responses) : IFeedDownloader
     {
@@ -158,7 +192,7 @@ public sealed class FeedRefreshServiceTests
             CancellationToken cancellationToken = default) => Task.FromResult(responses[feed.Id]());
     }
 
-    private sealed class RawFeedDownloaderStub(string rawContent) : IFeedDownloader, IRawFeedContentDownloader
+    private sealed class RawFeedDownloaderStub(string rawContent, Exception? failure = null) : IFeedDownloader, IRawFeedContentDownloader
     {
         public string? ExternalId { get; private set; }
         public string? Link { get; private set; }
@@ -179,6 +213,11 @@ public sealed class FeedRefreshServiceTests
             ExternalId = externalId;
             Link = link;
             Title = title;
+            if (failure is not null)
+            {
+                return Task.FromException<string>(failure);
+            }
+
             return Task.FromResult(rawContent);
         }
     }

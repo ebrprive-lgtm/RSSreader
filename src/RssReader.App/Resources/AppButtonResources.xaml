@@ -2,8 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:RssReader.App">
         <Style x:Key="PrimaryActionButtonStyle" TargetType="{x:Type Button}">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForegroundBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -24,7 +24,7 @@
                                               RecognizesAccessKey="True" />
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource TextBrush}"
+                                    BorderBrush="{DynamicResource TextBrush}"
                                     BorderThickness="2"
                                     CornerRadius="7"
                                     Opacity="0"
@@ -32,14 +32,14 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource PrimaryHoverBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource PrimaryHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource PrimaryPressedBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource PrimaryPressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource DisabledSurfaceBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource DisabledSurfaceBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                                 <Setter Property="Cursor" Value="Arrow" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -53,7 +53,7 @@
 
         <Style x:Key="SecondaryActionButtonStyle" TargetType="{x:Type Button}">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Padding" Value="10,6" />
@@ -73,7 +73,7 @@
                                               RecognizesAccessKey="True" />
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderBrush="{DynamicResource AccentBrush}"
                                     BorderThickness="2"
                                     CornerRadius="7"
                                     Opacity="0"
@@ -81,14 +81,14 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource NeutralPressedBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource SidebarBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource SidebarBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                                 <Setter Property="Cursor" Value="Arrow" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -105,7 +105,7 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="15" />
@@ -125,7 +125,7 @@
                                               RecognizesAccessKey="True" />
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderBrush="{DynamicResource AccentBrush}"
                                     BorderThickness="2"
                                     CornerRadius="6"
                                     Opacity="0"
@@ -133,14 +133,14 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource NeutralPressedBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource SidebarBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource SidebarBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                                 <Setter Property="Cursor" Value="Arrow" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -157,7 +157,7 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="15" />
@@ -177,7 +177,7 @@
                                               RecognizesAccessKey="True" />
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource DestructiveBrush}"
+                                    BorderBrush="{DynamicResource DestructiveBrush}"
                                     BorderThickness="2"
                                     CornerRadius="6"
                                     Opacity="0"
@@ -185,14 +185,77 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource DestructiveWashBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource NeutralPressedBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="ActionBorder" Property="Background" Value="{StaticResource SidebarBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource SidebarBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryActionToggleButtonStyle" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Grid>
+                            <Border x:Name="ActionBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="5" />
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True" />
+                            <Border x:Name="FocusRing"
+                                    Margin="-2"
+                                    BorderBrush="{DynamicResource AccentBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="7"
+                                    Opacity="0"
+                                    IsHitTestVisible="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="IsChecked" Value="False" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
+                            </MultiTrigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsPressed" Value="True" />
+                                    <Condition Property="IsChecked" Value="False" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
+                            </MultiTrigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ActionBorder" Property="Background" Value="{DynamicResource SidebarBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                                 <Setter Property="Cursor" Value="Arrow" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">

@@ -11,8 +11,8 @@
         MinHeight="460"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Background="White"
-        Foreground="{StaticResource TextBrush}">
+        Background="{DynamicResource ContentBrush}"
+        Foreground="{DynamicResource TextBrush}">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="50"
                             ResizeBorderThickness="6"
@@ -20,8 +20,8 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
         <Border Margin="8"
-            Background="{StaticResource ContentBrush}"
-            BorderBrush="{StaticResource ControlBorderBrush}"
+            Background="{DynamicResource ContentBrush}"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
             BorderThickness="1"
             CornerRadius="6">
         <Grid Margin="20">
@@ -31,14 +31,35 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid Margin="0,0,0,14">
-            <StackPanel Margin="0,0,42,0">
-                <TextBlock Text="Raw feed XML" FontSize="18" FontWeight="SemiBold" />
+            <Grid Margin="0,0,42,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Raw feed XML" FontSize="18" FontWeight="SemiBold" />
+                    <Border x:Name="CachedSourceBadge"
+                            Margin="10,0,0,0"
+                            Padding="7,2"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource WindowBrush}"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Visibility="Collapsed">
+                        <TextBlock Text="CACHED"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                    </Border>
+                </StackPanel>
                 <TextBlock x:Name="FeedSourceText"
+                           Grid.Row="1"
                            Margin="0,5,0,0"
                            FontSize="12"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            TextTrimming="CharacterEllipsis" />
-            </StackPanel>
+            </Grid>
             <Button Content="&#xE711;"
                     Style="{StaticResource IconActionButtonStyle}"
                     HorizontalAlignment="Right"
@@ -54,8 +75,8 @@
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                   ScrollViewer.VerticalScrollBarVisibility="Auto"
                   Padding="12"
-                  Background="#FAFBFA"
-                  BorderBrush="{StaticResource ControlBorderBrush}">
+                  Background="{DynamicResource WindowBrush}"
+                  BorderBrush="{DynamicResource ControlBorderBrush}">
             <TreeView.Resources>
                 <HierarchicalDataTemplate DataType="{x:Type local:RawXmlTreeNode}"
                                           ItemsSource="{Binding Children}">
@@ -72,7 +93,7 @@
                             <Style TargetType="TextBlock">
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsEncoded}" Value="True">
-                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+                                        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -90,7 +111,7 @@
         <Grid Grid.Row="2" Margin="0,14,0,0">
             <TextBlock x:Name="CopyStatusText"
                        VerticalAlignment="Center"
-                       Foreground="{StaticResource MutedTextBrush}" />
+                       Foreground="{DynamicResource MutedTextBrush}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="CopyXmlButton"
                         Content="Copy XML"

@@ -26,6 +26,175 @@ public sealed class MainWindowViewModelTests
 {
     public TestContext TestContext { get; set; } = null!;
 
+    [TestMethod]
+    public void RawFeedWindowShowsCachedBadgeOnlyForCachedContent()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var cachedWindow = new RawFeedWindow("Example feed", "<item />", isCached: true);
+            var liveWindow = new RawFeedWindow("Example feed", "<item />");
+
+            try
+            {
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    ((Border)cachedWindow.FindName("CachedSourceBadge")!).Visibility);
+                Assert.AreEqual(
+                    Visibility.Collapsed,
+                    ((Border)liveWindow.FindName("CachedSourceBadge")!).Visibility);
+            }
+            finally
+            {
+                cachedWindow.Close();
+                liveWindow.Close();
+            }
+        });
+    }
+
+    [TestMethod]
+    public void PreferencesWindowPreservesSplitModeWhileSavingOtherReadingOptions()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var initialPreferences = new ProfilePreferences(
+                ReaderTextSize: ProfileReaderTextSize.Large,
+                ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
+                ReaderFontFamily: ProfileReaderFontFamily.Serif,
+                ReadingLayout: ProfileReadingLayout.SplitPane,
+                SplitPaneListRatio: 0.63);
+            var window = new PreferencesWindow(initialPreferences);
+            Assert.IsNull(window.FindName("ReadingLayoutComboBox"));
+            Assert.AreEqual(0, ((ComboBox)window.FindName("ArticleListDensityComboBox")!).SelectedIndex);
+            Assert.AreEqual(0, ((ComboBox)window.FindName("ReaderThemeComboBox")!).SelectedIndex);
+            Assert.IsNull(window.FindName("ReaderTextSizeComboBox"));
+            Assert.IsNull(window.FindName("ReaderLineSpacingComboBox"));
+            Assert.IsNull(window.FindName("ReaderFontFamilyComboBox"));
+
+            window.Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                new Action(() =>
+                {
+                    ((ComboBox)window.FindName("ArticleListDensityComboBox")!).SelectedIndex = 2;
+                    ((ComboBox)window.FindName("ReaderThemeComboBox")!).SelectedIndex = 2;
+                    ((Button)window.FindName("SavePreferencesButton")!).RaiseEvent(
+                        new RoutedEventArgs(Button.ClickEvent));
+                }));
+
+            Assert.IsTrue(window.ShowDialog() == true);
+            Assert.AreEqual(
+                new ProfilePreferences(
+                    ReadingLayout: ProfileReadingLayout.SplitPane,
+                    SplitPaneListRatio: 0.63,
+                    ArticleListDensity: ProfileArticleListDensity.Spacious,
+                    ReaderTheme: ProfileReaderTheme.Warm,
+                    ReaderTextSize: ProfileReaderTextSize.Large,
+                    ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
+                    ReaderFontFamily: ProfileReaderFontFamily.Serif),
+                window.Preferences);
+        });
+    }
+
+    [TestMethod]
+    public void ApplicationThemeUpdatesExistingMainWindowAndPreferencesWindow()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            var mainWindow = CreateTestMainWindow(viewModel);
+            var preferencesWindow = new PreferencesWindow(new ProfilePreferences());
+            WpfTestHost.Application.MainWindow = mainWindow;
+
+            try
+            {
+                mainWindow.Show();
+                preferencesWindow.Show();
+                mainWindow.UpdateLayout();
+                preferencesWindow.UpdateLayout();
+
+                viewModel.ApplyPreferences(new ProfilePreferences(ReaderTheme: ProfileReaderTheme.Dark));
+                mainWindow.UpdateLayout();
+                preferencesWindow.UpdateLayout();
+
+                var darkContent = Color.FromRgb(32, 35, 38);
+                Assert.AreEqual(
+                    darkContent,
+                    ((SolidColorBrush)((Border)mainWindow.FindName("MainWindowSurface")!).Background).Color);
+                Assert.AreEqual(darkContent, ((SolidColorBrush)preferencesWindow.Background).Color);
+                Assert.AreEqual(
+                    Color.FromRgb(238, 240, 242),
+                    ((SolidColorBrush)WpfTestHost.Application.Resources["TextBrush"]).Color);
+            }
+            finally
+            {
+                preferencesWindow.Close();
+                mainWindow.Close();
+                WpfTestHost.Application.MainWindow = null;
+                AppThemeManager.Apply(ProfileReaderTheme.Light);
+            }
+        });
+    }
+
+    [TestMethod]
+    public void ArticleReaderTypographyPopupUpdatesTextSizeSpacingAndFontFamily()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            viewModel.SelectArticleCommand.Execute(viewModel.VisibleArticles[0]);
+            var window = CreateTestMainWindow(viewModel);
+            WpfTestHost.Application.MainWindow = window;
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                var readerView = (FrameworkElement)window.FindName("ArticleReaderView")!;
+                var popup = (System.Windows.Controls.Primitives.Popup)readerView.FindName("ReaderTypographyPopup")!;
+                ((Button)readerView.FindName("ReaderTypographyButton")!).RaiseEvent(
+                    new RoutedEventArgs(Button.ClickEvent));
+                Assert.IsTrue(popup.IsOpen);
+
+                ((ComboBox)readerView.FindName("ReaderTextSizeComboBox")!).SelectedIndex = 2;
+                ((ComboBox)readerView.FindName("ReaderFontFamilyComboBox")!).SelectedIndex = 1;
+                ((ComboBox)readerView.FindName("ReaderLineSpacingComboBox")!).SelectedIndex = 2;
+
+                Assert.AreEqual(ProfileReaderTextSize.Large, viewModel.ReaderTextSize);
+                Assert.AreEqual(ProfileReaderFontFamily.Serif, viewModel.ReaderFontFamily);
+                Assert.AreEqual(ProfileReaderLineSpacing.Relaxed, viewModel.ReaderLineSpacing);
+            }
+            finally
+            {
+                window.Close();
+                WpfTestHost.Application.MainWindow = null;
+                AppThemeManager.Apply(ProfileReaderTheme.Light);
+            }
+        });
+    }
+
+    [TestMethod]
+    public void CommandPaletteFiltersDestinationsWithoutLosingItsKeyboardResultsList()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var window = new CommandPaletteWindow(
+            [
+                new CommandPaletteItem("Refresh feeds", "Update followed sources", () => { }),
+                new CommandPaletteItem("Show reader", "Open article reader", () => { })
+            ]);
+            window.Show();
+            window.UpdateLayout();
+
+            var searchBox = (TextBox)window.FindName("SearchBox")!;
+            var commandList = (ListBox)window.FindName("CommandList")!;
+            searchBox.Text = "reader";
+            window.UpdateLayout();
+
+            Assert.AreEqual(1, commandList.Items.Count);
+            Assert.AreEqual("Show reader", ((CommandPaletteItem)commandList.Items[0]).Label);
+            window.Close();
+        });
+    }
+
     private static T FindReaderElement<T>(MainWindow window, string name) where T : class
     {
         var readerView = window.FindName("ArticleReaderView") as FrameworkElement
@@ -206,6 +375,249 @@ public sealed class MainWindowViewModelTests
             [],
             "Example summary");
         Assert.IsFalse(untaggedArticle.HasFeedTags);
+    }
+
+    [TestMethod]
+    public async Task BulkArticleActionsRequireSelectionModeAndApplyOnlyToSelectedArticles()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var articlesToSave = viewModel.VisibleArticles.Take(2).ToArray();
+        var unselectedArticle = viewModel.VisibleArticles.Single(article => !articlesToSave.Contains(article));
+
+        viewModel.ToggleBulkSelectionModeCommand.Execute(null);
+        foreach (var article in articlesToSave)
+        {
+            viewModel.SelectArticleCommand.Execute(article);
+        }
+
+        Assert.IsNull(viewModel.SelectedArticle);
+        Assert.AreEqual(2, viewModel.BulkSelectedArticleCount);
+        Assert.IsTrue(articlesToSave.All(article => article.IsBulkSelected));
+        Assert.IsFalse(unselectedArticle.IsBulkSelected);
+
+        await viewModel.BulkSaveCommand.ExecuteAsync();
+
+        Assert.AreEqual(0, viewModel.BulkSelectedArticleCount);
+        Assert.IsTrue(articlesToSave.All(article => article.IsSaved));
+        Assert.IsFalse(unselectedArticle.IsSaved);
+        StringAssert.Contains(viewModel.StatusMessage, "Updated 2 of 2 selected articles.");
+
+        viewModel.ToggleBulkSelectionModeCommand.Execute(null);
+        Assert.IsFalse(viewModel.IsBulkSelectionMode);
+        Assert.IsTrue(articlesToSave.All(article => !article.IsBulkSelected));
+    }
+
+    [TestMethod]
+    public void SplitPaneFallsBackAtNarrowWidthsAndListDensityChangesCardVirtualizationSize()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var article = viewModel.VisibleArticles[0];
+        viewModel.ApplyPreferences(new ProfilePreferences(ReadingLayout: ProfileReadingLayout.SplitPane));
+        viewModel.SelectArticleCommand.Execute(article);
+
+        viewModel.UpdateSplitPaneViewportWidth(680);
+        Assert.IsTrue(viewModel.IsSplitPaneActive);
+        Assert.IsTrue(viewModel.IsArticleListVisible);
+        Assert.AreEqual(1, viewModel.ArticleListGridColumnSpan);
+        Assert.AreEqual(2, viewModel.ArticleReaderGridColumn);
+
+        viewModel.UpdateSplitPaneViewportWidth(679);
+        Assert.IsFalse(viewModel.IsSplitPaneActive);
+        Assert.IsFalse(viewModel.IsArticleListVisible);
+        Assert.AreEqual(3, viewModel.ArticleReaderGridColumnSpan);
+
+        viewModel.UpdateSplitPaneViewportWidth(700);
+        Assert.IsTrue(viewModel.IsSplitPaneActive);
+        viewModel.ApplyPreferences(new ProfilePreferences(ArticleListDensity: ProfileArticleListDensity.Compact));
+        Assert.AreEqual(new Size(286, 346), viewModel.ArticleCardItemSize);
+        viewModel.ApplyPreferences(new ProfilePreferences(ArticleListDensity: ProfileArticleListDensity.Spacious));
+        Assert.AreEqual(new Size(346, 410), viewModel.ArticleCardItemSize);
+    }
+
+    [TestMethod]
+    public async Task SplitPaneToggleChangesAndPersistsProfileLayoutAndDividerRatio()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var article = viewModel.VisibleArticles[0];
+        viewModel.SelectArticleCommand.Execute(article);
+        viewModel.UpdateSplitPaneViewportWidth(1000);
+
+        await viewModel.ToggleSplitPaneCommand.ExecuteAsync();
+
+        Assert.IsTrue(viewModel.IsSplitPaneEnabled);
+        Assert.IsTrue(viewModel.IsSplitPaneActive);
+        Assert.IsTrue(viewModel.IsArticleListVisible);
+        Assert.AreSame(article, viewModel.SelectedArticle);
+
+        await viewModel.UpdateSplitPaneListRatioAsync(0.9);
+        Assert.AreEqual(0.7, viewModel.SplitPaneListRatio, 0.001);
+
+        await viewModel.ToggleSplitPaneCommand.ExecuteAsync();
+        Assert.IsFalse(viewModel.IsSplitPaneEnabled);
+        Assert.IsFalse(viewModel.IsSplitPaneActive);
+        Assert.IsFalse(viewModel.IsArticleListVisible);
+        Assert.AreSame(article, viewModel.SelectedArticle);
+    }
+
+    [TestMethod]
+    public void SplitPaneToggleShowsAnEmptyReaderPlaceholderWithoutAnArticleSelection()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            var window = CreateTestMainWindow(viewModel);
+            window.Width = 1100;
+            window.Height = 760;
+            WpfTestHost.Application.MainWindow = window;
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                var articleList = (ArticleListView)window.FindName("ArticleListView")!;
+                var toggleButton = (Button)articleList.FindName("ArticleListSplitPaneToggleButton")!;
+                Assert.AreSame(viewModel.ToggleSplitPaneCommand, toggleButton.Command);
+                toggleButton.Command.Execute(toggleButton.CommandParameter);
+                window.UpdateLayout();
+
+                var placeholder = (FrameworkElement)window.FindName("SplitPaneEmptyReaderPlaceholder")!;
+                var splitter = (FrameworkElement)window.FindName("SplitPaneResizeSplitter")!;
+                Assert.IsTrue(viewModel.IsSplitPaneActive);
+                Assert.IsTrue(articleList.IsVisible);
+                Assert.IsFalse(viewModel.IsReadingViewVisible);
+                Assert.AreEqual(Visibility.Visible, placeholder.Visibility);
+                Assert.AreEqual(Visibility.Visible, splitter.Visibility);
+            }
+            finally
+            {
+                window.Close();
+                WpfTestHost.Application.MainWindow = null;
+            }
+        });
+    }
+
+    [TestMethod]
+    public void SplitPaneUsesAvailableWorkspaceWidthRatherThanWholeWindowWidth()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            viewModel.ApplyPreferences(new ProfilePreferences(ReadingLayout: ProfileReadingLayout.SplitPane));
+            viewModel.SelectArticleCommand.Execute(viewModel.VisibleArticles[0]);
+            var window = CreateTestMainWindow(viewModel);
+            window.Width = 1100;
+            window.Height = 760;
+            WpfTestHost.Application.MainWindow = window;
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+
+                var workspace = (Grid)window.FindName("WorkspaceGrid")!;
+                var readingWorkspace = (Grid)window.FindName("ReadingWorkspaceGrid")!;
+                var articleList = (FrameworkElement)window.FindName("ArticleListView")!;
+                var articleReader = (FrameworkElement)window.FindName("ArticleReaderView")!;
+                var splitter = (GridSplitter)window.FindName("SplitPaneResizeSplitter")!;
+                Assert.IsTrue(
+                    workspace.ActualWidth >= 680,
+                    $"Expected enough reading workspace at 1100 DIPs, got {workspace.ActualWidth}.");
+                Assert.IsTrue(viewModel.IsSplitPaneActive);
+                Assert.AreEqual(Visibility.Visible, splitter.Visibility);
+                Assert.AreEqual(GridResizeBehavior.PreviousAndNext, splitter.ResizeBehavior);
+                Assert.AreEqual(0.45, readingWorkspace.ColumnDefinitions[0].ActualWidth /
+                    (readingWorkspace.ColumnDefinitions[0].ActualWidth + readingWorkspace.ColumnDefinitions[2].ActualWidth), 0.02);
+                Assert.AreEqual(1, Grid.GetColumnSpan(articleList));
+                Assert.AreEqual(2, Grid.GetColumn(articleReader));
+                Assert.AreEqual(1, Grid.GetColumnSpan(articleReader));
+                Assert.IsTrue(articleList.IsVisible);
+                Assert.IsTrue(articleReader.IsVisible);
+
+                readingWorkspace.ColumnDefinitions[0].Width = new GridLength(0.46, GridUnitType.Star);
+                readingWorkspace.ColumnDefinitions[2].Width = new GridLength(0.54, GridUnitType.Star);
+                window.UpdateLayout();
+                splitter.RaiseEvent(new System.Windows.Controls.Primitives.DragCompletedEventArgs(0, 0, false));
+                Assert.AreEqual(0.46, readingWorkspace.ColumnDefinitions[0].Width.Value, 0.001);
+                Assert.AreEqual(0.54, readingWorkspace.ColumnDefinitions[2].Width.Value, 0.001);
+                Assert.AreEqual(0.46, viewModel.SplitPaneListRatio, 0.001);
+            }
+            finally
+            {
+                window.Close();
+                WpfTestHost.Application.MainWindow = null;
+            }
+        });
+    }
+
+    [TestMethod]
+    public void ReaderPreferenceChangesPreserveTheCurrentFeedAndDoNotRebuildItsArticleList()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.ApplyPreferences(new ProfilePreferences());
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "folder:Gaming"));
+        var article = viewModel.VisibleArticles[0];
+        viewModel.SelectArticleCommand.Execute(article);
+        viewModel.UpdateSplitPaneViewportWidth(1280);
+        var activeRoute = viewModel.ActiveRoute;
+        var collectionChangeCount = 0;
+        viewModel.VisibleArticles.CollectionChanged += (_, _) => collectionChangeCount++;
+
+        viewModel.ApplyPreferences(new ProfilePreferences(
+            ReadingLayout: ProfileReadingLayout.SplitPane,
+            ReaderTheme: ProfileReaderTheme.Warm,
+            ReaderTextSize: ProfileReaderTextSize.Large,
+            ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
+            ReaderFontFamily: ProfileReaderFontFamily.Monospace));
+
+        Assert.AreEqual(activeRoute, viewModel.ActiveRoute);
+        Assert.AreEqual(0, collectionChangeCount);
+        Assert.IsTrue(viewModel.IsSplitPaneActive);
+        Assert.AreEqual(ProfileReaderTheme.Warm, viewModel.ReaderTheme);
+        Assert.AreEqual(ProfileReaderTextSize.Large, viewModel.ReaderTextSize);
+        Assert.AreEqual(ProfileReaderLineSpacing.Relaxed, viewModel.ReaderLineSpacing);
+        Assert.AreEqual(ProfileReaderFontFamily.Monospace, viewModel.ReaderFontFamily);
+    }
+
+    [TestMethod]
+    public void UnreadCountsAndContextActionsStayInSyncWithArticleState()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var article = viewModel.VisibleArticles[0];
+        var allArticlesLink = viewModel.FeedLinks.Single(link => link.Route == "All");
+        var gamingFolderLink = viewModel.FeedLinks.Single(link => link.Route == "folder:Gaming");
+        var reviewsTagLink = viewModel.TagLinks.Single(link => link.Route == "tag:Reviews");
+
+        Assert.AreEqual(3, allArticlesLink.UnreadCount);
+        Assert.AreEqual(2, gamingFolderLink.UnreadCount);
+        Assert.AreEqual(2, reviewsTagLink.UnreadCount);
+
+        viewModel.ToggleArticleReadCommand.Execute(article);
+
+        Assert.IsTrue(article.IsRead);
+        Assert.IsNull(viewModel.SelectedArticle);
+        Assert.AreEqual(2, allArticlesLink.UnreadCount);
+        Assert.AreEqual(1, gamingFolderLink.UnreadCount);
+        Assert.AreEqual(1, reviewsTagLink.UnreadCount);
+
+        viewModel.ToggleArticleSavedCommand.Execute(article);
+        Assert.IsTrue(article.IsSaved);
+    }
+
+    [TestMethod]
+    public void CommandPaletteItemsRunPresentationChangesAndSearchEmptyActionClearsQuery()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var commands = viewModel.CreateCommandPaletteItems();
+        commands.Single(item => item.Label == "Show magazine view").Execute();
+        Assert.IsTrue(viewModel.IsMagazineView);
+
+        viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Search"));
+        viewModel.SearchQuery = "no matching title";
+        Assert.IsTrue(viewModel.IsArticleListEmpty);
+        Assert.AreEqual("No matching articles", viewModel.ArticleListEmptyTitle);
+        Assert.AreEqual("Clear search", viewModel.EmptyStateActionLabel);
+        viewModel.EmptyStateActionCommand.Execute(null);
+        Assert.AreEqual(string.Empty, viewModel.SearchQuery);
     }
 
     [TestMethod]
@@ -496,6 +908,23 @@ public sealed class MainWindowViewModelTests
         articleRowsList.UpdateLayout();
         var articleRowContainer = articleRowsList.ItemContainerGenerator.ContainerFromItem(taggedArticle)
             ?? throw new AssertFailedException("The title-only article row was not created.");
+        var rowReadMarker = FindVisualChildren<ContentControl>(articleRowContainer)
+            .Single(control => control.Name == "ArticleRowReadMarker");
+        Assert.AreEqual(Visibility.Collapsed, rowReadMarker.Visibility);
+        var rowActionButton = FindVisualChildren<Button>(articleRowContainer)
+            .Single(button => ReferenceEquals(button.Command, mainViewModel.SelectArticleCommand));
+        Assert.IsNotNull(rowActionButton.ContextMenu);
+        Assert.AreSame(mainViewModel, rowActionButton.Tag);
+        Assert.AreEqual("Open in reader", ((MenuItem)rowActionButton.ContextMenu.Items[0]).Header);
+        var rowContextMenu = rowActionButton.ContextMenu;
+        rowContextMenu.PlacementTarget = rowActionButton;
+        rowContextMenu.IsOpen = true;
+        mainWindow.UpdateLayout();
+        var rowReadMenuItem = rowContextMenu.Items.OfType<MenuItem>()
+            .Single(item => Equals(item.Header, "Toggle read status"));
+        Assert.AreSame(mainViewModel.ToggleArticleReadCommand, rowReadMenuItem.Command);
+        Assert.AreSame(taggedArticle, rowReadMenuItem.CommandParameter);
+        rowContextMenu.IsOpen = false;
         var articleRowLabels = FindVisualChildren<TextBlock>(articleRowContainer)
             .Select(textBlock => string.Join(
                 " ",
@@ -574,6 +1003,7 @@ public sealed class MainWindowViewModelTests
             ?? throw new AssertFailedException("The read-later toggle does not expose its bookmark icon.");
         var cardButton = FindVisualChildren<Button>(cardRoot)
             .Single(button => AutomationProperties.GetName(button) == taggedArticle.Title);
+        Assert.IsNotNull(cardButton.ContextMenu);
         mainWindow.Activate();
         Assert.IsTrue(cardButton.Focus());
         mainWindow.UpdateLayout();
@@ -590,6 +1020,10 @@ public sealed class MainWindowViewModelTests
         taggedArticle.IsRead = true;
         mainWindow.UpdateLayout();
         Assert.AreEqual(Visibility.Collapsed, unreadIndicator.Visibility);
+        Assert.AreEqual(Visibility.Visible, rowReadMarker.Visibility);
+        var cardReadMarker = FindVisualChildren<ContentControl>(cardRoot)
+            .Single(control => control.Name == "ArticleCardReadIndicator");
+        Assert.AreEqual(Visibility.Visible, cardReadMarker.Visibility);
         mainViewModel.IsMagazineView = true;
         mainWindow.UpdateLayout();
         var magazineList = FindArticleListElement<ListBox>(mainWindow, "ArticleMagazineList");
@@ -597,6 +1031,12 @@ public sealed class MainWindowViewModelTests
         magazineList.UpdateLayout();
         var magazineContainer = magazineList.ItemContainerGenerator.ContainerFromItem(taggedArticle)
             ?? throw new AssertFailedException("The tagged magazine article was not created.");
+        var magazineReadMarker = FindVisualChildren<ContentControl>(magazineContainer)
+            .Single(control => control.Name == "MagazineReadMarker");
+        Assert.AreEqual(Visibility.Visible, magazineReadMarker.Visibility);
+        Assert.IsTrue(FindVisualChildren<Button>(magazineContainer)
+            .Any(button => ReferenceEquals(button.Command, mainViewModel.SelectArticleCommand) &&
+                           button.ContextMenu is not null));
         var magazineTopicPills = FindVisualChildren<ItemsControl>(magazineContainer)
             .Single(control => AutomationProperties.GetName(control) == "Publisher topics");
         var magazineTopicPill = FindVisualChildren<Button>(magazineTopicPills)
@@ -645,6 +1085,18 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual(sidebarPeekButton.ToolTip, AutomationProperties.GetName(sidebarPeekButton));
         mainViewModel.SelectArticleCommand.Execute(taggedArticle);
         mainWindow.UpdateLayout();
+        var readerActionsButton = FindReaderElement<Button>(mainWindow, "SelectedArticleActionsButton");
+        Assert.AreSame(taggedArticle, readerActionsButton.DataContext);
+        Assert.AreSame(mainViewModel, readerActionsButton.Tag);
+        readerActionsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, readerActionsButton));
+        var readerContextMenu = readerActionsButton.ContextMenu
+            ?? throw new AssertFailedException("The reader action menu is unavailable.");
+        Assert.IsTrue(readerContextMenu.IsOpen);
+        var readerReadMenuItem = readerContextMenu.Items.OfType<MenuItem>()
+            .Single(item => Equals(item.Header, "Toggle read status"));
+        Assert.AreSame(mainViewModel.ToggleArticleReadCommand, readerReadMenuItem.Command);
+        Assert.AreSame(taggedArticle, readerReadMenuItem.CommandParameter);
+        readerContextMenu.IsOpen = false;
         var selectedFeedName = FindReaderElement<TextBlock>(mainWindow, "SelectedArticleFeedName");
         Assert.AreEqual(Visibility.Visible, selectedFeedName.Visibility);
         var feedNameText = string.Join(
@@ -1509,6 +1961,31 @@ public sealed class MainWindowViewModelTests
                     $"Actual author inlines: [{string.Join(" | ", authorInlines)}]");
                 PumpDispatcherUntil(redrawNavigationCompleted.Task);
                 Assert.AreEqual(navigationCountBeforeResize + 1, articleViewer.DocumentNavigationCount);
+                Assert.IsTrue(
+                    articleViewer.LastNavigationSucceeded,
+                    $"The resized article document failed with {articleViewer.LastNavigationErrorStatus}.");
+                Assert.AreEqual(Visibility.Visible, browser.Visibility);
+
+                var navigationCountBeforeAppearanceChange = articleViewer.DocumentNavigationCount;
+                var appearanceNavigationCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                articleViewer.ArticleDocumentNavigationCompleted += () => appearanceNavigationCompleted.TrySetResult();
+                viewModel.ApplyPreferences(new ProfilePreferences(
+                    ReaderTheme: ProfileReaderTheme.Warm,
+                    ReaderTextSize: ProfileReaderTextSize.Large,
+                    ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
+                    ReaderFontFamily: ProfileReaderFontFamily.Serif));
+                PumpDispatcherUntil(appearanceNavigationCompleted.Task);
+                Assert.AreEqual(
+                    navigationCountBeforeAppearanceChange + 1,
+                    articleViewer.DocumentNavigationCount,
+                    "Applying all reader appearance settings should redraw the document once.");
+                Assert.IsTrue(
+                    articleViewer.LastNavigationSucceeded,
+                    $"The reader appearance update failed with {articleViewer.LastNavigationErrorStatus}.");
+                StringAssert.Contains(articleViewer.CurrentDocument, "--reader-background: #f8f2e6");
+                StringAssert.Contains(articleViewer.CurrentDocument, "font: 18px/1.85");
+                StringAssert.Contains(articleViewer.CurrentDocument, "\"Georgia\", \"Times New Roman\", serif");
+
                 viewModel.BackCommand.Execute(null);
                 window.UpdateLayout();
 
@@ -2885,7 +3362,7 @@ public sealed class MainWindowViewModelTests
             Assert.IsTrue(viewModel.IsRawFeedButtonVisible);
             Assert.AreEqual(
                 $"<item><guid>{newFeed.Id}-item</guid><title>New headline</title></item>",
-                await viewModel.GetRawArticleContentAsync(newFeedArticle));
+                (await viewModel.GetRawArticleContentAsync(newFeedArticle)).Xml);
 
             var visibleArticleChanges = 0;
             viewModel.VisibleArticles.CollectionChanged += (_, _) => visibleArticleChanges++;
@@ -4547,6 +5024,27 @@ public sealed class MainWindowViewModelTests
         Assert.IsFalse(sanitized.Contains("javascript:", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(sanitized.Contains("file:", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(sanitized.Contains("data:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderAppliesReaderThemeAndTypographyAfterSanitizingFeedContent()
+    {
+        var document = ArticleHtmlDocumentBuilder.Build(
+            "<p style=\"color: red\"><a href=\"https://example.com\">Article link</a></p>",
+            null,
+            null,
+            null,
+            readerTheme: ProfileReaderTheme.Dark,
+            textSize: ProfileReaderTextSize.Large,
+            lineSpacing: ProfileReaderLineSpacing.Relaxed,
+            fontFamily: ProfileReaderFontFamily.Serif);
+
+        StringAssert.Contains(document, "color-scheme: dark");
+        StringAssert.Contains(document, "--reader-background: #202326");
+        StringAssert.Contains(document, "font: 18px/1.85");
+        StringAssert.Contains(document, "\"Georgia\", \"Times New Roman\", serif");
+        StringAssert.Contains(document, "color: var(--reader-link) !important");
+        Assert.IsFalse(document.Contains("color: red", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]

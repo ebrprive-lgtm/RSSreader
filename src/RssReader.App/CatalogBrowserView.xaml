@@ -43,7 +43,7 @@
                                 <TextBlock Text="Browse the feed catalog" FontSize="21" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding CatalogResultsSummary}"
                                            Margin="0,7,0,0"
-                                           Foreground="{StaticResource MutedTextBrush}" />
+                                           Foreground="{DynamicResource MutedTextBrush}" />
                                 <ProgressBar x:Name="CatalogLoadProgressBar"
                                              Height="3"
                                              Margin="0,7,0,0"
@@ -101,7 +101,7 @@
                             <TextBlock Grid.Row="2"
                                        Text="{Binding SelectedCatalogCollectionCuratorLabel}"
                                        FontSize="12"
-                                       Foreground="{StaticResource MutedTextBrush}" />
+                                       Foreground="{DynamicResource MutedTextBrush}" />
                         </Grid>
                         <Grid Grid.Row="2" Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
@@ -166,7 +166,7 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
+                                        <Border Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="38" />
@@ -188,7 +188,7 @@
                                                                    Text="{Binding CategoryName, TargetNullValue=Uncategorized}"
                                                                    Margin="8,0,0,0"
                                                                    FontSize="11"
-                                                                   Foreground="{StaticResource AccentBrush}"
+                                                                   Foreground="{DynamicResource AccentBrush}"
                                                                    TextTrimming="CharacterEllipsis" />
                                                         <TextBlock Text="{Binding Name}"
                                                                    FontWeight="SemiBold"
@@ -197,7 +197,7 @@
                                                     </DockPanel>
                                                     <TextBlock Text="{Binding Description}"
                                                                Margin="0,1,0,0"
-                                                               Foreground="{StaticResource MutedTextBrush}"
+                                                               Foreground="{DynamicResource MutedTextBrush}"
                                                                TextTrimming="CharacterEllipsis"
                                                                AutomationProperties.Name="Catalog feed description"
                                                                ToolTip="{Binding Description}"
@@ -209,14 +209,14 @@
                                                         </Grid.ColumnDefinitions>
                                                         <TextBlock Text="{Binding FeedUrl}"
                                                                    FontSize="10"
-                                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                                   Foreground="{DynamicResource MutedTextBrush}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    ToolTip="{Binding FeedUrl}" />
                                                         <TextBlock Grid.Column="1"
                                                                    Text="{Binding PublisherWebsiteDisplay}"
                                                                    Margin="8,0,0,0"
                                                                    FontSize="10"
-                                                                   Foreground="{StaticResource AccentBrush}"
+                                                                   Foreground="{DynamicResource AccentBrush}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    ToolTip="{Binding WebsiteUrl}" />
                                                     </Grid>
@@ -237,7 +237,7 @@
                                                         <TextBlock Text="&#xE890;"
                                                                    FontFamily="Segoe MDL2 Assets"
                                                                    FontSize="16"
-                                                                   Foreground="{StaticResource AccentBrush}" />
+                                                                   Foreground="{DynamicResource AccentBrush}" />
                                                     </Button>
                                                     <Button Width="32"
                                                             Height="32"
@@ -255,11 +255,11 @@
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Text" Value="&#xE710;" />
-                                                                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding IsSubscribed}" Value="True">
                                                                             <Setter Property="Text" Value="&#xE738;" />
-                                                                            <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
+                                                                            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
@@ -276,7 +276,7 @@
                                        Margin="0,16,0,0"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Top"
-                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Foreground="{DynamicResource MutedTextBrush}"
                                        IsHitTestVisible="False"
                                        Visibility="{Binding IsCatalogResultsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         </Grid>
@@ -284,8 +284,8 @@
                                 Panel.ZIndex="1"
                                 Margin="12"
                                 Padding="16"
-                                Background="White"
-                            BorderBrush="{StaticResource ControlBorderBrush}"
+                                Background="{DynamicResource ContentBrush}"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
                                 BorderThickness="1"
                                 VerticalAlignment="Top"
                                 Visibility="{Binding HasCatalogLoadError, Converter={StaticResource BooleanToVisibilityConverter}}">

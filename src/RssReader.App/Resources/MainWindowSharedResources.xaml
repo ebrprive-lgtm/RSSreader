@@ -4,6 +4,7 @@
                     xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel">
     <local:OptionalUriConverter x:Key="OptionalUriConverter" />
     <Geometry x:Key="BackTrailIconGeometry">M 8,3 L 4,7 L 8,11 M 4,7 L 10,7 M 12,3 L 17,3 M 12,7 L 17,7 M 12,11 L 17,11</Geometry>
+    <Geometry x:Key="SplitPaneIconGeometry">M 2,2 L 18,2 L 18,16 L 2,16 Z M 9,2 L 9,16</Geometry>
     <Style x:Key="SidebarResizeSplitterStyle" TargetType="{x:Type GridSplitter}">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Focusable" Value="True" />
@@ -16,23 +17,38 @@
                                 Height="42"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center"
-                                Background="{StaticResource ControlBorderBrush}"
+                                Background="{DynamicResource ControlBorderBrush}"
                                 CornerRadius="2"
                                 Opacity="0.75" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ResizeGrip" Property="Background" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="ResizeGrip" Property="Background" Value="{DynamicResource AccentBrush}" />
                             <Setter TargetName="ResizeGrip" Property="Opacity" Value="1" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="ResizeGrip" Property="Background" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="ResizeGrip" Property="Background" Value="{DynamicResource AccentBrush}" />
                             <Setter TargetName="ResizeGrip" Property="Opacity" Value="1" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+    <Style x:Key="SplitPaneToggleButtonStyle"
+           TargetType="{x:Type Button}"
+           BasedOn="{StaticResource IconActionButtonStyle}">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="ToolTip" Value="Open selected articles in split view" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsSplitPaneEnabled}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                <Setter Property="ToolTip" Value="Turn off split view" />
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
     <Style x:Key="SearchClearButtonStyle"
            TargetType="{x:Type Button}"
@@ -51,24 +67,39 @@
     </Style>
     <Style x:Key="ArticleViewModeStyle" TargetType="RadioButton">
         <Setter Property="Padding" Value="10,6" />
-        <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="ModeBorder"
-                            Padding="{TemplateBinding Padding}"
-                            Background="Transparent"
-                            CornerRadius="4">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <Grid>
+                        <Border x:Name="ModeBorder"
+                                Padding="{TemplateBinding Padding}"
+                                Background="Transparent"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Border x:Name="FocusRing"
+                                Margin="-2"
+                                BorderBrush="{DynamicResource AccentBrush}"
+                                BorderThickness="2"
+                                CornerRadius="6"
+                                Opacity="0"
+                                IsHitTestVisible="False" />
+                    </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ModeBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="ModeBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
-                            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="ModeBorder" Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                             <Setter Property="FontWeight" Value="SemiBold" />
                         </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ModeBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

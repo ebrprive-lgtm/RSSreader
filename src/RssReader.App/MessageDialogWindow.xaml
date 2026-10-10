@@ -11,8 +11,8 @@
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        Background="{StaticResource WindowBrush}"
-        Foreground="{StaticResource TextBrush}">
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="36"
                             ResizeBorderThickness="0"
@@ -20,8 +20,8 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
     <Grid Margin="8">
-        <Border Background="{StaticResource ContentBrush}"
-                BorderBrush="{StaticResource ControlBorderBrush}"
+        <Border Background="{DynamicResource ContentBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="20">
@@ -51,7 +51,7 @@
                             Width="4"
                             Margin="0,2,16,2"
                             CornerRadius="2"
-                            Background="{StaticResource AccentBrush}" />
+                            Background="{DynamicResource AccentBrush}" />
                     <TextBlock x:Name="MessageText"
                                Grid.Column="1"
                                TextWrapping="Wrap"

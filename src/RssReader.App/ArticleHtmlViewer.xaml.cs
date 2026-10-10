@@ -3,9 +3,9 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using System.IO;
 using System.Diagnostics;
-using System.Text;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using RssReader.Domain;
 
 namespace RssReader.App;
 
@@ -21,7 +21,8 @@ public partial class ArticleHtmlViewer : UserControl
     private bool _isInitializing;
     private bool _isUnloaded;
     private Task _initializationTask = Task.CompletedTask;
-    private string? _pendingDocumentNavigationUri;
+    private bool _isArticleDocumentNavigationPending;
+    private ulong? _articleDocumentNavigationId;
     private readonly TaskCompletionSource _navigationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ArticleHtmlViewer()
@@ -58,11 +59,31 @@ public partial class ArticleHtmlViewer : UserControl
         string? articleUrl,
         string? feedUrl,
         bool limitArticleWidth = true,
-        string? imageUrl = null)
+        string? imageUrl = null,
+        ProfileReaderTheme readerTheme = ProfileReaderTheme.Light,
+        ProfileReaderTextSize textSize = ProfileReaderTextSize.Medium,
+        ProfileReaderLineSpacing lineSpacing = ProfileReaderLineSpacing.Normal,
+        ProfileReaderFontFamily fontFamily = ProfileReaderFontFamily.SansSerif)
     {
         _fallbackText = summary;
-        _document = ArticleHtmlDocumentBuilder.Build(content, summary, articleUrl, feedUrl, limitArticleWidth, imageUrl);
-        if (_isInitialized)
+        var document = ArticleHtmlDocumentBuilder.Build(
+            content,
+            summary,
+            articleUrl,
+            feedUrl,
+            limitArticleWidth,
+            imageUrl,
+            readerTheme,
+            textSize,
+            lineSpacing,
+            fontFamily);
+        if (string.Equals(_document, document, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _document = document;
+        if (_isInitialized && !_isUnloaded)
         {
             _resizeRedrawTimer.Stop();
             NavigateArticleDocument();
@@ -128,6 +149,8 @@ public partial class ArticleHtmlViewer : UserControl
     {
         _isUnloaded = true;
         _resizeRedrawTimer.Stop();
+        _isArticleDocumentNavigationPending = false;
+        _articleDocumentNavigationId = null;
         if (_isInitialized)
         {
             Browser.CoreWebView2?.Stop();
@@ -160,9 +183,12 @@ public partial class ArticleHtmlViewer : UserControl
             ? navigationUri.Scheme
             : null;
         Trace.WriteLine($"WebView2 article navigation starting: {LastNavigationUriScheme}");
-        if (string.Equals(e.Uri, _pendingDocumentNavigationUri, StringComparison.Ordinal))
+        if (_isArticleDocumentNavigationPending &&
+            !e.IsUserInitiated &&
+            string.Equals(LastNavigationUriScheme, "data", StringComparison.OrdinalIgnoreCase))
         {
-            _pendingDocumentNavigationUri = null;
+            _isArticleDocumentNavigationPending = false;
+            _articleDocumentNavigationId = e.NavigationId;
             return;
         }
 
@@ -189,6 +215,12 @@ public partial class ArticleHtmlViewer : UserControl
 
     private void CoreWebView2_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        if (_isUnloaded || _articleDocumentNavigationId != e.NavigationId)
+        {
+            return;
+        }
+
+        _articleDocumentNavigationId = null;
         LastNavigationSucceeded = e.IsSuccess;
         LastNavigationErrorStatus = e.WebErrorStatus;
         _navigationCompletion.TrySetResult();
@@ -199,6 +231,13 @@ public partial class ArticleHtmlViewer : UserControl
     internal void HandleNavigationResult(bool isSuccess, CoreWebView2WebErrorStatus webErrorStatus)
     {
         if (!isSuccess && webErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled)
+        {
+            return;
+        }
+
+        if (!isSuccess &&
+            webErrorStatus == CoreWebView2WebErrorStatus.ConnectionAborted &&
+            (_isArticleDocumentNavigationPending || _resizeRedrawTimer.IsEnabled))
         {
             return;
         }
@@ -230,8 +269,8 @@ public partial class ArticleHtmlViewer : UserControl
 
     private void NavigateArticleDocument()
     {
-        _pendingDocumentNavigationUri = "data:text/html;charset=utf-8;base64," +
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(_document));
+        _articleDocumentNavigationId = null;
+        _isArticleDocumentNavigationPending = true;
         DocumentNavigationCount++;
         try
         {
@@ -239,7 +278,7 @@ public partial class ArticleHtmlViewer : UserControl
         }
         catch
         {
-            _pendingDocumentNavigationUri = null;
+            _isArticleDocumentNavigationPending = false;
             throw;
         }
     }

@@ -4,14 +4,37 @@ namespace RssReader.Infrastructure;
 
 internal static class RawFeedArticleSelector
 {
+    public static string Serialize(XElement article)
+    {
+        var standaloneArticle = new XElement(article);
+        var inheritedNamespaces = article.AncestorsAndSelf()
+            .Reverse()
+            .SelectMany(element => element.Attributes().Where(attribute => attribute.IsNamespaceDeclaration))
+            .GroupBy(attribute => attribute.Name.LocalName, StringComparer.Ordinal)
+            .Select(group => group.Last());
+        foreach (var namespaceDeclaration in inheritedNamespaces)
+        {
+            if (standaloneArticle.Attribute(namespaceDeclaration.Name) is null)
+            {
+                standaloneArticle.SetAttributeValue(namespaceDeclaration.Name, namespaceDeclaration.Value);
+            }
+        }
+
+        return standaloneArticle.ToString(SaveOptions.None);
+    }
+
     public static XElement? Select(
         XElement feedRoot,
         string? externalId,
         string? link,
         string title,
-        Uri baseUri)
+        Uri baseUri,
+        ISet<XElement>? excludedArticles = null)
     {
-        var articles = feedRoot.Descendants().Where(IsArticleElement).ToArray();
+        var articles = feedRoot.Descendants()
+            .Where(IsArticleElement)
+            .Where(article => excludedArticles?.Contains(article) != true)
+            .ToArray();
         var selectedArticle = !string.IsNullOrWhiteSpace(externalId)
             ? articles.FirstOrDefault(article => string.Equals(
                 GetArticleId(article),

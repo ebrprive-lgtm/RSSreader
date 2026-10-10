@@ -61,6 +61,7 @@ public sealed class SqliteReaderStore : IReaderStore
                 Content TEXT NULL,
                 ImageUrl TEXT NULL,
                 Author TEXT NULL,
+                SourceXml TEXT NULL,
                 UNIQUE (FeedId, ExternalId)
             );
             CREATE TABLE IF NOT EXISTS ArticleCategories (
@@ -97,10 +98,12 @@ public sealed class SqliteReaderStore : IReaderStore
         await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken);
         var hasImageUrl = false;
         var hasAuthor = false;
+        var hasSourceXml = false;
         while (await columnsReader.ReadAsync(cancellationToken))
         {
             hasImageUrl |= columnsReader.GetString(1) == "ImageUrl";
             hasAuthor |= columnsReader.GetString(1) == "Author";
+            hasSourceXml |= columnsReader.GetString(1) == "SourceXml";
         }
 
         await columnsReader.DisposeAsync();
@@ -115,6 +118,13 @@ public sealed class SqliteReaderStore : IReaderStore
         {
             await using var migrationCommand = connection.CreateCommand();
             migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN Author TEXT NULL;";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!hasSourceXml)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = "ALTER TABLE Articles ADD COLUMN SourceXml TEXT NULL;";
             await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
         }
 

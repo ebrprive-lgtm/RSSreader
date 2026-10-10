@@ -11,11 +11,11 @@
         AllowsTransparency="True"
         Background="Transparent"
         ShowInTaskbar="False"
-        Foreground="{StaticResource TextBrush}"
+        Foreground="{DynamicResource TextBrush}"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Grid Margin="8">
-        <Border Background="{StaticResource WindowBrush}"
-                BorderBrush="{StaticResource ControlBorderBrush}"
+        <Border Background="{DynamicResource WindowBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="20">
@@ -41,13 +41,13 @@
                         <TextBlock x:Name="FeedNameText"
                                    Margin="0,3,8,0"
                                    FontSize="12"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </DockPanel>
                 <Grid Grid.Row="1" Margin="0,18,0,0">
-                    <Border Background="{StaticResource ContentBrush}"
-                            BorderBrush="{StaticResource ControlBorderBrush}"
+                    <Border Background="{DynamicResource ContentBrush}"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
                             BorderThickness="1"
                             CornerRadius="4">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="2">
@@ -67,7 +67,7 @@
                                Text="No tags yet"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                IsHitTestVisible="False" />
                 </Grid>
                 <Grid Grid.Row="2" Margin="0,12,0,0">
@@ -98,7 +98,7 @@
                                Grid.Row="1"
                                Grid.ColumnSpan="2"
                                Margin="0,4,0,0"
-                               Foreground="{StaticResource DestructiveBrush}"
+                               Foreground="{DynamicResource DestructiveBrush}"
                                TextWrapping="Wrap" />
                 </Grid>
                 <StackPanel Grid.Row="3"

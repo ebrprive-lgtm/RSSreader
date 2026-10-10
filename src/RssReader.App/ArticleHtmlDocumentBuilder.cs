@@ -1,34 +1,67 @@
 using System.Net;
 using HtmlAgilityPack;
+using RssReader.Domain;
 
 namespace RssReader.App;
 
 internal static class ArticleHtmlDocumentBuilder
 {
-    private const string ReaderStyles = """
-        :root { color-scheme: light; }
-        html, body { margin: 0; padding: 0; background: #fff; }
-        body { color: #202923; font: 16px/1.65 "Segoe UI", sans-serif; overflow-wrap: anywhere; }
-        main { box-sizing: border-box; width: 100%; padding: 12px 12px 24px; }
-        img { max-width: 100%; height: auto; vertical-align: middle; }
-        img.reader-centered-image { display: block; margin: 16px auto; }
-        a.reader-centered-image-link { clear: both; display: block; text-align: center; }
-        figure { margin: 16px 0; text-align: center; }
-        figcaption { color: #5d6a62; font-size: 0.9em; margin-top: 6px; }
-        a { color: #176b9a; text-decoration: underline; }
-        blockquote { border-left: 3px solid #a8b8ad; color: #4d5a52; margin: 1em 0; padding: 2px 0 2px 14px; }
-        table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
-        th, td { border: 1px solid #cbd5ce; padding: 6px 9px; text-align: left; vertical-align: top; }
-        pre { background: #f1f4f2; border-radius: 3px; overflow-wrap: anywhere; padding: 10px; white-space: pre-wrap; }
-        code, kbd, samp { font-family: Consolas, monospace; }
-        hr { border: 0; border-top: 1px solid #dfe6e1; margin: 1.5em 0; }
-        .reader-feed-preview { max-width: 760px; margin: 0 auto; }
-        .reader-feed-preview-image { margin: 0 0 20px; }
-        .reader-feed-preview-image img { width: 100%; max-height: 360px; object-fit: cover; border-radius: 12px; }
-        .reader-feed-preview-summary { font-size: 1.12em; }
-        .reader-feed-preview-note { background: #f1f4f2; border-left: 3px solid #86a58e; border-radius: 4px; color: #4d5a52; margin-top: 22px; padding: 12px 16px; }
-        .reader-feed-preview-link { font-weight: 600; }
-        """;
+    private static string BuildReaderStyles(
+        ProfileReaderTheme theme,
+        ProfileReaderTextSize textSize,
+        ProfileReaderLineSpacing lineSpacing,
+        ProfileReaderFontFamily fontFamily)
+    {
+        var colors = theme switch
+        {
+            ProfileReaderTheme.Dark => ("dark", "#202326", "#eef0f2", "#b4bac0", "#7dc3f1", "#485057", "#30353a", "#3a4147"),
+            ProfileReaderTheme.Warm => ("light", "#f8f2e6", "#45392b", "#705e48", "#765012", "#c5b89f", "#f0e7d7", "#efe6d6"),
+            _ => ("light", "#ffffff", "#202923", "#5d6a62", "#176b9a", "#a8b8ad", "#f1f4f2", "#dfe6e1")
+        };
+        var fontSize = textSize switch
+        {
+            ProfileReaderTextSize.Small => "14px",
+            ProfileReaderTextSize.Large => "18px",
+            _ => "16px"
+        };
+        var lineHeight = lineSpacing switch
+        {
+            ProfileReaderLineSpacing.Compact => "1.45",
+            ProfileReaderLineSpacing.Relaxed => "1.85",
+            _ => "1.65"
+        };
+        var fontFamilyStack = fontFamily switch
+        {
+            ProfileReaderFontFamily.Serif => "\"Georgia\", \"Times New Roman\", serif",
+            ProfileReaderFontFamily.Monospace => "\"Consolas\", \"Courier New\", monospace",
+            _ => "\"Segoe UI\", sans-serif"
+        };
+
+        return $$"""
+            :root { color-scheme: {{colors.Item1}}; --reader-background: {{colors.Item2}}; --reader-foreground: {{colors.Item3}}; --reader-muted: {{colors.Item4}}; --reader-link: {{colors.Item5}}; --reader-border: {{colors.Item6}}; --reader-surface: {{colors.Item7}}; --reader-note: {{colors.Item8}}; }
+            html, body { margin: 0; padding: 0; background: var(--reader-background) !important; }
+            body { color: var(--reader-foreground) !important; font: {{fontSize}}/{{lineHeight}} {{fontFamilyStack}}; overflow-wrap: anywhere; }
+            main { box-sizing: border-box; width: 100%; padding: 12px 12px 24px; }
+            img { max-width: 100%; height: auto; vertical-align: middle; }
+            img.reader-centered-image { display: block; margin: 16px auto; }
+            a.reader-centered-image-link { clear: both; display: block; text-align: center; }
+            figure { margin: 16px 0; text-align: center; }
+            figcaption { color: var(--reader-muted); font-size: 0.9em; margin-top: 6px; }
+            a { color: var(--reader-link) !important; text-decoration: underline; }
+            blockquote { border-left: 3px solid var(--reader-border); color: var(--reader-muted); margin: 1em 0; padding: 2px 0 2px 14px; }
+            table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; }
+            th, td { border: 1px solid var(--reader-border); padding: 6px 9px; text-align: left; vertical-align: top; }
+            pre { background: var(--reader-surface); border-radius: 3px; overflow-wrap: anywhere; padding: 10px; white-space: pre-wrap; }
+            code, kbd, samp { font-family: Consolas, monospace; }
+            hr { border: 0; border-top: 1px solid var(--reader-border); margin: 1.5em 0; }
+            .reader-feed-preview { max-width: 760px; margin: 0 auto; }
+            .reader-feed-preview-image { margin: 0 0 20px; }
+            .reader-feed-preview-image img { width: 100%; max-height: 360px; object-fit: cover; border-radius: 12px; }
+            .reader-feed-preview-summary { font-size: 1.12em; }
+            .reader-feed-preview-note { background: var(--reader-note); border-left: 3px solid var(--reader-border); border-radius: 4px; color: var(--reader-muted); margin-top: 22px; padding: 12px 16px; }
+            .reader-feed-preview-link { font-weight: 600; }
+            """;
+    }
 
     public static string Build(
         string? content,
@@ -36,7 +69,11 @@ internal static class ArticleHtmlDocumentBuilder
         string? articleUrl,
         string? feedUrl,
         bool limitArticleWidth = true,
-        string? imageUrl = null)
+        string? imageUrl = null,
+        ProfileReaderTheme readerTheme = ProfileReaderTheme.Light,
+        ProfileReaderTextSize textSize = ProfileReaderTextSize.Medium,
+        ProfileReaderLineSpacing lineSpacing = ProfileReaderLineSpacing.Normal,
+        ProfileReaderFontFamily fontFamily = ProfileReaderFontFamily.SansSerif)
     {
         var baseUrl = GetWebUrl(articleUrl) ?? GetWebUrl(feedUrl);
         var isFeedPreview = IsFeedPreview(content, summary);
@@ -54,6 +91,7 @@ internal static class ArticleHtmlDocumentBuilder
         {
             sanitizedFragment = BuildFeedPreview(sanitizedFragment, imageUrl, articleUrl, baseUrl);
         }
+        var readerStyles = BuildReaderStyles(readerTheme, textSize, lineSpacing, fontFamily);
 
         return $"""
             <!doctype html>
@@ -62,7 +100,7 @@ internal static class ArticleHtmlDocumentBuilder
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
               <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-              <style>{ReaderStyles}{widthLimitStyle}</style>
+              <style>{readerStyles}{widthLimitStyle}</style>
             </head>
             <body><main>{sanitizedFragment}</main></body>
             </html>

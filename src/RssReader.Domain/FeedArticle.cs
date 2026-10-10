@@ -10,7 +10,8 @@ public sealed record FeedArticle(
     string? Summary,
     string? Content,
     string? ImageUrl = null,
-    string? Author = null)
+    string? Author = null,
+    string? SourceXml = null)
 {
     public IReadOnlyList<ArticleCategory> Categories { get; init; } = [];
 }

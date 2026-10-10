@@ -35,6 +35,8 @@
 
         <SolidColorBrush x:Key="PrimaryPressedBrush" Color="#314E45" />
 
+        <SolidColorBrush x:Key="PrimaryActionForegroundBrush" Color="#FFFFFF" />
+
         <SolidColorBrush x:Key="DisabledSurfaceBrush" Color="#DCE5E0" />
 
         <SolidColorBrush x:Key="DestructiveBrush" Color="#A33C35" />
@@ -43,5 +45,23 @@
 
         <SolidColorBrush x:Key="SuccessBrush" Color="#218739" />
 
+        <SolidColorBrush x:Key="SuccessWashBrush" Color="#E8F4EA" />
+
+        <SolidColorBrush x:Key="SuccessBorderBrush" Color="#B7D8C0" />
+
+        <SolidColorBrush x:Key="SuccessHoverBrush" Color="#D7EBDD" />
+
+        <SolidColorBrush x:Key="SuccessPressedBrush" Color="#C4E0CB" />
+
         <SolidColorBrush x:Key="WarningBrush" Color="#A65B00" />
+
+        <SolidColorBrush x:Key="ModalScrimBrush" Color="#66000000" />
+
+        <SolidColorBrush x:Key="PublisherTopicPillBrush" Color="#E8F2EC" />
+
+        <SolidColorBrush x:Key="PublisherTopicPillTextBrush" Color="#53695C" />
+
+        <SolidColorBrush x:Key="UserFeedTagPillBrush" Color="#EAF1F8" />
+
+        <SolidColorBrush x:Key="UserFeedTagPillTextBrush" Color="#536B82" />
 </ResourceDictionary>

@@ -20,13 +20,21 @@ This guide records the shared visual language for the WPF reader. Prefer the sha
 | `SeparatorBrush` | `#E3E7E5` | Light separators between content sections and rows |
 | `PrimaryHoverBrush` | `#3B5D53` | Hover state for primary actions |
 | `PrimaryPressedBrush` | `#314E45` | Pressed state for primary actions |
+| `PrimaryActionForegroundBrush` | `#FFFFFF` | Primary-action text in the light theme |
 | `DisabledSurfaceBrush` | `#DCE5E0` | Disabled primary-action surface |
 | `DestructiveBrush` | `#A33C35` | Destructive actions and error text |
 | `DestructiveWashBrush` | `#FCE8E6` | Destructive icon-action hover surface |
 | `SuccessBrush` | `#218739` | Successful status |
+| `SuccessWashBrush` / `SuccessBorderBrush` | `#E8F4EA` / `#B7D8C0` | Successful status surfaces |
+| `SuccessHoverBrush` / `SuccessPressedBrush` | `#D7EBDD` / `#C4E0CB` | Successful action hover and pressed states |
 | `WarningBrush` | `#A65B00` | Warning status |
+| `ModalScrimBrush` | `#66000000` | Dimmed backdrop behind modal overlays |
+| `PublisherTopicPillBrush` / `PublisherTopicPillTextBrush` | `#E8F2EC` / `#53695C` | Publisher-provided topic pills |
+| `UserFeedTagPillBrush` / `UserFeedTagPillTextBrush` | `#EAF1F8` / `#536B82` | User-created feed-tag pills |
 
 Use semantic status colors only where meaning requires them. Prefer `DestructiveBrush` for shared error/destructive styling; retain another established red value only where a view-specific treatment requires it.
+
+The **Light**, **Dark**, and **Warm** application themes update this palette across open windows and dialogs. XAML references to palette brushes must use `DynamicResource` so existing controls refresh when the profile theme changes.
 
 ## Typography
 
@@ -38,6 +46,8 @@ Use the platform UI font inherited by WPF controls. Keep text compact and scanna
 - Metadata, counts, and helper text: 10-12 px in `MutedTextBrush`.
 
 Use `Segoe MDL2 Assets` for the existing icon glyphs. Pair icons with clear text for primary actions and leave about 8 px between an icon and its label.
+
+Article text size, line spacing, and font family are selected from the article viewer's compact typography popup; these settings affect article content only. Available font families are Segoe UI, Georgia, and Consolas.
 
 ## Layout and Shape
 
@@ -83,4 +93,4 @@ Use `Segoe MDL2 Assets` for the existing icon glyphs. Pair icons with clear text
 
 ## Resources
 
-The application-wide color brushes and reusable action/form/tab/menu/scrollbar control styles are declared in `src/RssReader.App/App.xaml`. Main-window feature-specific control styles remain in `src/RssReader.App/MainWindow.xaml`; dialog-specific styles remain with their owning window unless they are reused elsewhere.
+The application-wide color brushes are declared in `src/RssReader.App/Resources/AppThemeResources.xaml`, and reusable action/form/tab/menu/scrollbar styles are in the resource dictionaries merged by `src/RssReader.App/App.xaml`. Main-window feature-specific control styles remain in `src/RssReader.App/MainWindow.xaml`; dialog-specific styles remain with their owning window unless they are reused elsewhere.

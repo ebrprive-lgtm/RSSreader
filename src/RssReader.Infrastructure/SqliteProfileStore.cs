@@ -42,7 +42,14 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 AutoRefreshIntervalMinutes INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240)),
                 ShowRawFeedButton INTEGER NOT NULL DEFAULT 0 CHECK (ShowRawFeedButton IN (0, 1)),
                 LimitArticleWidth INTEGER NOT NULL DEFAULT 1 CHECK (LimitArticleWidth IN (0, 1)),
-                HideFollowedCatalogFeeds INTEGER NOT NULL DEFAULT 0 CHECK (HideFollowedCatalogFeeds IN (0, 1))
+                HideFollowedCatalogFeeds INTEGER NOT NULL DEFAULT 0 CHECK (HideFollowedCatalogFeeds IN (0, 1)),
+                ReadingLayout INTEGER NOT NULL DEFAULT 0 CHECK (ReadingLayout IN (0, 1)),
+                ArticleListDensity INTEGER NOT NULL DEFAULT 0 CHECK (ArticleListDensity IN (0, 1, 2)),
+                ReaderTheme INTEGER NOT NULL DEFAULT 0 CHECK (ReaderTheme IN (0, 1, 2)),
+                ReaderTextSize INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2)),
+                ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2)),
+                ReaderFontFamily INTEGER NOT NULL DEFAULT 0 CHECK (ReaderFontFamily IN (0, 1, 2)),
+                SplitPaneListRatio REAL NOT NULL DEFAULT 0.45 CHECK (SplitPaneListRatio BETWEEN 0.3 AND 0.7)
             );
             INSERT INTO Profiles (Id, Name, IsCatalogMaster, PasswordHash, RecoveryEmail)
             VALUES ($id, $name, 1, NULL, NULL)
@@ -76,6 +83,41 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             "HideFollowedCatalogFeeds",
             "INTEGER NOT NULL DEFAULT 0 CHECK (HideFollowedCatalogFeeds IN (0, 1))",
             cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ReadingLayout",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (ReadingLayout IN (0, 1))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ArticleListDensity",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (ArticleListDensity IN (0, 1, 2))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ReaderTheme",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (ReaderTheme IN (0, 1, 2))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ReaderTextSize",
+            "INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ReaderLineSpacing",
+            "INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "ReaderFontFamily",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (ReaderFontFamily IN (0, 1, 2))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "SplitPaneListRatio",
+            "REAL NOT NULL DEFAULT 0.45 CHECK (SplitPaneListRatio BETWEEN 0.3 AND 0.7)",
+            cancellationToken);
     }
 
     public async Task<ProfilePreferences> GetPreferencesAsync(
@@ -87,7 +129,8 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         command.CommandText = """
                  SELECT StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
                          RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
-                         HideFollowedCatalogFeeds
+                         HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
+                         ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio
             FROM ProfilePreferences
             WHERE ProfileId = $profileId;
             """;
@@ -109,7 +152,14 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             reader.GetInt32(6),
             reader.GetInt64(7) == 1,
             reader.GetInt64(8) == 1,
-            reader.GetInt64(9) == 1);
+            reader.GetInt64(9) == 1,
+            (ProfileReadingLayout)reader.GetInt32(10),
+            (ProfileArticleListDensity)reader.GetInt32(11),
+            (ProfileReaderTheme)reader.GetInt32(12),
+            (ProfileReaderTextSize)reader.GetInt32(13),
+            (ProfileReaderLineSpacing)reader.GetInt32(14),
+            (ProfileReaderFontFamily)reader.GetInt32(15),
+            reader.GetDouble(16));
     }
 
     public async Task SavePreferencesAsync(
@@ -123,10 +173,12 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             INSERT INTO ProfilePreferences (
                 ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
                 RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
-                HideFollowedCatalogFeeds)
+                HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
+                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio)
             VALUES ($profileId, $startPage, $presentation, $articleSort, $hideReadArticles, $folderArticleLimitPerFeed,
                     $refreshFeedsWhenOpened, $autoRefreshIntervalMinutes, $showRawFeedButton, $limitArticleWidth,
-                    $hideFollowedCatalogFeeds)
+                    $hideFollowedCatalogFeeds, $readingLayout, $articleListDensity, $readerTheme, $readerTextSize,
+                    $readerLineSpacing, $readerFontFamily, $splitPaneListRatio)
             ON CONFLICT(ProfileId) DO UPDATE SET
                 StartPage = excluded.StartPage,
                 Presentation = excluded.Presentation,
@@ -137,7 +189,14 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 AutoRefreshIntervalMinutes = excluded.AutoRefreshIntervalMinutes,
                 ShowRawFeedButton = excluded.ShowRawFeedButton,
                 LimitArticleWidth = excluded.LimitArticleWidth,
-                HideFollowedCatalogFeeds = excluded.HideFollowedCatalogFeeds;
+                HideFollowedCatalogFeeds = excluded.HideFollowedCatalogFeeds,
+                ReadingLayout = excluded.ReadingLayout,
+                ArticleListDensity = excluded.ArticleListDensity,
+                ReaderTheme = excluded.ReaderTheme,
+                ReaderTextSize = excluded.ReaderTextSize,
+                ReaderLineSpacing = excluded.ReaderLineSpacing,
+                ReaderFontFamily = excluded.ReaderFontFamily,
+                SplitPaneListRatio = excluded.SplitPaneListRatio;
             """;
         command.Parameters.AddWithValue("$profileId", profileId);
         command.Parameters.AddWithValue("$startPage", (int)preferences.StartPage);
@@ -150,6 +209,13 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         command.Parameters.AddWithValue("$showRawFeedButton", preferences.ShowRawFeedButton ? 1 : 0);
         command.Parameters.AddWithValue("$limitArticleWidth", preferences.LimitArticleWidth ? 1 : 0);
         command.Parameters.AddWithValue("$hideFollowedCatalogFeeds", preferences.HideFollowedCatalogFeeds ? 1 : 0);
+        command.Parameters.AddWithValue("$readingLayout", (int)preferences.ReadingLayout);
+        command.Parameters.AddWithValue("$articleListDensity", (int)preferences.ArticleListDensity);
+        command.Parameters.AddWithValue("$readerTheme", (int)preferences.ReaderTheme);
+        command.Parameters.AddWithValue("$readerTextSize", (int)preferences.ReaderTextSize);
+        command.Parameters.AddWithValue("$readerLineSpacing", (int)preferences.ReaderLineSpacing);
+        command.Parameters.AddWithValue("$readerFontFamily", (int)preferences.ReaderFontFamily);
+        command.Parameters.AddWithValue("$splitPaneListRatio", preferences.SplitPaneListRatio);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Xml;
 using RssReader.Domain;
 
 namespace RssReader.Application;
@@ -37,19 +40,15 @@ public sealed class FeedRefreshService(
             cancellationToken);
     }
 
-    public async Task<string> GetRawArticleContentAsync(
+    public async Task<RawArticleContent> GetRawArticleContentAsync(
         string profileId,
         string feedId,
         string? externalId,
         string? link,
         string title,
+        string? cachedSourceXml = null,
         CancellationToken cancellationToken = default)
     {
-        if (feedDownloader is not IRawFeedContentDownloader rawFeedContentDownloader)
-        {
-            throw new InvalidOperationException("Raw feed content is not supported by the configured downloader.");
-        }
-
         var subscriptions = await readerStore.GetSubscriptionsAsync(profileId, cancellationToken);
         if (!subscriptions.Any(subscription => subscription.FeedId == feedId))
         {
@@ -59,12 +58,45 @@ public sealed class FeedRefreshService(
         var feed = (await catalogStore.GetFeedsForProfileAsync(profileId, cancellationToken))
             .FirstOrDefault(candidate => candidate.Id == feedId)
             ?? throw new InvalidOperationException("The feed is no longer in the catalog.");
-        return await rawFeedContentDownloader.DownloadRawArticleContentAsync(
-            feed,
-            externalId,
-            link,
-            title,
-            cancellationToken);
+
+        if (feedDownloader is not IRawFeedContentDownloader rawFeedContentDownloader)
+        {
+            return GetCachedArticleContent(cachedSourceXml)
+                ?? throw new InvalidOperationException("Raw feed content is not supported by the configured downloader.");
+        }
+
+        try
+        {
+            var rawContent = await rawFeedContentDownloader.DownloadRawArticleContentAsync(
+                feed,
+                externalId,
+                link,
+                title,
+                cancellationToken);
+            return new RawArticleContent(rawContent, IsCached: false);
+        }
+        catch (HttpRequestException exception) when (HasCachedSource(cachedSourceXml))
+        {
+            return LogCachedFallback(cachedSourceXml!, exception);
+        }
+        catch (InvalidDataException exception) when (HasCachedSource(cachedSourceXml))
+        {
+            return LogCachedFallback(cachedSourceXml!, exception);
+        }
+        catch (XmlException exception) when (HasCachedSource(cachedSourceXml))
+        {
+            return LogCachedFallback(cachedSourceXml!, exception);
+        }
+        catch (IOException exception) when (HasCachedSource(cachedSourceXml))
+        {
+            return LogCachedFallback(cachedSourceXml!, exception);
+        }
+        catch (TaskCanceledException exception) when (
+            !cancellationToken.IsCancellationRequested &&
+            HasCachedSource(cachedSourceXml))
+        {
+            return LogCachedFallback(cachedSourceXml!, exception);
+        }
     }
 
     private async Task<FeedRefreshSummary> RefreshSubscriptionsAsync(
@@ -161,8 +193,23 @@ public sealed class FeedRefreshService(
             item.ImageUrl)
         {
             Categories = item.Categories ?? [],
-            Author = item.Author
+            Author = item.Author,
+            SourceXml = item.SourceXml
         };
+    }
+
+    private static bool HasCachedSource(string? cachedSourceXml) =>
+        !string.IsNullOrWhiteSpace(cachedSourceXml);
+
+    private static RawArticleContent? GetCachedArticleContent(string? cachedSourceXml) =>
+        HasCachedSource(cachedSourceXml)
+            ? new RawArticleContent(cachedSourceXml!, IsCached: true)
+            : null;
+
+    private static RawArticleContent LogCachedFallback(string cachedSourceXml, Exception exception)
+    {
+        Trace.TraceWarning($"The live article XML could not be loaded; using its cached copy. {exception.Message}");
+        return new RawArticleContent(cachedSourceXml, IsCached: true);
     }
 }
 

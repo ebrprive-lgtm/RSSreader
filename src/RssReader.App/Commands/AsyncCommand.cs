@@ -10,6 +10,8 @@ public sealed class AsyncCommand(Func<Task> execute, Func<bool>? canExecute = nu
 
     public bool CanExecute(object? parameter) => !_isExecuting && (canExecute?.Invoke() ?? true);
 
+    public void NotifyCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+
     public async void Execute(object? parameter) => await ExecuteAsync();
 
     public async Task ExecuteAsync()
@@ -42,6 +44,8 @@ public sealed class AsyncCommand<T>(Func<T, Task> execute, Func<T, bool>? canExe
 
     public bool CanExecute(object? parameter) =>
         !_isExecuting && parameter is T item && (canExecute?.Invoke(item) ?? true);
+
+    public void NotifyCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
 
     public async void Execute(object? parameter)
     {

@@ -11,7 +11,7 @@
         AllowsTransparency="True"
         Background="Transparent"
         ShowInTaskbar="False"
-        Foreground="{StaticResource TextBrush}"
+        Foreground="{DynamicResource TextBrush}"
         Loaded="Window_Loaded"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
@@ -30,10 +30,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource AccentWashBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -42,8 +42,8 @@
         </Style>
     </Window.Resources>
     <Grid Margin="8">
-        <Border Background="{StaticResource WindowBrush}"
-                BorderBrush="{StaticResource ControlBorderBrush}"
+        <Border Background="{DynamicResource WindowBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="9">
@@ -76,7 +76,7 @@
                             AutomationProperties.Name="Close dialog"
                             Click="CloseWindow_Click" />
                 </Grid>
-                <Border Grid.Row="1" Height="1" Margin="-9,9" Background="{StaticResource SeparatorBrush}" />
+                <Border Grid.Row="1" Height="1" Margin="-9,9" Background="{DynamicResource SeparatorBrush}" />
                 <Grid Grid.Row="2">
                     <ListBox x:Name="FoldersListBox"
                              ItemsSource="{Binding VisibleFolders}"
@@ -90,7 +90,7 @@
                                     <TextBlock Text="&#xE8B7;"
                                                FontFamily="Segoe MDL2 Assets"
                                                FontSize="16"
-                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Foreground="{DynamicResource MutedTextBrush}"
                                                VerticalAlignment="Center" />
                                     <TextBlock Text="{Binding}"
                                                Margin="12,0,0,0"
@@ -102,7 +102,7 @@
                     </ListBox>
                     <TextBlock x:Name="EmptyFoldersMessage"
                                Text="No folders yet. Create one to follow this source."
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                TextWrapping="Wrap"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
@@ -110,7 +110,7 @@
                                TextAlignment="Center"
                                Visibility="Collapsed" />
                 </Grid>
-                <Border Grid.Row="3" Height="1" Margin="-9,0" VerticalAlignment="Top" Background="{StaticResource SeparatorBrush}" />
+                <Border Grid.Row="3" Height="1" Margin="-9,0" VerticalAlignment="Top" Background="{DynamicResource SeparatorBrush}" />
                 <Button Grid.Row="3"
                         Click="NewFolder_Click"
                         HorizontalAlignment="Left"
@@ -118,7 +118,7 @@
                         Padding="8,8"
                         Background="Transparent"
                         BorderThickness="0"
-                        Foreground="{StaticResource AccentBrush}">
+                        Foreground="{DynamicResource AccentBrush}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE710;" FontFamily="Segoe MDL2 Assets" Margin="0,0,8,0" />
                         <TextBlock Text="New Folder" FontWeight="SemiBold" />

@@ -5,22 +5,49 @@
     <Style x:Key="ArticleFilterToggleStyle" TargetType="ToggleButton">
         <Setter Property="Width" Value="32" />
         <Setter Property="Height" Value="32" />
-        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="FilterBorder" Background="{TemplateBinding Background}" CornerRadius="4">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <Grid>
+                        <Border x:Name="FilterBorder" Background="{TemplateBinding Background}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Border x:Name="FocusRing"
+                                Margin="-2"
+                                BorderBrush="{DynamicResource AccentBrush}"
+                                BorderThickness="2"
+                                CornerRadius="6"
+                                Opacity="0"
+                                IsHitTestVisible="False" />
+                    </Grid>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="FilterBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
-                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True" />
+                                <Condition Property="IsChecked" Value="False" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="FilterBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
+                        </MultiTrigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="FilterBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
-                            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            <Setter TargetName="FilterBorder" Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsPressed" Value="True" />
+                                <Condition Property="IsChecked" Value="False" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="FilterBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
+                        </MultiTrigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
+                            <Setter Property="Opacity" Value="0.6" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -56,14 +83,17 @@
         </Setter>
     </Style>
     <ItemsPanelTemplate x:Key="ArticleCardsPanel">
-        <vwp:VirtualizingWrapPanel Orientation="Horizontal" ItemSize="322,382" SpacingMode="None" />
+        <vwp:VirtualizingWrapPanel Orientation="Horizontal"
+                                   ItemSize="{Binding DataContext.ArticleCardItemSize, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                   SpacingMode="None" />
     </ItemsPanelTemplate>
     <Style x:Key="ArticleCardsListStyle" TargetType="ListBox" BasedOn="{StaticResource VirtualizedArticleListStyle}">
         <Setter Property="ItemsPanel" Value="{StaticResource ArticleCardsPanel}" />
         <Setter Property="ItemContainerStyle">
             <Setter.Value>
                 <Style TargetType="ListBoxItem">
-                    <Setter Property="Width" Value="322" />
+                    <Setter Property="Width"
+                            Value="{Binding DataContext.ArticleCardItemWidth, RelativeSource={RelativeSource AncestorType=ListBox}}" />
                     <Setter Property="Padding" Value="0" />
                     <Setter Property="BorderThickness" Value="0" />
                     <Setter Property="Background" Value="Transparent" />

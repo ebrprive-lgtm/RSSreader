@@ -18,8 +18,8 @@
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
     <Border Margin="8"
-            Background="{StaticResource ContentBrush}"
-            BorderBrush="{StaticResource ControlBorderBrush}"
+            Background="{DynamicResource ContentBrush}"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
             BorderThickness="1"
             CornerRadius="8">
         <Grid Margin="24">
@@ -48,7 +48,7 @@
                         Padding="0"
                         Background="Transparent"
                         BorderThickness="0"
-                        Foreground="{StaticResource MutedTextBrush}"
+                        Foreground="{DynamicResource MutedTextBrush}"
                         Style="{StaticResource IconActionButtonStyle}"
                         AutomationProperties.Name="Close dialog"
                         ToolTip="Close"
@@ -58,7 +58,7 @@
             <TextBlock x:Name="DialogDescription"
                        Grid.Row="1"
                        Margin="0,7,0,16"
-                       Foreground="{StaticResource MutedTextBrush}"
+                       Foreground="{DynamicResource MutedTextBrush}"
                        TextWrapping="Wrap" />
             <Grid Grid.Row="2" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
@@ -104,7 +104,7 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Border BorderBrush="{StaticResource ControlBorderBrush}"
+                        <Border BorderBrush="{DynamicResource ControlBorderBrush}"
                                 BorderThickness="0,0,0,1"
                                 Padding="8,10">
                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -117,7 +117,7 @@
                                     <TextBlock Text="{Binding Details}"
                                                Margin="0,3,0,0"
                                                FontSize="11"
-                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Foreground="{DynamicResource MutedTextBrush}"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                             </CheckBox>
@@ -133,7 +133,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="SelectionSummary"
                            VerticalAlignment="Center"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            AutomationProperties.LiveSetting="Polite" />
                 <Button x:Name="CreateCollectionButton"
                         Grid.Column="1"

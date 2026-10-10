@@ -10,6 +10,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Navigation;
 using System.Windows.Threading;
 using System.Diagnostics;
+using System.Windows.Input;
 using RssReader.App.ViewModels;
 using RssReader.Domain;
 
@@ -34,10 +35,12 @@ public partial class MainWindow : Window
 
     internal MainWindow(MainWindowViewModel viewModel, WindowPlacementStore windowPlacementStore)
     {
+        AppThemeManager.Apply(viewModel.ReaderTheme);
         InitializeComponent();
         _windowPlacementStore = windowPlacementStore;
         _viewModel = viewModel;
         DataContext = viewModel;
+        UpdateSplitPaneColumnWidths();
         RestoreWindowPlacement(viewModel);
         viewModel.FolderSelectionRequested = ShowFolderSelectionAsync;
         viewModel.ConfirmUnfollowRequested = ConfirmUnfollowAsync;
@@ -49,6 +52,7 @@ public partial class MainWindow : Window
         }
 
         viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        viewModel.OriginalArticleRequested += OpenExternalUri;
         SidebarView.LogoutRequested += SidebarView_LogoutRequested;
         SidebarView.PreferencesRequested += SidebarView_PreferencesRequested;
         ArticleReaderView.SourceLinkRequested += SourceLink_RequestNavigate;
@@ -61,6 +65,7 @@ public partial class MainWindow : Window
         {
             _autoRefreshTimer.Stop();
             viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            viewModel.OriginalArticleRequested -= OpenExternalUri;
             SidebarView.LogoutRequested -= SidebarView_LogoutRequested;
             SidebarView.PreferencesRequested -= SidebarView_PreferencesRequested;
             ArticleReaderView.SourceLinkRequested -= SourceLink_RequestNavigate;
@@ -211,7 +216,63 @@ public partial class MainWindow : Window
         UpdateShellGridClip();
     }
 
-    private void ShellGrid_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateShellGridClip();
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.K ||
+            Keyboard.Modifiers != ModifierKeys.Control ||
+            e.OriginalSource is TextBoxBase or PasswordBox ||
+            e.OriginalSource is ComboBox { IsEditable: true } ||
+            _viewModel is null)
+        {
+            return;
+        }
+
+        var palette = new CommandPaletteWindow(_viewModel.CreateCommandPaletteItems())
+        {
+            Owner = this
+        };
+        palette.ShowDialog();
+        e.Handled = true;
+    }
+
+    private void ShellGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateShellGridClip();
+    }
+
+    private void WorkspaceGrid_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        _viewModel?.UpdateSplitPaneViewportWidth(e.NewSize.Width);
+
+    private async void SplitPaneResizeSplitter_DragCompleted(object? sender, DragCompletedEventArgs e)
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        var listWidth = ReadingWorkspaceGrid.ColumnDefinitions[0].ActualWidth;
+        var readerWidth = ReadingWorkspaceGrid.ColumnDefinitions[2].ActualWidth;
+        var totalWidth = listWidth + readerWidth;
+        if (!double.IsFinite(totalWidth) || totalWidth <= 0)
+        {
+            return;
+        }
+
+        await _viewModel.UpdateSplitPaneListRatioAsync(listWidth / totalWidth);
+    }
+
+    private void UpdateSplitPaneColumnWidths()
+    {
+        if (_viewModel is null || ReadingWorkspaceGrid.ColumnDefinitions.Count < 3)
+        {
+            return;
+        }
+
+        ReadingWorkspaceGrid.ColumnDefinitions[0].Width =
+            new GridLength(_viewModel.SplitPaneListRatio, GridUnitType.Star);
+        ReadingWorkspaceGrid.ColumnDefinitions[2].Width =
+            new GridLength(1 - _viewModel.SplitPaneListRatio, GridUnitType.Star);
+    }
 
     private void UpdateShellGridClip()
     {
@@ -230,6 +291,16 @@ public partial class MainWindow : Window
 
     private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainWindowViewModel.SplitPaneListRatio))
+        {
+            UpdateSplitPaneColumnWidths();
+        }
+
+        if (e.PropertyName == nameof(MainWindowViewModel.ReaderTheme) && _viewModel is not null)
+        {
+            AppThemeManager.Apply(_viewModel.ReaderTheme);
+        }
+
         if (e.PropertyName == nameof(MainWindowViewModel.SelectedArticle))
         {
             if (_viewModel?.SelectedArticle is { } selectedArticle)
@@ -321,7 +392,7 @@ public partial class MainWindow : Window
         try
         {
             var rawContent = await _viewModel.GetRawArticleContentAsync(article);
-            var dialog = new RawFeedWindow(article.Source, rawContent) { Owner = this };
+            var dialog = new RawFeedWindow(article.Source, rawContent.Xml, rawContent.IsCached) { Owner = this };
             dialog.Show();
         }
         catch (Exception exception)

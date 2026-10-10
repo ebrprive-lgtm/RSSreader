@@ -16,8 +16,9 @@
     MinWidth="760"
     MinHeight="540"
     Background="Transparent"
-    Foreground="{StaticResource TextBrush}"
-    StateChanged="MainWindow_StateChanged">
+    Foreground="{DynamicResource TextBrush}"
+    StateChanged="MainWindow_StateChanged"
+    PreviewKeyDown="MainWindow_PreviewKeyDown">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="34"
                             ResizeBorderThickness="6"
@@ -41,13 +42,13 @@
     </Window.Resources>
 
     <Border x:Name="WindowResizeFrame"
-            Background="{StaticResource WindowFrameBrush}"
+            Background="{DynamicResource WindowFrameBrush}"
             CornerRadius="18"
             SnapsToDevicePixels="True">
         <Border x:Name="MainWindowSurface"
                 Margin="6"
-                Background="{StaticResource ContentBrush}"
-                BorderBrush="{StaticResource WindowFrameBrush}"
+                Background="{DynamicResource ContentBrush}"
+                BorderBrush="{DynamicResource WindowFrameBrush}"
                 BorderThickness="1"
                 CornerRadius="18"
                 SnapsToDevicePixels="True">
@@ -67,7 +68,11 @@
 
         <local:SidebarView x:Name="SidebarView" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Panel.ZIndex="10" />
 
-        <Grid Grid.Row="1" Grid.Column="1" Margin="38,0,42,28">
+        <Grid x:Name="WorkspaceGrid"
+              Grid.Row="1"
+              Grid.Column="1"
+              Margin="38,0,42,28"
+              SizeChanged="WorkspaceGrid_SizeChanged">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -76,7 +81,7 @@
                 <DockPanel.Style>
                     <Style TargetType="DockPanel">
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsReadingViewVisible}" Value="True">
+                            <DataTrigger Binding="{Binding IsFullPageReadingViewVisible}" Value="True">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                         </Style.Triggers>
@@ -85,7 +90,7 @@
                 <Button x:Name="WorkspaceBackButton"
                         DockPanel.Dock="Left"
                         Margin="0,0,10,0"
-                        Foreground="{StaticResource AccentBrush}"
+                        Foreground="{DynamicResource AccentBrush}"
                         Style="{StaticResource IconActionButtonStyle}"
                         ToolTip="Back to previous view (Esc)"
                         AutomationProperties.Name="Go back to previous view"
@@ -94,7 +99,7 @@
                     <Path Width="18"
                           Height="18"
                           Data="{StaticResource BackTrailIconGeometry}"
-                          Stroke="{StaticResource AccentBrush}"
+                          Stroke="{DynamicResource AccentBrush}"
                           StrokeThickness="1.6"
                           StrokeStartLineCap="Round"
                           StrokeEndLineCap="Round"
@@ -106,12 +111,12 @@
                     <TextBlock Text="{Binding VisibleArticles.Count, StringFormat={}{0} articles}"
                                Margin="0,4,0,0"
                                FontSize="12"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                Visibility="{Binding IsArticleCountVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <TextBlock Text="{Binding StatusMessage}"
                                Margin="0,5,0,0"
                                FontSize="11"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                TextWrapping="Wrap" />
                 </StackPanel>
                 <Button x:Name="RefreshButton"
@@ -156,14 +161,68 @@
                 </Grid>
             </DockPanel>
 
-            <Grid Grid.Row="1">
-                <local:ArticleListView x:Name="ArticleListView" />
+            <Grid x:Name="ReadingWorkspaceGrid" Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="45*"
+                                      MinWidth="{Binding SplitPaneListMinimumWidth}" />
+                    <ColumnDefinition Width="{Binding SplitPaneDividerColumnWidth}" />
+                    <ColumnDefinition Width="55*"
+                                      MinWidth="{Binding SplitPaneReaderMinimumWidth}" />
+                </Grid.ColumnDefinitions>
+                <local:ArticleListView x:Name="ArticleListView"
+                                       Grid.Column="0"
+                                       Grid.ColumnSpan="{Binding ArticleListGridColumnSpan}" />
 
-                <local:ArticleReaderView x:Name="ArticleReaderView" />
+                <GridSplitter x:Name="SplitPaneResizeSplitter"
+                              Grid.Column="1"
+                              Width="18"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              ResizeDirection="Columns"
+                              ResizeBehavior="PreviousAndNext"
+                              ShowsPreview="False"
+                              Cursor="SizeWE"
+                              DragCompleted="SplitPaneResizeSplitter_DragCompleted"
+                              Style="{StaticResource SidebarResizeSplitterStyle}"
+                              ToolTip="Drag to resize article list and reader"
+                              AutomationProperties.Name="Resize article list and reader"
+                              Visibility="{Binding IsSplitPaneActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <Border x:Name="SplitPaneEmptyReaderPlaceholder"
+                        Grid.Column="2"
+                        Background="{DynamicResource ContentBrush}"
+                        Visibility="{Binding IsSplitPaneEmptyReaderPlaceholderVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="28">
+                        <Path Width="28"
+                              Height="24"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,12"
+                              Data="{StaticResource SplitPaneIconGeometry}"
+                              Stroke="{DynamicResource MutedTextBrush}"
+                              StrokeThickness="1.5"
+                              StrokeLineJoin="Round" />
+                        <TextBlock Text="Choose an article to read"
+                                   HorizontalAlignment="Center"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock Text="Select an item from the list to show it here."
+                                   Margin="0,6,0,0"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"
+                                   Foreground="{DynamicResource MutedTextBrush}" />
+                    </StackPanel>
+                </Border>
+                <local:ArticleReaderView x:Name="ArticleReaderView"
+                                         Grid.Column="{Binding ArticleReaderGridColumn}"
+                                         Grid.ColumnSpan="{Binding ArticleReaderGridColumnSpan}" />
 
-                <local:CatalogBrowserView x:Name="CatalogBrowserView" />
+                <local:CatalogBrowserView x:Name="CatalogBrowserView"
+                                          Grid.ColumnSpan="3" />
 
-                <local:CatalogAdminView x:Name="CatalogAdminView" />
+                <local:CatalogAdminView x:Name="CatalogAdminView"
+                                        Grid.ColumnSpan="3" />
 
             </Grid>
         </Grid>
@@ -171,7 +230,7 @@
 
         <Grid Grid.Row="0"
               Grid.ColumnSpan="2"
-              Background="White"
+              Background="{DynamicResource ContentBrush}"
               Panel.ZIndex="30"
               shell:WindowChrome.IsHitTestVisibleInChrome="False">
             <TextBlock Text="RSS Reader"
@@ -179,7 +238,7 @@
                        FontSize="13"
                        FontWeight="SemiBold"
                        VerticalAlignment="Center"
-                       Foreground="{StaticResource TextBrush}" />
+                       Foreground="{DynamicResource TextBrush}" />
             <local:FeedWarningsView x:Name="FeedWarningsView"
                                     HorizontalAlignment="Right"
                                     VerticalAlignment="Center"

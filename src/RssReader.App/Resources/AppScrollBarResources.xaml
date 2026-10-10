@@ -16,7 +16,7 @@
         </Style>
 
         <Style x:Key="ScrollBarThumbStyle" TargetType="{x:Type Thumb}">
-            <Setter Property="Background" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource MutedTextBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type Thumb}">
@@ -26,10 +26,10 @@
                                 Margin="1" />
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ThumbSurface" Property="Background" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="ThumbSurface" Property="Background" Value="{DynamicResource AccentBrush}" />
                             </Trigger>
                             <Trigger Property="IsDragging" Value="True">
-                                <Setter TargetName="ThumbSurface" Property="Background" Value="{StaticResource PrimaryPressedBrush}" />
+                                <Setter TargetName="ThumbSurface" Property="Background" Value="{DynamicResource PrimaryPressedBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

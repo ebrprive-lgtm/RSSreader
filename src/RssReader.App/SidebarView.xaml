@@ -20,6 +20,7 @@
                                 <ColumnDefinition Width="36" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock FontFamily="Segoe MDL2 Assets"
                                        FontSize="9"
@@ -61,11 +62,38 @@
                             <TextBlock Grid.Column="2"
                                        Text="{Binding Count}"
                                        FontSize="11"
-                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Foreground="{DynamicResource MutedTextBrush}"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
                                        TextAlignment="Right"
                                        Visibility="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <Border Grid.Column="3"
+                                    Margin="7,0,0,0"
+                                    Padding="5,1"
+                                    Background="{DynamicResource AccentWashBrush}"
+                                    CornerRadius="7"
+                                    ToolTip="{Binding UnreadCountAutomationName}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding HasUnreadCount}" Value="True" />
+                                                    <Condition Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                               Value="True" />
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding UnreadCount}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           AutomationProperties.Name="{Binding UnreadCountAutomationName}" />
+                            </Border>
                         </Grid>
                     </Button>
                     <Button Width="28"
@@ -76,7 +104,7 @@
                             Content="&#xE74D;"
                             FontFamily="Segoe MDL2 Assets"
                             FontSize="14"
-                            Foreground="{StaticResource MutedTextBrush}"
+                            Foreground="{DynamicResource MutedTextBrush}"
                             Background="Transparent"
                             BorderThickness="0"
                             Visibility="{Binding IsFolder, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -98,11 +126,11 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{StaticResource DestructiveWashBrush}" />
-                                                    <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
+                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
                                                 </Trigger>
                                                 <Trigger Property="IsPressed" Value="True">
-                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="#F3D1CE" />
+                                                    <Setter TargetName="DeleteButtonBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -189,7 +217,7 @@
                 Width="{Binding SidebarPanelWidth}"
                 HorizontalAlignment="Left"
                 Panel.ZIndex="10"
-                Background="{StaticResource SidebarBrush}"
+                Background="{DynamicResource SidebarBrush}"
                 Padding="14,14,12,12"
                 MouseEnter="SidebarPanel_MouseEnter"
                 MouseLeave="SidebarPanel_MouseLeave">
@@ -216,8 +244,8 @@
                             ToolTip="Profile options">
                         <Button.ContextMenu>
                             <ContextMenu x:Name="ProfileContextMenu"
-                                         Background="White"
-                                         BorderBrush="{StaticResource ControlBorderBrush}"
+                                         Background="{DynamicResource ContentBrush}"
+                                         BorderBrush="{DynamicResource ControlBorderBrush}"
                                          BorderThickness="1"
                                          Padding="5">
                                 <MenuItem Header="Preferences" Click="PreferencesMenuItem_Click" Padding="12,8" />
@@ -231,11 +259,11 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Border Width="26" Height="26" CornerRadius="13" Background="{StaticResource AccentBrush}">
+                            <Border Width="26" Height="26" CornerRadius="13" Background="{DynamicResource AccentBrush}">
                                 <TextBlock Text="&#xE77B;"
                                            FontFamily="Segoe MDL2 Assets"
                                            FontSize="12"
-                                           Foreground="White"
+                                           Foreground="{DynamicResource PrimaryActionForegroundBrush}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center" />
                             </Border>
@@ -248,7 +276,7 @@
                                        Text="&#xE70D;"
                                        FontFamily="Segoe MDL2 Assets"
                                        FontSize="11"
-                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Foreground="{DynamicResource MutedTextBrush}"
                                        VerticalAlignment="Center" />
                         </Grid>
                     </Button>
@@ -263,20 +291,20 @@
                 <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <ItemsControl ItemsSource="{Binding PrimaryLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
-                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="8,12" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="8,12" />
                         <ItemsControl ItemsSource="{Binding ReadingLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
                         <TextBlock Text="FEEDS"
                                    Margin="10,25,0,8"
                                    FontSize="11"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <ItemsControl ItemsSource="{Binding FeedLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
                         <TextBlock Text="TAGS"
                                    Margin="10,23,0,8"
                                    FontSize="11"
                                    FontWeight="SemiBold"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <ItemsControl ItemsSource="{Binding TagLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
                         <ItemsControl ItemsSource="{Binding AdminLinks}"
@@ -289,7 +317,7 @@
                            Margin="9,12,0,2"
                            FontSize="10"
                            FontWeight="Bold"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            Visibility="{Binding IsSidebarExpanded, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </Grid>
         </Border>

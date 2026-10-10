@@ -8,6 +8,50 @@ namespace RssReader.Infrastructure.Tests;
 public sealed class SqliteReaderStoreTests
 {
     [TestMethod]
+    public async Task InitializeMigratesSourceXmlColumnForExistingDatabases()
+    {
+        using var database = new TemporaryDatabase();
+        await new SqliteProfileStore(database.Path).InitializeAsync();
+        await new SqliteCatalogStore(database.Path).InitializeAsync();
+        await using (var connection = new SqliteConnection($"Data Source={database.Path}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE Articles (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    FeedId TEXT NOT NULL,
+                    ExternalId TEXT NOT NULL,
+                    Title TEXT NOT NULL,
+                    Link TEXT NULL,
+                    PublishedAt TEXT NULL,
+                    Summary TEXT NULL,
+                    Content TEXT NULL,
+                    ImageUrl TEXT NULL,
+                    Author TEXT NULL
+                );
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var reader = new SqliteReaderStore(database.Path);
+        await reader.InitializeAsync();
+
+        await using var migratedConnection = new SqliteConnection($"Data Source={database.Path}");
+        await migratedConnection.OpenAsync();
+        await using var migratedCommand = migratedConnection.CreateCommand();
+        migratedCommand.CommandText = "PRAGMA table_info(Articles);";
+        await using var migratedColumns = await migratedCommand.ExecuteReaderAsync();
+        var hasSourceXml = false;
+        while (await migratedColumns.ReadAsync())
+        {
+            hasSourceXml |= migratedColumns.GetString(1) == "SourceXml";
+        }
+
+        Assert.IsTrue(hasSourceXml);
+    }
+
+    [TestMethod]
     public async Task SaveArticlesReportsOnlyNewRowsAndStillUpdatesExistingRows()
     {
         using var database = new TemporaryDatabase();
@@ -23,11 +67,16 @@ public sealed class SqliteReaderStoreTests
         await catalog.AddFeedAsync(feed);
         await reader.AddFolderAsync(profile.Id, "News");
         await reader.SubscribeAsync(profile.Id, feed.Id, "News");
-        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", null, DateTimeOffset.UtcNow, null, null);
+        var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", null, DateTimeOffset.UtcNow, null, null)
+        {
+            SourceXml = "<item><guid>item-1</guid></item>"
+        };
 
         Assert.AreEqual(1, await reader.SaveArticlesAsync(feed.Id, [article]));
         Assert.AreEqual(0, await reader.SaveArticlesAsync(feed.Id, [article with { Title = "Updated headline" }]));
-        Assert.AreEqual("Updated headline", (await reader.GetArticlesAsync(profile.Id)).Single().Article.Title);
+        var storedArticle = (await reader.GetArticlesAsync(profile.Id)).Single().Article;
+        Assert.AreEqual("Updated headline", storedArticle.Title);
+        Assert.AreEqual(article.SourceXml, storedArticle.SourceXml);
     }
 
     [TestMethod]
@@ -102,6 +151,7 @@ public sealed class SqliteReaderStoreTests
         var article = new FeedArticle("article-1", feed.Id, "item-1", "Headline", "https://example.com/story", publishedAt, "<p>Summary &amp; <strong>details</strong></p>", "<p>Body<br/>second line</p>", "https://example.com/cover.jpg")
         {
             Author = "Example Author",
+            SourceXml = "<item><guid>item-1</guid></item>",
             Categories = [new ArticleCategory("Press Releases")]
         };
         await reader.SaveArticlesAsync(feed.Id, [article]);
@@ -121,6 +171,7 @@ public sealed class SqliteReaderStoreTests
         Assert.AreEqual("<p>Body<br/>second line</p>", firstArticles[0].Article.Content);
         Assert.AreEqual("https://example.com/cover.jpg", firstArticles[0].Article.ImageUrl);
         Assert.AreEqual("Example Author", firstArticles[0].Article.Author);
+        Assert.AreEqual(article.SourceXml, firstArticles[0].Article.SourceXml);
         Assert.AreEqual("Press Releases", firstArticles[0].Article.Categories.Single().Term);
         Assert.IsTrue(firstArticles[0].IsRead);
         Assert.IsTrue(firstArticles[0].IsSaved);

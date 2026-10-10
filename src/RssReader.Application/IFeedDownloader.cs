@@ -31,4 +31,7 @@ public sealed record DownloadedFeedItem(
     string? Content,
     string? ImageUrl = null,
     IReadOnlyList<ArticleCategory>? Categories = null,
-    string? Author = null);
+    string? Author = null,
+    string? SourceXml = null);
+
+public sealed record RawArticleContent(string Xml, bool IsCached);

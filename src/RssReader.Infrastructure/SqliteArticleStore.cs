@@ -54,7 +54,7 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
             SELECT article.Id, article.FeedId, article.ExternalId, article.Title, article.Link,
                      article.PublishedAt, article.Summary, article.Content, article.ImageUrl, feed.Name,
                    subscription.FolderName, state.IsRead, state.IsSaved
-                   , article.Author
+                   , article.Author, article.SourceXml
             FROM Articles AS article
             INNER JOIN ProfileSubscriptions AS subscription ON subscription.FeedId = article.FeedId
             INNER JOIN CatalogFeeds AS feed ON feed.Id = article.FeedId
@@ -90,7 +90,8 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
                 reader.IsDBNull(8) ? null : reader.GetString(8))
             {
                 Categories = categoriesByArticle.GetValueOrDefault(reader.GetString(0)) ?? [],
-                Author = reader.IsDBNull(13) ? null : reader.GetString(13)
+                Author = reader.IsDBNull(13) ? null : reader.GetString(13),
+                SourceXml = reader.IsDBNull(14) ? null : reader.GetString(14)
             };
             articles.Add(new ArticleForProfile(
                 article,
@@ -121,8 +122,8 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content, ImageUrl, Author)
-                VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content, $imageUrl, $author)
+                INSERT INTO Articles (Id, FeedId, ExternalId, Title, Link, PublishedAt, Summary, Content, ImageUrl, Author, SourceXml)
+                VALUES ($id, $feedId, $externalId, $title, $link, $publishedAt, $summary, $content, $imageUrl, $author, $sourceXml)
                 ON CONFLICT(Id) DO NOTHING;
                 """;
             command.Parameters.AddWithValue("$id", article.Id);
@@ -135,6 +136,7 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
             command.Parameters.AddWithValue("$content", (object?)article.Content ?? DBNull.Value);
             command.Parameters.AddWithValue("$imageUrl", (object?)article.ImageUrl ?? DBNull.Value);
             command.Parameters.AddWithValue("$author", (object?)article.Author ?? DBNull.Value);
+            command.Parameters.AddWithValue("$sourceXml", (object?)article.SourceXml ?? DBNull.Value);
             var inserted = await command.ExecuteNonQueryAsync(cancellationToken);
             if (inserted > 0)
             {
@@ -150,7 +152,8 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
                         Summary = $summary,
                         Content = $content,
                         ImageUrl = $imageUrl,
-                        Author = $author
+                        Author = $author,
+                        SourceXml = COALESCE($sourceXml, SourceXml)
                     WHERE Id = $id;
                     """;
                 await command.ExecuteNonQueryAsync(cancellationToken);

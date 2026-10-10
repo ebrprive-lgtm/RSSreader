@@ -23,25 +23,55 @@ internal static class SyndicationFeedParser
 
     public static IReadOnlyList<DownloadedFeedItem> Parse(XmlReader reader, Uri baseUri)
     {
-        var syndicationFeed = SyndicationFeed.Load(reader)
+        var sourceFeed = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        var feedRoot = sourceFeed.Root
+            ?? throw new InvalidDataException("The response does not contain an RSS or Atom feed.");
+        using var feedTextReader = new StringReader(sourceFeed.ToString(SaveOptions.DisableFormatting));
+        using var feedReader = XmlReader.Create(feedTextReader, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = 5_000_000,
+            MaxCharactersFromEntities = 0
+        });
+        var syndicationFeed = SyndicationFeed.Load(feedReader)
             ?? throw new InvalidDataException("The response does not contain an RSS or Atom feed.");
 
+        var matchedSourceArticles = new HashSet<XElement>();
         return syndicationFeed.Items
             .Take(MaximumItems)
-            .Select(item => new DownloadedFeedItem(
-                item.Id,
-                item.Title?.Text ?? string.Empty,
-                ResolveLink(item.Links.FirstOrDefault()?.Uri, baseUri),
-                item.PublishDate != DateTimeOffset.MinValue
-                    ? item.PublishDate
-                    : item.LastUpdatedTime != DateTimeOffset.MinValue
-                        ? item.LastUpdatedTime
-                        : null,
-                HtmlTextParser.ToPlainText(item.Summary?.Text),
-                GetArticleContent(item) ?? GetTextContent(item.Summary),
-                FindImageUrl(item, baseUri),
-                GetCategories(item),
-                GetAuthor(item)))
+            .Select(item =>
+            {
+                var title = item.Title?.Text ?? string.Empty;
+                var link = ResolveLink(item.Links.FirstOrDefault()?.Uri, baseUri);
+                var sourceArticle = RawFeedArticleSelector.Select(
+                    feedRoot,
+                    item.Id,
+                    link,
+                    title,
+                    baseUri,
+                    matchedSourceArticles);
+                if (sourceArticle is not null)
+                {
+                    matchedSourceArticles.Add(sourceArticle);
+                }
+
+                return new DownloadedFeedItem(
+                    item.Id,
+                    title,
+                    link,
+                    item.PublishDate != DateTimeOffset.MinValue
+                        ? item.PublishDate
+                        : item.LastUpdatedTime != DateTimeOffset.MinValue
+                            ? item.LastUpdatedTime
+                            : null,
+                    GetSummary(item),
+                    GetArticleContent(item) ?? GetTextContent(item.Summary),
+                    FindImageUrl(item, baseUri),
+                    GetCategories(item),
+                    GetAuthor(item),
+                    sourceArticle is null ? null : RawFeedArticleSelector.Serialize(sourceArticle));
+            })
             .ToArray();
     }
 
@@ -125,15 +155,11 @@ internal static class SyndicationFeedParser
             return imageEnclosure!.AbsoluteUri;
         }
 
-        foreach (var extension in item.ElementExtensions)
+        var mediaImages = GetMediaRssElements(item, "thumbnail")
+            .Concat(GetMediaRssElements(item, "content").Where(IsMediaImage));
+        foreach (var element in mediaImages)
         {
-            if (extension.OuterNamespace != MediaRssNamespace ||
-                extension.OuterName is not ("thumbnail" or "content"))
-            {
-                continue;
-            }
-
-            var imageUrl = (string?)extension.GetObject<XElement>().Attribute("url");
+            var imageUrl = (string?)element.Attribute("url");
             if (TryResolveImageUrl(imageUrl, baseUri, out var resolvedImageUrl))
             {
                 return resolvedImageUrl;
@@ -162,6 +188,37 @@ internal static class SyndicationFeedParser
         }
 
         return null;
+    }
+
+    private static string? GetSummary(SyndicationItem item)
+    {
+        var summary = HtmlTextParser.ToPlainText(item.Summary?.Text);
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            return summary;
+        }
+
+        return HtmlTextParser.ToPlainText(
+            GetMediaRssElements(item, "description")
+                .Select(element => element.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private static IEnumerable<XElement> GetMediaRssElements(SyndicationItem item, string elementName)
+    {
+        var elementNameWithNamespace = XName.Get(elementName, MediaRssNamespace);
+        return item.ElementExtensions
+            .Where(extension => extension.OuterNamespace == MediaRssNamespace)
+            .SelectMany(extension => extension.GetObject<XElement>().DescendantsAndSelf(elementNameWithNamespace));
+    }
+
+    private static bool IsMediaImage(XElement element)
+    {
+        var medium = (string?)element.Attribute("medium");
+        var type = (string?)element.Attribute("type");
+        return string.Equals(medium, "image", StringComparison.OrdinalIgnoreCase) ||
+               (string.IsNullOrWhiteSpace(medium) &&
+                (string.IsNullOrWhiteSpace(type) || type.StartsWith("image/", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static string? GetArticleContent(SyndicationItem item)

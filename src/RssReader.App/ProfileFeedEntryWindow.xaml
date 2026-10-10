@@ -10,12 +10,12 @@
         AllowsTransparency="True"
         Background="Transparent"
         ShowInTaskbar="False"
-        Foreground="{StaticResource TextBrush}"
+        Foreground="{DynamicResource TextBrush}"
         Loaded="Window_Loaded"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Grid Margin="8">
-        <Border Background="{StaticResource WindowBrush}"
-                BorderBrush="{StaticResource ControlBorderBrush}"
+        <Border Background="{DynamicResource WindowBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="22">
@@ -52,7 +52,7 @@
                              Padding="9,7" />
                     <TextBlock Text="This feed is private to your profile and will be added to Unfiled."
                                Margin="0,9,0,0"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{DynamicResource MutedTextBrush}"
                                TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Grid.Row="2"

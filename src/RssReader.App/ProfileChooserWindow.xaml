@@ -9,8 +9,8 @@
         MinWidth="440"
         MinHeight="520"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource WindowBrush}"
-        Foreground="{StaticResource TextBrush}"
+        Background="{DynamicResource WindowBrush}"
+        Foreground="{DynamicResource TextBrush}"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewKeyUp="Window_PreviewKeyUp"
         Deactivated="Window_Deactivated">
@@ -23,7 +23,7 @@
     <Window.Resources>
         <Style x:Key="ProfileButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource ControlBorderBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="14,12" />
             <Setter Property="Margin" Value="0,0,0,8" />
@@ -40,7 +40,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -50,9 +50,9 @@
         <Style x:Key="DeleteProfileButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="34" />
             <Setter Property="Height" Value="34" />
-            <Setter Property="Background" Value="#FBEDEC" />
-            <Setter Property="Foreground" Value="{StaticResource DestructiveBrush}" />
-            <Setter Property="BorderBrush" Value="#E9CBC7" />
+            <Setter Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -66,10 +66,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="DeleteBorder" Property="Background" Value="#F4DAD7" />
+                                <Setter TargetName="DeleteBorder" Property="Background" Value="{DynamicResource DestructiveWashBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="DeleteBorder" Property="Background" Value="#EFCBC7" />
+                                <Setter TargetName="DeleteBorder" Property="Background" Value="{DynamicResource NeutralPressedBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -79,8 +79,8 @@
     </Window.Resources>
 
         <Border Margin="8"
-            Background="{StaticResource ContentBrush}"
-            BorderBrush="{StaticResource ControlBorderBrush}"
+            Background="{DynamicResource ContentBrush}"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
             BorderThickness="1"
             CornerRadius="6">
         <Grid Margin="24">
@@ -92,7 +92,7 @@
         <Grid Margin="0,8,0,28">
             <StackPanel>
                 <TextBlock Text="RSS READER"
-                           Foreground="{StaticResource AccentBrush}"
+                           Foreground="{DynamicResource AccentBrush}"
                            FontSize="12"
                            FontWeight="Bold" />
                 <TextBlock Text="Your reading space"
@@ -149,9 +149,9 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="36" Height="36" CornerRadius="18" Background="{StaticResource AccentWashBrush}">
+                                            <Border Width="36" Height="36" CornerRadius="18" Background="{DynamicResource AccentWashBrush}">
                                                 <TextBlock Text="{Binding Name, StringFormat={}{0:0}}"
-                                                           Foreground="{StaticResource AccentBrush}"
+                                                           Foreground="{DynamicResource AccentBrush}"
                                                            FontWeight="Bold"
                                                            FontSize="16"
                                                            HorizontalAlignment="Center"
@@ -161,13 +161,13 @@
                                                 <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" />
                                                 <TextBlock Text="Catalog management"
                                                            FontSize="12"
-                                                           Foreground="{StaticResource MutedTextBrush}"
+                                                           Foreground="{DynamicResource MutedTextBrush}"
                                                            Visibility="{Binding IsCatalogMaster, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                             </StackPanel>
                                             <TextBlock Grid.Column="2"
                                                        Text="&#xE76C;"
                                                        FontFamily="Segoe MDL2 Assets"
-                                                       Foreground="{StaticResource MutedTextBrush}"
+                                                       Foreground="{DynamicResource MutedTextBrush}"
                                                        VerticalAlignment="Center" />
                                         </Grid>
                                     </Button>
@@ -227,7 +227,7 @@
                          Text="{Binding RecoveryEmail, UpdateSourceTrigger=PropertyChanged}"
                          Margin="0,6,0,4"
                          Padding="10,8" />
-                <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource DestructiveBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource DestructiveBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
                         <Button Content="Cancel" Click="CancelCreate_Click" Style="{StaticResource SecondaryActionButtonStyle}" Padding="14,9" Margin="0,0,8,0" />
                     <Button Content="Create profile"
@@ -245,7 +245,7 @@
                              AutomationProperties.Name="Profile password"
                              PasswordChanged="UnlockPasswordBox_PasswordChanged"
                              Padding="10,8" />
-                <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource DestructiveBrush}" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource DestructiveBrush}" Margin="0,8,0,0" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
                         <Button Content="Cancel" Click="CancelUnlock_Click" Style="{StaticResource SecondaryActionButtonStyle}" Padding="14,9" Margin="0,0,8,0" />
                     <Button Content="Unlock"

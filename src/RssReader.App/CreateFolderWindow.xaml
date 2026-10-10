@@ -11,12 +11,12 @@
         AllowsTransparency="True"
         Background="Transparent"
         ShowInTaskbar="False"
-        Foreground="{StaticResource TextBrush}"
+        Foreground="{DynamicResource TextBrush}"
         Loaded="Window_Loaded"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Grid Margin="8">
-        <Border Background="{StaticResource WindowBrush}"
-                BorderBrush="{StaticResource ControlBorderBrush}"
+        <Border Background="{DynamicResource WindowBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="20">
@@ -67,7 +67,7 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE710;"
                                                FontFamily="Segoe MDL2 Assets"
-                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Foreground="{DynamicResource MutedTextBrush}"
                                                Margin="0,0,10,0" />
                                     <TextBlock Text="{Binding}" />
                                 </StackPanel>
@@ -77,7 +77,7 @@
                 </ItemsControl>
                 <TextBlock x:Name="ErrorMessageText"
                            Grid.Row="3"
-                           Foreground="{StaticResource DestructiveBrush}"
+                           Foreground="{DynamicResource DestructiveBrush}"
                            VerticalAlignment="Bottom"
                            TextWrapping="Wrap" />
                 <StackPanel Grid.Row="4"

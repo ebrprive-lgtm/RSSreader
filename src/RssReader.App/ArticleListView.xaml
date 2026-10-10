@@ -14,6 +14,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid Grid.Row="0"
@@ -73,6 +74,13 @@
                             Visibility="{Binding IsArticleTopicFilterActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <ToggleButton Content="Select"
+                                  IsChecked="{Binding IsBulkSelectionMode, Mode=TwoWay}"
+                                  Padding="8,5"
+                                  Margin="0,0,8,0"
+                                  Style="{StaticResource SecondaryActionToggleButtonStyle}"
+                                  ToolTip="Select multiple articles for bulk actions"
+                                  AutomationProperties.Name="Toggle article selection mode" />
                     <ToggleButton Content="&#xE8D4;"
                                   FontFamily="Segoe MDL2 Assets"
                                   IsChecked="{Binding UnreadOnly, Mode=TwoWay}"
@@ -87,7 +95,7 @@
                                   ToolTip="Show saved articles only"
                                   AutomationProperties.Name="Saved only"
                                   Margin="0,0,10,0" />
-                    <Border BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="2">
+                    <Border BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="2">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Content="Cards"
                                          GroupName="ArticleViewMode"
@@ -104,7 +112,7 @@
                         </StackPanel>
                     </Border>
                     <Border Margin="8,0,0,0"
-                            BorderBrush="{StaticResource ControlBorderBrush}"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
                             BorderThickness="1"
                             CornerRadius="5"
                             Padding="2"
@@ -120,10 +128,70 @@
                                          Style="{StaticResource ArticleViewModeStyle}" />
                         </StackPanel>
                     </Border>
+                    <Button x:Name="ArticleListSplitPaneToggleButton"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource SplitPaneToggleButtonStyle}"
+                            Command="{Binding ToggleSplitPaneCommand}"
+                            AutomationProperties.Name="Toggle split view">
+                        <Path Width="18"
+                              Height="16"
+                              Data="{StaticResource SplitPaneIconGeometry}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"
+                              StrokeThickness="1.5"
+                              StrokeLineJoin="Round"
+                              IsHitTestVisible="False" />
+                    </Button>
                 </StackPanel>
             </DockPanel>
+            <Border Grid.Row="2"
+                    Margin="0,0,0,10"
+                    Padding="8,6"
+                    Background="{DynamicResource AccentWashBrush}"
+                    CornerRadius="5"
+                    Visibility="{Binding IsBulkSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <WrapPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding BulkSelectedArticleCount, StringFormat={}{0} selected}"
+                               Margin="0,0,10,0"
+                               VerticalAlignment="Center"
+                               AutomationProperties.Name="Selected article count" />
+                    <Button Content="Select visible"
+                            Command="{Binding SelectAllVisibleArticlesCommand}"
+                            Margin="0,0,6,0"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                    <Button Content="Clear selection"
+                            Command="{Binding ClearBulkSelectionCommand}"
+                            Margin="0,0,6,0"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                    <Button Content="Mark read"
+                            Command="{Binding BulkMarkReadCommand}"
+                            Margin="0,0,6,0"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                    <Button Content="Mark unread"
+                            Command="{Binding BulkMarkUnreadCommand}"
+                            Margin="0,0,6,0"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                    <Button Content="Save"
+                            Command="{Binding BulkSaveCommand}"
+                            Margin="0,0,6,0"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                    <Button Content="Unsave"
+                            Command="{Binding BulkUnsaveCommand}"
+                            Margin="0,0,6,0"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                    <Button Content="Done"
+                            Command="{Binding ToggleBulkSelectionModeCommand}"
+                            Padding="8,5"
+                            Style="{StaticResource SecondaryActionButtonStyle}" />
+                </WrapPanel>
+            </Border>
             <ListBox x:Name="ArticleRowsList"
-                     Grid.Row="2"
+                     Grid.Row="3"
                      Style="{StaticResource VirtualizedArticleListStyle}"
                      ScrollViewer.VerticalScrollBarVisibility="Hidden"
                      ItemsSource="{Binding ArticleListView}"
@@ -143,11 +211,11 @@
                             </GroupStyle.Panel>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="{StaticResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,14,0,7">
+                                    <Border BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,14,0,7">
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="13"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextBrush}" />
+                                                   Foreground="{DynamicResource TextBrush}" />
                                     </Border>
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
@@ -155,7 +223,7 @@
                     </ListBox.GroupStyle>
             </ListBox>
             <ListBox x:Name="ArticleMagazineList"
-                     Grid.Row="2"
+                     Grid.Row="3"
                      Style="{StaticResource VirtualizedArticleListStyle}"
                      ScrollViewer.VerticalScrollBarVisibility="Hidden"
                      ItemsSource="{Binding ArticleListView}"
@@ -175,11 +243,11 @@
                             </GroupStyle.Panel>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="{StaticResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,14,0,7">
+                                    <Border BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,14,0,7">
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="13"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextBrush}" />
+                                                   Foreground="{DynamicResource TextBrush}" />
                                     </Border>
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
@@ -187,14 +255,14 @@
                     </ListBox.GroupStyle>
             </ListBox>
             <ListBox x:Name="ArticleCardsList"
-                     Grid.Row="2"
+                     Grid.Row="3"
                      Style="{StaticResource DateArticleCardsListStyle}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ItemsSource="{Binding DateSortedArticleListView}"
                      ItemTemplate="{StaticResource ArticleCardTemplate}">
             </ListBox>
             <ListBox x:Name="ArticleFolderCardsList"
-                     Grid.Row="2"
+                     Grid.Row="3"
                      Style="{StaticResource FolderArticleCardsListStyle}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ItemsSource="{Binding FolderSortedArticleListView}"
@@ -208,24 +276,60 @@
                             </GroupStyle.Panel>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <Border BorderBrush="{StaticResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,14,0,7">
+                                    <Border BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,14,0,7">
                                         <TextBlock Text="{Binding Name}"
                                                    FontSize="13"
                                                    FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextBrush}" />
+                                                   Foreground="{DynamicResource TextBrush}" />
                                     </Border>
                                 </DataTemplate>
                             </GroupStyle.HeaderTemplate>
                         </GroupStyle>
                     </ListBox.GroupStyle>
             </ListBox>
-            <StackPanel Grid.Row="2"
+            <StackPanel Grid.Row="3"
+                        Width="420"
                         VerticalAlignment="Center"
                         HorizontalAlignment="Center"
                         Visibility="{Binding IsArticleListEmpty, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <TextBlock Text="{Binding ArticleListEmptyMessage, Mode=OneWay}"
-                           FontSize="18"
+                <TextBlock Text="&#xE783;"
+                           FontFamily="Segoe MDL2 Assets"
+                           FontSize="28"
+                           Foreground="{DynamicResource MutedTextBrush}"
+                           HorizontalAlignment="Center"
+                           AutomationProperties.Name="Empty article list" />
+                <TextBlock Text="{Binding ArticleListEmptyTitle, Mode=OneWay}"
+                           Margin="0,14,0,0"
+                           FontSize="20"
                            FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+                <TextBlock Text="{Binding ArticleListEmptyMessage, Mode=OneWay}"
+                           Margin="0,7,0,0"
+                           FontSize="13"
+                           Foreground="{DynamicResource MutedTextBrush}"
+                           TextWrapping="Wrap"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+                <Button Content="{Binding EmptyStateActionLabel}"
+                        Command="{Binding EmptyStateActionCommand}"
+                        Margin="0,16,0,0"
+                        Padding="12,7"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SecondaryActionButtonStyle}"
+                        Visibility="{Binding IsEmptyStateActionVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            </StackPanel>
+            <StackPanel Grid.Row="3"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Visibility="{Binding IsArticleListLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ProgressBar Width="180"
+                             Height="4"
+                             IsIndeterminate="True" />
+                <TextBlock Text="Loading your reading list..."
+                           Margin="0,12,0,0"
+                           FontSize="13"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            HorizontalAlignment="Center" />
             </StackPanel>
         </Grid>

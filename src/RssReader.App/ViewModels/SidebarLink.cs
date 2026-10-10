@@ -13,6 +13,7 @@ public sealed class SidebarLink(
 {
     private bool _isSelected;
     private bool _isExpanded;
+    private int _unreadCount;
 
     public string Route { get; } = route;
     public string Label { get; } = label;
@@ -22,6 +23,21 @@ public sealed class SidebarLink(
     public SidebarLink? ParentFolder { get; } = parentFolder;
     public string? Count { get; } = count;
     public Thickness IndentMargin { get; } = new(indentLevel * 14, 0, 0, 0);
+    public bool HasUnreadCount => UnreadCount > 0;
+    public string UnreadCountAutomationName => $"{UnreadCount} unread articles";
+
+    public int UnreadCount
+    {
+        get => _unreadCount;
+        set
+        {
+            if (SetProperty(ref _unreadCount, Math.Max(0, value)))
+            {
+                OnPropertyChanged(nameof(HasUnreadCount));
+                OnPropertyChanged(nameof(UnreadCountAutomationName));
+            }
+        }
+    }
 
     public bool IsExpanded
     {

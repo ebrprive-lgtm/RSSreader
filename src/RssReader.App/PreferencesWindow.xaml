@@ -9,8 +9,8 @@
         MinHeight="540"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Background="White"
-        Foreground="{StaticResource TextBrush}">
+        Background="{DynamicResource ContentBrush}"
+        Foreground="{DynamicResource TextBrush}">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="40"
                             ResizeBorderThickness="6"
@@ -19,7 +19,7 @@
     </shell:WindowChrome.WindowChrome>
     <Window.Resources>
         <Style x:Key="PreferenceNavigationStyle" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Padding" Value="10,9" />
@@ -36,7 +36,7 @@
                             </Border>
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderBrush="{DynamicResource AccentBrush}"
                                     BorderThickness="2"
                                     CornerRadius="6"
                                     Opacity="0"
@@ -44,18 +44,18 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="NavigationBorder" Property="Background" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="NavigationBorder" Property="Background" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="NavigationBorder" Property="Background" Value="{StaticResource AccentWashBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="NavigationBorder" Property="Background" Value="{DynamicResource AccentWashBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -64,7 +64,7 @@
         </Style>
         <Style x:Key="PreferenceOptionStyle" TargetType="RadioButton">
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Margin" Value="0,4" />
             <Setter Property="Padding" Value="2" />
             <Setter Property="Cursor" Value="Hand" />
@@ -79,14 +79,14 @@
                             <Ellipse x:Name="RadioRing"
                                      Width="15"
                                      Height="15"
-                                     Stroke="{StaticResource ControlBorderBrush}"
+                                     Stroke="{DynamicResource ControlBorderBrush}"
                                      StrokeThickness="1"
-                                     Fill="{StaticResource ContentBrush}"
+                                     Fill="{DynamicResource ContentBrush}"
                                      VerticalAlignment="Center" />
                             <Ellipse x:Name="RadioDot"
                                      Width="7"
                                      Height="7"
-                                     Fill="{StaticResource AccentBrush}"
+                                     Fill="{DynamicResource AccentBrush}"
                                      Visibility="Collapsed"
                                      VerticalAlignment="Center" />
                             <ContentPresenter Grid.Column="1"
@@ -96,7 +96,7 @@
                                               VerticalAlignment="Center" />
                             <Border x:Name="FocusRing"
                                     Margin="-2"
-                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderBrush="{DynamicResource AccentBrush}"
                                     BorderThickness="2"
                                     CornerRadius="5"
                                     Opacity="0"
@@ -104,17 +104,17 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="RadioRing" Property="Fill" Value="{StaticResource NeutralHoverBrush}" />
+                                <Setter TargetName="RadioRing" Property="Fill" Value="{DynamicResource NeutralHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="RadioRing" Property="Stroke" Value="{StaticResource AccentBrush}" />
+                                <Setter TargetName="RadioRing" Property="Stroke" Value="{DynamicResource AccentBrush}" />
                                 <Setter TargetName="RadioDot" Property="Visibility" Value="Visible" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="FocusRing" Property="Opacity" Value="1" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
                                 <Setter Property="Cursor" Value="Arrow" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -124,8 +124,8 @@
         </Style>
     </Window.Resources>
     <Grid Margin="8">
-        <Border Background="{StaticResource ContentBrush}"
-                BorderBrush="{StaticResource ControlBorderBrush}"
+        <Border Background="{DynamicResource ContentBrush}"
+                BorderBrush="{DynamicResource ControlBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6">
         <Grid>
@@ -134,7 +134,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" BorderBrush="{StaticResource ControlBorderBrush}" BorderThickness="0,0,1,0" Padding="16,22">
+        <Border Grid.Column="0" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,0,1,0" Padding="16,22">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top"
                            Text="Preferences"
@@ -183,7 +183,7 @@
                     <StackPanel x:Name="GeneralPanel">
                         <TextBlock Text="Start page" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Choose the page shown when you open this profile."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,10" />
                         <RadioButton x:Name="StartTodayOption" Content="Today" GroupName="StartPage" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="StartFirstFolderOption" Content="First folder" GroupName="StartPage" Style="{StaticResource PreferenceOptionStyle}" />
@@ -193,40 +193,70 @@
                     <StackPanel x:Name="AppearancePanel" Visibility="Collapsed">
                         <TextBlock Text="Default presentation" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Choose how articles appear when this profile opens."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,10" />
                         <RadioButton x:Name="PresentationTitleOnlyOption" Content="Title-only view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="PresentationMagazineOption" Content="Magazine view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="PresentationCardsOption" Content="Cards view" GroupName="Presentation" Style="{StaticResource PreferenceOptionStyle}" />
-                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Default sort" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Choose the article order used in this profile."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,10" />
                         <RadioButton x:Name="SortFolderOption" Content="By folder" GroupName="ArticleSort" Style="{StaticResource PreferenceOptionStyle}" />
                         <RadioButton x:Name="SortNewestOption" Content="Newest first" GroupName="ArticleSort" Style="{StaticResource PreferenceOptionStyle}" />
-                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <CheckBox x:Name="LimitArticleWidthCheckBox"
                                   Content="Limit article width to 900 px"
                                   AutomationProperties.Name="Limit article width to 900 pixels"
                                   FontSize="13"
                                   Padding="2" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <TextBlock Text="Application theme" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Choose the color theme used throughout the interface."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,4,0,10"
+                                   TextWrapping="Wrap" />
+                        <ComboBox x:Name="ReaderThemeComboBox"
+                                  AutomationProperties.Name="Application theme"
+                                  Width="190"
+                                  HorizontalAlignment="Left"
+                                  Padding="7">
+                            <ComboBoxItem Content="Light" Tag="0" />
+                            <ComboBoxItem Content="Dark" Tag="1" />
+                            <ComboBoxItem Content="Warm" Tag="2" />
+                        </ComboBox>
                     </StackPanel>
 
                     <StackPanel x:Name="ReadingPanel" Visibility="Collapsed">
+                        <TextBlock Text="Article-list density" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Use the current layout by default, or choose a denser or roomier list."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,4,0,10"
+                                   TextWrapping="Wrap" />
+                        <ComboBox x:Name="ArticleListDensityComboBox"
+                                  AutomationProperties.Name="Article-list density"
+                                  Width="190"
+                                  HorizontalAlignment="Left"
+                                  Padding="7">
+                            <ComboBoxItem Content="Current layout" Tag="0" />
+                            <ComboBoxItem Content="Compact" Tag="1" />
+                            <ComboBoxItem Content="Spacious" Tag="2" />
+                        </ComboBox>
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Article visibility" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Control which articles appear in your reading lists."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,12" />
                         <CheckBox x:Name="HideReadArticlesCheckBox"
                                   Content="Hide read articles"
                                   AutomationProperties.Name="Hide read articles"
                                   FontSize="13"
                                   Padding="2" />
-                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Folder article limit" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Maximum articles shown per feed inside a folder."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,10"
                                    TextWrapping="Wrap" />
                         <TextBox x:Name="FolderArticleLimitBox"
@@ -237,10 +267,10 @@
                                  MaxLength="3"
                                  ToolTip="Enter a number from 1 to 100" />
                         <TextBlock x:Name="ValidationMessage"
-                                   Foreground="{StaticResource DestructiveBrush}"
+                                   Foreground="{DynamicResource DestructiveBrush}"
                                    Margin="0,6,0,0"
                                    TextWrapping="Wrap" />
-                        <Border Height="1" Background="{StaticResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Feed updates" FontSize="13" FontWeight="SemiBold" />
                         <CheckBox x:Name="RefreshFeedsWhenOpenedCheckBox"
                                   Content="Refresh feeds when opening a feed or folder"
@@ -249,12 +279,12 @@
                                   Margin="0,10,0,0"
                                   Padding="2" />
                         <TextBlock Text="Newly followed feeds refresh the first time they are opened."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="24,3,0,12"
                                    TextWrapping="Wrap" />
                         <TextBlock Text="Refresh on a timer" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Periodically check all feeds followed by this profile."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,8"
                                    TextWrapping="Wrap" />
                         <ComboBox x:Name="AutoRefreshIntervalComboBox"
@@ -273,7 +303,7 @@
                     <StackPanel x:Name="DebuggingPanel" Visibility="Collapsed">
                         <TextBlock Text="Feed diagnostics" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Inspect the source XML used to parse an article's feed."
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="0,4,0,12"
                                    TextWrapping="Wrap" />
                         <CheckBox x:Name="ShowRawFeedButtonCheckBox"
@@ -286,11 +316,11 @@
             </ScrollViewer>
             <Grid Grid.Row="2" Margin="0,18,0,0">
                 <TextBlock Text="{Binding Name, RelativeSource={RelativeSource AncestorType=Window}}"
-                           Foreground="{StaticResource MutedTextBrush}"
+                           Foreground="{DynamicResource MutedTextBrush}"
                            VerticalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Cancel" IsCancel="True" Style="{StaticResource SecondaryActionButtonStyle}" MinWidth="82" Padding="12,7" Margin="0,0,8,0" />
-                    <Button Content="Save" IsDefault="True" Style="{StaticResource PrimaryActionButtonStyle}" MinWidth="82" Padding="12,7" Click="Save_Click" />
+                    <Button x:Name="SavePreferencesButton" Content="Save" IsDefault="True" Style="{StaticResource PrimaryActionButtonStyle}" MinWidth="82" Padding="12,7" Click="Save_Click" />
                 </StackPanel>
             </Grid>
         </Grid>
