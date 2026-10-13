@@ -81,7 +81,9 @@ public sealed record ProfilePreferences(
     ProfileReaderLineSpacing ReaderLineSpacing = ProfileReaderLineSpacing.Normal,
     ProfileReaderFontFamily ReaderFontFamily = ProfileReaderFontFamily.SansSerif,
     double SplitPaneListRatio = 0.45,
-    bool AutoLoadFullArticle = false)
+    bool AutoLoadFullArticle = false,
+    bool PreloadNextArticle = false,
+    bool SmoothArticleScrolling = true)
 {
     public const int MinimumFolderArticleLimitPerFeed = 1;
     public const int MaximumFolderArticleLimitPerFeed = 100;

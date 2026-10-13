@@ -67,7 +67,9 @@ public sealed class SqliteProfileStoreTests
             ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
             ReaderFontFamily: ProfileReaderFontFamily.Monospace,
             SplitPaneListRatio: 0.63,
-            AutoLoadFullArticle: true);
+            AutoLoadFullArticle: true,
+            PreloadNextArticle: true,
+            SmoothArticleScrolling: false);
 
         await store.SavePreferencesAsync(firstProfile.Id, preferences);
         var reopenedStore = new SqliteProfileStore(database.Path);

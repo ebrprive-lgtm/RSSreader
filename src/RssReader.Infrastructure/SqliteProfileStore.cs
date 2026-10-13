@@ -50,7 +50,9 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2, 3)),
                 ReaderFontFamily INTEGER NOT NULL DEFAULT 0 CHECK (ReaderFontFamily IN (0, 1, 2)),
                 SplitPaneListRatio REAL NOT NULL DEFAULT 0.45 CHECK (SplitPaneListRatio BETWEEN 0.3 AND 0.7),
-                AutoLoadFullArticle INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1))
+                AutoLoadFullArticle INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1)),
+                PreloadNextArticle INTEGER NOT NULL DEFAULT 0 CHECK (PreloadNextArticle IN (0, 1)),
+                SmoothArticleScrolling INTEGER NOT NULL DEFAULT 1 CHECK (SmoothArticleScrolling IN (0, 1))
             );
             INSERT INTO Profiles (Id, Name, IsCatalogMaster, PasswordHash, RecoveryEmail)
             VALUES ($id, $name, 1, NULL, NULL)
@@ -124,6 +126,16 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             "AutoLoadFullArticle",
             "INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1))",
             cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "PreloadNextArticle",
+            "INTEGER NOT NULL DEFAULT 0 CHECK (PreloadNextArticle IN (0, 1))",
+            cancellationToken);
+        await EnsurePreferenceColumnAsync(
+            connection,
+            "SmoothArticleScrolling",
+            "INTEGER NOT NULL DEFAULT 1 CHECK (SmoothArticleScrolling IN (0, 1))",
+            cancellationToken);
         await WidenReaderTypographyConstraintsAsync(connection, cancellationToken);
     }
 
@@ -137,7 +149,8 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                  SELECT StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
                          RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
                          HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
-                         ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle
+                         ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle,
+                         PreloadNextArticle, SmoothArticleScrolling
             FROM ProfilePreferences
             WHERE ProfileId = $profileId;
             """;
@@ -167,7 +180,9 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             (ProfileReaderLineSpacing)reader.GetInt32(14),
             (ProfileReaderFontFamily)reader.GetInt32(15),
             reader.GetDouble(16),
-            reader.GetInt64(17) == 1);
+            reader.GetInt64(17) == 1,
+            PreloadNextArticle: reader.GetInt64(18) == 1,
+            SmoothArticleScrolling: reader.GetInt64(19) == 1);
     }
 
     public async Task SavePreferencesAsync(
@@ -182,11 +197,13 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
                 RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
                 HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
-                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle)
+                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle,
+                PreloadNextArticle, SmoothArticleScrolling)
             VALUES ($profileId, $startPage, $presentation, $articleSort, $hideReadArticles, $folderArticleLimitPerFeed,
                     $refreshFeedsWhenOpened, $autoRefreshIntervalMinutes, $showRawFeedButton, $limitArticleWidth,
                     $hideFollowedCatalogFeeds, $readingLayout, $articleListDensity, $readerTheme, $readerTextSize,
-                    $readerLineSpacing, $readerFontFamily, $splitPaneListRatio, $autoLoadFullArticle)
+                    $readerLineSpacing, $readerFontFamily, $splitPaneListRatio, $autoLoadFullArticle,
+                    $preloadNextArticle, $smoothArticleScrolling)
             ON CONFLICT(ProfileId) DO UPDATE SET
                 StartPage = excluded.StartPage,
                 Presentation = excluded.Presentation,
@@ -205,7 +222,9 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 ReaderLineSpacing = excluded.ReaderLineSpacing,
                 ReaderFontFamily = excluded.ReaderFontFamily,
                 SplitPaneListRatio = excluded.SplitPaneListRatio,
-                AutoLoadFullArticle = excluded.AutoLoadFullArticle;
+                AutoLoadFullArticle = excluded.AutoLoadFullArticle,
+                PreloadNextArticle = excluded.PreloadNextArticle,
+                SmoothArticleScrolling = excluded.SmoothArticleScrolling;
             """;
         command.Parameters.AddWithValue("$profileId", profileId);
         command.Parameters.AddWithValue("$startPage", (int)preferences.StartPage);
@@ -226,6 +245,8 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         command.Parameters.AddWithValue("$readerFontFamily", (int)preferences.ReaderFontFamily);
         command.Parameters.AddWithValue("$splitPaneListRatio", preferences.SplitPaneListRatio);
         command.Parameters.AddWithValue("$autoLoadFullArticle", preferences.AutoLoadFullArticle ? 1 : 0);
+        command.Parameters.AddWithValue("$preloadNextArticle", preferences.PreloadNextArticle ? 1 : 0);
+        command.Parameters.AddWithValue("$smoothArticleScrolling", preferences.SmoothArticleScrolling ? 1 : 0);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -391,18 +412,22 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2, 3)),
                 ReaderFontFamily INTEGER NOT NULL DEFAULT 0 CHECK (ReaderFontFamily IN (0, 1, 2)),
                 SplitPaneListRatio REAL NOT NULL DEFAULT 0.45 CHECK (SplitPaneListRatio BETWEEN 0.3 AND 0.7),
-                AutoLoadFullArticle INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1))
+                AutoLoadFullArticle INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1)),
+                PreloadNextArticle INTEGER NOT NULL DEFAULT 0 CHECK (PreloadNextArticle IN (0, 1)),
+                SmoothArticleScrolling INTEGER NOT NULL DEFAULT 1 CHECK (SmoothArticleScrolling IN (0, 1))
             );
             INSERT INTO ProfilePreferences_migrating (
                 ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
                 RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
                 HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
-                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle)
+                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle,
+                PreloadNextArticle, SmoothArticleScrolling)
             SELECT
                 ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
                 RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
                 HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
-                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle
+                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle,
+                PreloadNextArticle, SmoothArticleScrolling
             FROM ProfilePreferences;
             DROP TABLE ProfilePreferences;
             ALTER TABLE ProfilePreferences_migrating RENAME TO ProfilePreferences;

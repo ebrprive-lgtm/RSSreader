@@ -71,6 +71,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _hasAttemptedInitialReaderDataLoad;
     private string? _initialReaderDataLoadError;
     private CancellationTokenSource? _selectedArticleContentLoad;
+    private CancellationTokenSource? _nextArticlePrefetchCancellation;
+    private ArticleRowViewModel? _nextArticlePrefetchTarget;
+    private ArticleRowViewModel? _nextArticlePrefetchOrigin;
+    private Task? _nextArticlePrefetchTask;
     private string? _articleContentError;
     private bool _isLoadingArticleContent;
     private bool _isForbiddenArticleContentError;
@@ -221,6 +225,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectFeedTagCommand = new RelayCommand<ArticleFeedTagChip>(SelectFeedTag, CanSelectFeedTag);
         PreviousArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(-1), () => CanNavigateToAdjacentArticle(-1));
         NextArticleCommand = new RelayCommand(() => NavigateToAdjacentArticle(1), () => CanNavigateToAdjacentArticle(1));
+        NextUnreadArticleCommand = new RelayCommand(NavigateToNextUnreadArticle, CanNavigateToNextUnreadArticle);
         NavigateToSelectedArticleFeedCommand = new RelayCommand(NavigateToSelectedArticleFeed);
         BackCommand = new RelayCommand(GoBack, () => CanGoBack);
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
@@ -343,6 +348,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<ArticleFeedTagChip> SelectFeedTagCommand { get; }
     public RelayCommand PreviousArticleCommand { get; }
     public RelayCommand NextArticleCommand { get; }
+    public RelayCommand NextUnreadArticleCommand { get; }
     public RelayCommand NavigateToSelectedArticleFeedCommand { get; }
     public RelayCommand BackCommand { get; }
     public RelayCommand ToggleSavedCommand { get; }
@@ -722,6 +728,10 @@ public sealed class MainWindowViewModel : ObservableObject
         };
         var autoLoadFullArticleEnabled =
             !previousPreferences.AutoLoadFullArticle && _profilePreferences.AutoLoadFullArticle;
+        var preloadNextArticleChanged =
+            previousPreferences.PreloadNextArticle != _profilePreferences.PreloadNextArticle;
+        var smoothArticleScrollingChanged =
+            previousPreferences.SmoothArticleScrolling != _profilePreferences.SmoothArticleScrolling;
         var readingLayoutChanged = previousPreferences.ReadingLayout != _profilePreferences.ReadingLayout;
         var splitPaneListRatioChanged = previousPreferences.SplitPaneListRatio != _profilePreferences.SplitPaneListRatio;
         var densityChanged = previousPreferences.ArticleListDensity != _profilePreferences.ArticleListDensity;
@@ -794,6 +804,11 @@ public sealed class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(LimitArticleWidth));
         }
 
+        if (smoothArticleScrollingChanged)
+        {
+            OnPropertyChanged(nameof(SmoothArticleScrolling));
+        }
+
         if (readerContentPreferencesChanged)
         {
             OnPropertyChanged(nameof(ReaderContentPreferences));
@@ -824,9 +839,21 @@ public sealed class MainWindowViewModel : ObservableObject
             ApplyArticleFilters();
         }
 
-        if (autoLoadFullArticleEnabled && SelectedArticle is not null)
+        if (autoLoadFullArticleEnabled && SelectedArticle is { } selectedArticle)
         {
-            LoadFullArticleCommand.Execute(null);
+            StartAutomaticFullArticleLoad(selectedArticle);
+        }
+
+        if (preloadNextArticleChanged)
+        {
+            if (_profilePreferences.PreloadNextArticle)
+            {
+                ScheduleNextArticlePrefetch();
+            }
+            else
+            {
+                CancelNextArticlePrefetch();
+            }
         }
     }
 
@@ -1168,6 +1195,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
                 _selectedArticleContentLoad?.Cancel();
                 _selectedArticleContentLoad = null;
+                CancelNextArticlePrefetchUnless(value);
                 IsLoadingArticleContent = false;
                 ArticleContentError = null;
                 OnPropertyChanged(nameof(IsArticleListVisible));
@@ -1193,6 +1221,10 @@ public sealed class MainWindowViewModel : ObservableObject
                 NotifyRefreshFailureContextChanged();
                 PreviousArticleCommand.NotifyCanExecuteChanged();
                 NextArticleCommand.NotifyCanExecuteChanged();
+                NextUnreadArticleCommand.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(ArticlePositionLabel));
+                NextUnreadArticleCommand.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(ArticlePositionLabel));
                 LoadFullArticleCommand.NotifyCanExecuteChanged();
                 ShowFeedPreviewCommand.NotifyCanExecuteChanged();
             }
@@ -1228,6 +1260,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public ProfileReaderTextSize ReaderTextSize => _profilePreferences.ReaderTextSize;
     public ProfileReaderLineSpacing ReaderLineSpacing => _profilePreferences.ReaderLineSpacing;
     public ProfileReaderFontFamily ReaderFontFamily => _profilePreferences.ReaderFontFamily;
+    public bool SmoothArticleScrolling => _profilePreferences.SmoothArticleScrolling;
     public ProfilePreferences ReaderContentPreferences => _profilePreferences;
     public bool IsSplitPaneViewportWide => _isSplitPaneViewportWide;
     public Size ArticleCardItemSize => ArticleListDensity switch
@@ -1806,12 +1839,11 @@ public sealed class MainWindowViewModel : ObservableObject
             _articleContentService is not null &&
             article.IsSourceLinkVisible;
         article.SetWaitingForFullArticle(shouldWaitForFullArticle);
+        article.RefreshExtractedContentFreshness();
         article.IsRead = true;
         SelectedArticle = article;
-        if (_profilePreferences.AutoLoadFullArticle)
-        {
-            LoadFullArticleCommand.Execute(null);
-        }
+        StartAutomaticFullArticleLoad(article);
+        ScheduleNextArticlePrefetch();
     }
 
     private void SelectArticleOrToggleBulkSelection(ArticleRowViewModel article)
@@ -2122,6 +2154,48 @@ public sealed class MainWindowViewModel : ObservableObject
             .ThenByDescending(article => article.PublishedAt)
             .ToArray();
 
+    private ArticleRowViewModel? GetNextUnreadArticle()
+    {
+        if (SelectedArticle is null)
+        {
+            return null;
+        }
+
+        var sequence = GetArticleNavigationSequence();
+        var selectedIndex = Array.IndexOf(sequence, SelectedArticle);
+        return selectedIndex >= 0
+            ? sequence.Skip(selectedIndex + 1).FirstOrDefault(article => !article.IsRead)
+            : sequence.FirstOrDefault(article => !article.IsRead);
+    }
+
+    private bool CanNavigateToNextUnreadArticle() =>
+        GetNextUnreadArticle() is not null;
+
+    private void NavigateToNextUnreadArticle()
+    {
+        if (GetNextUnreadArticle() is { } article)
+        {
+            OpenArticle(article);
+        }
+    }
+
+    public string ArticlePositionLabel
+    {
+        get
+        {
+            if (SelectedArticle is null)
+            {
+                return string.Empty;
+            }
+
+            var sequence = GetArticleNavigationSequence();
+            var selectedIndex = Array.IndexOf(sequence, SelectedArticle);
+            return selectedIndex >= 0
+                ? $"{selectedIndex + 1} of {sequence.Length}"
+                : "Reading article";
+        }
+    }
+
     private bool CanNavigateToAdjacentArticle(int offset)
     {
         if (SelectedArticle is null)
@@ -2144,6 +2218,136 @@ public sealed class MainWindowViewModel : ObservableObject
         var sequence = GetArticleNavigationSequence();
         var selectedIndex = Array.IndexOf(sequence, SelectedArticle);
         OpenArticle(sequence[selectedIndex + offset]);
+    }
+
+    private void CancelNextArticlePrefetchUnless(ArticleRowViewModel? article)
+    {
+        if (!ReferenceEquals(_nextArticlePrefetchTarget, article))
+        {
+            CancelNextArticlePrefetch();
+        }
+    }
+
+    private void CancelNextArticlePrefetch() =>
+        _nextArticlePrefetchCancellation?.Cancel();
+
+    private void ScheduleNextArticlePrefetch()
+    {
+        if (!_profilePreferences.PreloadNextArticle ||
+            _articleContentService is null ||
+            IsLoadingArticleContent ||
+            SelectedArticle is not { } selectedArticle)
+        {
+            return;
+        }
+
+        var sequence = GetArticleNavigationSequence();
+        var selectedIndex = Array.IndexOf(sequence, selectedArticle);
+        if (selectedIndex < 0 || selectedIndex + 1 >= sequence.Length)
+        {
+            return;
+        }
+
+        var nextArticle = sequence[selectedIndex + 1];
+        if (nextArticle.IsExtractedContentFresh(DateTimeOffset.UtcNow) ||
+            !Uri.TryCreate(nextArticle.Link, UriKind.Absolute, out var articleUri) ||
+            (articleUri.Scheme != Uri.UriSchemeHttp && articleUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return;
+        }
+
+        if (_nextArticlePrefetchTask is not null)
+        {
+            if (_nextArticlePrefetchCancellation?.IsCancellationRequested == true)
+            {
+                _nextArticlePrefetchOrigin = null;
+            }
+
+            if (ReferenceEquals(_nextArticlePrefetchTarget, selectedArticle))
+            {
+                return;
+            }
+
+            if (!ReferenceEquals(_nextArticlePrefetchTarget, nextArticle))
+            {
+                CancelNextArticlePrefetch();
+            }
+
+            return;
+        }
+
+        var cancellationSource = new CancellationTokenSource();
+        _nextArticlePrefetchCancellation = cancellationSource;
+        _nextArticlePrefetchTarget = nextArticle;
+        _nextArticlePrefetchOrigin = selectedArticle;
+        _nextArticlePrefetchTask = PrefetchArticleContentAsync(
+            nextArticle,
+            articleUri,
+            cancellationSource);
+    }
+
+    private async Task PrefetchArticleContentAsync(
+        ArticleRowViewModel article,
+        Uri articleUri,
+        CancellationTokenSource cancellationSource)
+    {
+        await Task.Yield();
+        try
+        {
+            var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            var extractedContent = await _articleContentService!.ExtractAsync(
+                articleUri,
+                cancellationSource.Token);
+            cancellationSource.Token.ThrowIfCancellationRequested();
+            article.SetExtractedContent(extractedContent.Html, extractedContent.RetrievedAt);
+            if (_readingService is not null && article.ArticleId is { } articleId)
+            {
+                await _readingService.SaveExtractedArticleContentAsync(
+                    articleId,
+                    extractedContent.Html,
+                    extractedContent.RetrievedAt,
+                    cancellationSource.Token);
+            }
+
+            System.Diagnostics.Trace.WriteLine(
+                $"[ArticleCache] Next-article prefetch completed in " +
+                $"{System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F0} ms.");
+        }
+        catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
+        {
+        }
+        catch (ArticleContentExtractionException exception)
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                $"[ArticleCache] Next-article prefetch failed: {exception.Message}");
+        }
+        catch (ArticleContentPersistenceException exception)
+        {
+            if (ReferenceEquals(SelectedArticle, article))
+            {
+                ArticleContentError = exception.Message;
+            }
+
+            System.Diagnostics.Trace.TraceWarning(
+                $"[ArticleCache] Prefetched article could not be persisted: {exception.Message}");
+        }
+        finally
+        {
+            if (ReferenceEquals(_nextArticlePrefetchCancellation, cancellationSource))
+            {
+                var shouldContinuePrefetching =
+                    !ReferenceEquals(SelectedArticle, _nextArticlePrefetchOrigin);
+                _nextArticlePrefetchCancellation = null;
+                _nextArticlePrefetchTarget = null;
+                _nextArticlePrefetchOrigin = null;
+                _nextArticlePrefetchTask = null;
+                cancellationSource.Dispose();
+                if (shouldContinuePrefetching)
+                {
+                    ScheduleNextArticlePrefetch();
+                }
+            }
+        }
     }
 
     private void ToggleSaved()
@@ -2685,6 +2889,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
         if (e.PropertyName is (nameof(ArticleRowViewModel.ReaderContent) or
             nameof(ArticleRowViewModel.HasExtractedContent) or
+            nameof(ArticleRowViewModel.IsExtractedContentStale) or
+            nameof(ArticleRowViewModel.IsShowingStaleExtractedContent) or
             nameof(ArticleRowViewModel.IsShowingExtractedContent)))
         {
             return;
@@ -2702,6 +2908,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             _unreadCountsDirty = true;
             UpdateUnreadCounts();
+            NextUnreadArticleCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(ArticlePositionLabel));
         }
 
         var isReadChange = e.PropertyName == nameof(ArticleRowViewModel.IsRead);
@@ -2820,18 +3028,6 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private async Task LoadFullArticleCommandAsync()
     {
-        do
-        {
-            await LoadFullArticleAsync();
-        }
-        while (_profilePreferences.AutoLoadFullArticle &&
-               SelectedArticle is { } article &&
-               (article.IsWaitingForFullArticle ||
-                (article.HasExtractedContent && !article.IsShowingExtractedContent)));
-    }
-
-    private async Task LoadFullArticleAsync()
-    {
         if (SelectedArticle is not { } article)
         {
             return;
@@ -2844,6 +3040,69 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
+        await LoadArticleContentAsync(article, showWaitingState: false);
+    }
+
+    private void StartAutomaticFullArticleLoad(ArticleRowViewModel article)
+    {
+        if (_profilePreferences.AutoLoadFullArticle)
+        {
+            _ = AutomaticallyLoadFullArticleAsync(article);
+        }
+    }
+
+    private async Task AutomaticallyLoadFullArticleAsync(ArticleRowViewModel article)
+    {
+        if (!ReferenceEquals(SelectedArticle, article))
+        {
+            return;
+        }
+
+        if (article.IsExtractedContentFresh(DateTimeOffset.UtcNow))
+        {
+            System.Diagnostics.Trace.WriteLine("[ArticleCache] Full article cache hit (fresh).");
+            ArticleContentError = null;
+            return;
+        }
+
+        var hasStaleContent = article.HasExtractedContent;
+        System.Diagnostics.Trace.WriteLine(
+            hasStaleContent
+                ? "[ArticleCache] Full article cache hit (stale); refreshing in the background."
+                : "[ArticleCache] Full article cache miss; loading article.");
+        await LoadArticleContentAsync(article, showWaitingState: !hasStaleContent);
+    }
+
+    private async Task LoadArticleContentAsync(
+        ArticleRowViewModel article,
+        bool showWaitingState)
+    {
+        if (showWaitingState &&
+            ReferenceEquals(_nextArticlePrefetchTarget, article) &&
+            _nextArticlePrefetchTask is { } prefetchTask)
+        {
+            article.SetWaitingForFullArticle(true);
+            IsLoadingArticleContent = true;
+            try
+            {
+                await prefetchTask;
+            }
+            finally
+            {
+                article.SetWaitingForFullArticle(false);
+                if (ReferenceEquals(SelectedArticle, article))
+                {
+                    IsLoadingArticleContent = false;
+                }
+            }
+
+            if (article.HasExtractedContent || !ReferenceEquals(SelectedArticle, article))
+            {
+                ScheduleNextArticlePrefetch();
+                return;
+            }
+        }
+
         if (_articleContentService is null ||
             !Uri.TryCreate(article.Link, UriKind.Absolute, out var articleUri) ||
             (articleUri.Scheme != Uri.UriSchemeHttp && articleUri.Scheme != Uri.UriSchemeHttps))
@@ -2852,15 +3111,20 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
+        article.SetWaitingForFullArticle(showWaitingState);
         var cancellationSource = new CancellationTokenSource();
         _selectedArticleContentLoad = cancellationSource;
         IsLoadingArticleContent = true;
         ArticleContentError = null;
         try
         {
+            var startedAt = System.Diagnostics.Stopwatch.GetTimestamp();
             var extractedContent = await _articleContentService.ExtractAsync(
                 articleUri,
                 cancellationSource.Token);
+            System.Diagnostics.Trace.WriteLine(
+                $"[ArticleCache] Publisher extraction completed in " +
+                $"{System.Diagnostics.Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F0} ms.");
             if (cancellationSource.IsCancellationRequested ||
                 !ReferenceEquals(SelectedArticle, article))
             {
@@ -2876,6 +3140,7 @@ public sealed class MainWindowViewModel : ObservableObject
                     extractedContent.RetrievedAt,
                     cancellationSource.Token);
             }
+            ArticleContentError = null;
         }
         catch (OperationCanceledException) when (cancellationSource.IsCancellationRequested)
         {
@@ -2905,6 +3170,7 @@ public sealed class MainWindowViewModel : ObservableObject
             }
 
             cancellationSource.Dispose();
+            ScheduleNextArticlePrefetch();
         }
     }
 

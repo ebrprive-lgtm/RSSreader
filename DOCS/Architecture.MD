@@ -67,6 +67,7 @@ Only retrieve feeds and article content that the user is authorized to access. D
 - Test duplicate handling, conditional refresh behavior, and persistence of read/saved state.
 - Keep local data usable offline; a failed refresh must not remove previously stored articles.
 - Stored article text/HTML, summary, metadata, refresh state, and per-profile read/saved state remain local and available offline. Article and feed image URLs are stored, but image bytes load from publishers and are not cached, so images may be unavailable offline.
+- Startup failures are recorded locally under the application-data directory; diagnostic logs must not be uploaded automatically and may contain local paths.
 - Test Catalog Master catalog-management permissions independently of UI visibility, including attempts by regular profiles to add/remove catalog feeds, categories, and collections.
 - Every feature is delivered with tests for its observable behavior; a feature is not complete until its tests pass.
 - Unit-test domain rules, application services, and each view model's commands, state transitions, validation, and error handling. Exercise WPF control wiring and critical user workflows with UI-level or integration tests rather than treating visual controls as isolated unit-test targets.
@@ -80,6 +81,7 @@ Only retrieve feeds and article content that the user is authorized to access. D
 - Catalog Master is a reserved profile name and cannot be used for a regular profile.
 - Password hashes protect profile unlock credentials; they do not encrypt the profile's database contents. Decide separately whether local data-at-rest encryption is required.
 - A recovery email is not sufficient to recover a password by itself. Before implementing recovery, choose a secure verification and delivery mechanism, account for abuse and privacy, and define what works without network access. Until then, provide no email-based reset flow and clearly communicate the limitation.
+- Full-library backups are SQLite snapshots containing every local profile and shared catalog data; they are not encrypted. Restore validates and stages the snapshot, creates a safety copy of the active database, and applies the restore before the next startup initialization.
 - Profile name uniqueness, password-reset behavior, and whether deleting a profile permanently deletes its local data remain product decisions.
 
 ## Decisions to Resolve During Implementation

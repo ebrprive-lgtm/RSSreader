@@ -137,15 +137,24 @@ public sealed class MainWindowViewModelTests
                 ReaderFontFamily: ProfileReaderFontFamily.Serif,
                 ReadingLayout: ProfileReadingLayout.SplitPane,
                 SplitPaneListRatio: 0.63,
-                AutoLoadFullArticle: false);
+                AutoLoadFullArticle: false,
+                PreloadNextArticle: false,
+                SmoothArticleScrolling: true);
             var window = new PreferencesWindow(initialPreferences);
             Assert.IsNull(window.FindName("ReadingLayoutComboBox"));
             Assert.AreEqual(0, ((ComboBox)window.FindName("ArticleListDensityComboBox")!).SelectedIndex);
             Assert.AreEqual(0, ((ComboBox)window.FindName("ReaderThemeComboBox")!).SelectedIndex);
             Assert.IsFalse(((CheckBox)window.FindName("AutoLoadFullArticleCheckBox")!).IsChecked);
+            Assert.IsFalse(((CheckBox)window.FindName("PreloadNextArticleCheckBox")!).IsChecked);
+            Assert.IsTrue(((CheckBox)window.FindName("SmoothArticleScrollingCheckBox")!).IsChecked);
             Assert.IsNull(window.FindName("ReaderTextSizeComboBox"));
             Assert.IsNull(window.FindName("ReaderLineSpacingComboBox"));
             Assert.IsNull(window.FindName("ReaderFontFamilyComboBox"));
+            var dataNavigation = (RadioButton)window.FindName("DataNavigation")!;
+            dataNavigation.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.AreEqual(Visibility.Visible, ((StackPanel)window.FindName("DataPanel")!).Visibility);
+            Assert.IsFalse(((Button)window.FindName("CreateLibraryBackupButton")!).IsEnabled);
+            Assert.IsFalse(((Button)window.FindName("RestoreLibraryBackupButton")!).IsEnabled);
 
             window.Dispatcher.BeginInvoke(
                 DispatcherPriority.Loaded,
@@ -154,6 +163,8 @@ public sealed class MainWindowViewModelTests
                     ((ComboBox)window.FindName("ArticleListDensityComboBox")!).SelectedIndex = 2;
                     ((ComboBox)window.FindName("ReaderThemeComboBox")!).SelectedIndex = 2;
                     ((CheckBox)window.FindName("AutoLoadFullArticleCheckBox")!).IsChecked = true;
+                    ((CheckBox)window.FindName("PreloadNextArticleCheckBox")!).IsChecked = true;
+                    ((CheckBox)window.FindName("SmoothArticleScrollingCheckBox")!).IsChecked = false;
                     ((Button)window.FindName("SavePreferencesButton")!).RaiseEvent(
                         new RoutedEventArgs(Button.ClickEvent));
                 }));
@@ -168,7 +179,9 @@ public sealed class MainWindowViewModelTests
                     ReaderTextSize: ProfileReaderTextSize.Large,
                     ReaderLineSpacing: ProfileReaderLineSpacing.Relaxed,
                     ReaderFontFamily: ProfileReaderFontFamily.Serif,
-                    AutoLoadFullArticle: true),
+                    AutoLoadFullArticle: true,
+                    PreloadNextArticle: true,
+                    SmoothArticleScrolling: false),
                 window.Preferences);
         });
     }
@@ -2385,9 +2398,11 @@ public sealed class MainWindowViewModelTests
                     "Comics",
                     [],
                     "Source",
+                    articleId: "comic-story",
                     feedId: "comic-feed",
                     link: "https://www.arcamax.com/thefunnies/ninechickweedlane/s-4307031",
-                    content: "<p>Comic panel <img src=\"https://example.com/inline-panel.png\" alt=\"Inline panel\" /> follows.</p>",
+                    content: "<p>Comic panel <img src=\"https://example.com/inline-panel.png\" alt=\"Inline panel\" /> follows.</p>" +
+                        string.Concat(Enumerable.Repeat("<p>Long article text for scroll restoration.</p>", 80)),
                     imageUrl: "https://resources.arcamax.com/newspics/396/39604/3960483.gif",
                     websiteUrl: "https://www.arcamax.com/thefunnies/ninechickweedlane",
                     author: "Jayme Lozano Carver, The Texas Tribune");
@@ -2427,7 +2442,28 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(
                     articleViewer.LastNavigationSucceeded,
                     $"Navigation to {articleViewer.LastNavigationUriScheme} failed with {articleViewer.LastNavigationErrorStatus}.");
+                var bottomReached = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
+                articleViewer.ReadingProgressChanged += progress =>
+                {
+                    if (progress >= 0.95)
+                    {
+                        bottomReached.TrySetResult(progress);
+                    }
+                };
+                PumpDispatcherUntil(browser.CoreWebView2.ExecuteScriptAsync(
+                    "window.scrollTo(0, document.documentElement.scrollHeight);"));
+                PumpDispatcherUntil(bottomReached.Task);
+                Assert.IsTrue(articleViewer.ReadingProgress >= 0.95);
                 var navigationCountBeforeResize = articleViewer.DocumentNavigationCount;
+                var scrollPositionRestored = new TaskCompletionSource<double>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                articleViewer.ReadingProgressChanged += progress =>
+                {
+                    if (progress >= 0.95)
+                    {
+                        scrollPositionRestored.TrySetResult(progress);
+                    }
+                };
                 var redrawNavigationCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 articleViewer.ArticleDocumentNavigationCompleted += () => redrawNavigationCompleted.TrySetResult();
                 var articleStatusPanel = (FrameworkElement)articleViewer.FindName("StatusPanel");
@@ -2476,6 +2512,8 @@ public sealed class MainWindowViewModelTests
                     $"Actual author inlines: [{string.Join(" | ", authorInlines)}]");
                 PumpDispatcherUntil(redrawNavigationCompleted.Task);
                 Assert.AreEqual(navigationCountBeforeResize + 1, articleViewer.DocumentNavigationCount);
+                PumpDispatcherUntil(scrollPositionRestored.Task);
+                Assert.IsTrue(articleViewer.ReadingProgress >= 0.95);
                 Assert.IsTrue(
                     articleViewer.LastNavigationSucceeded,
                     $"The resized article document failed with {articleViewer.LastNavigationErrorStatus}.");
@@ -5438,6 +5476,90 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void NextUnreadArticleFollowsTheVisibleSortedSequence()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+        viewModel.IsSortByDate = true;
+        var articles = viewModel.VisibleArticles
+            .OrderByDescending(article => article.PublishedAt)
+            .ToArray();
+        viewModel.OpenArticleInReaderCommand.Execute(articles[0]);
+
+        Assert.IsTrue(viewModel.NextUnreadArticleCommand.CanExecute(null));
+        viewModel.NextUnreadArticleCommand.Execute(null);
+
+        Assert.AreSame(articles[1], viewModel.SelectedArticle);
+        Assert.AreEqual("2 of 5", viewModel.ArticlePositionLabel);
+    }
+
+    [TestMethod]
+    public async Task PreloadNextArticleCachesOnlyTheAdjacentArticle()
+    {
+        var requestStarted = new TaskCompletionSource<Uri>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<ExtractedArticleContent>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StubArticleContentService((uri, _) =>
+        {
+            requestStarted.TrySetResult(uri);
+            return response.Task;
+        });
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            profilePreferences: new ProfilePreferences(PreloadNextArticle: true),
+            articleContentService: service);
+        viewModel.VisibleArticles.Clear();
+        var currentArticle = new ArticleRowViewModel(
+            "Current story",
+            "Example feed",
+            DateTimeOffset.UtcNow.AddHours(-1),
+            "News",
+            [],
+            "Current preview.",
+            articleId: "current-story",
+            link: "https://example.test/current");
+        var nextArticle = new ArticleRowViewModel(
+            "Next story",
+            "Example feed",
+            DateTimeOffset.UtcNow.AddHours(-2),
+            "News",
+            [],
+            "Next preview.",
+            articleId: "next-story",
+            link: "https://example.test/next");
+        viewModel.VisibleArticles.Add(currentArticle);
+        viewModel.VisibleArticles.Add(nextArticle);
+        var cacheWritten = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        nextArticle.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.PropertyName == nameof(ArticleRowViewModel.ExtractedContentHtml))
+            {
+                cacheWritten.TrySetResult();
+            }
+        };
+
+        viewModel.OpenArticleInReaderCommand.Execute(currentArticle);
+        var requestedUri = await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.AreEqual(nextArticle.Link, requestedUri.AbsoluteUri);
+        Assert.AreEqual(1, service.RequestCount);
+        response.SetResult(new ExtractedArticleContent(
+            "<article><p>Prefetched body.</p></article>",
+            "Next story",
+            null,
+            DateTimeOffset.UtcNow));
+        await cacheWritten.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.IsTrue(nextArticle.HasExtractedContent);
+        Assert.AreEqual(1, service.RequestCount);
+    }
+
+    [TestMethod]
     public void ArticleNavigationDisablesWhenSelectionLeavesFilteredResults()
     {
         var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
@@ -6069,6 +6191,21 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void ArticleHtmlDocumentBuilderAllowsOnlyItsHashedReaderProgressScript()
+    {
+        var document = ArticleHtmlDocumentBuilder.Build(
+            "<script>alert('feed script')</script><p>Safe article text.</p>",
+            null,
+            "https://example.test/story",
+            null);
+
+        StringAssert.Contains(document, "script-src 'sha256-");
+        StringAssert.Contains(document, "window.chrome.webview.postMessage");
+        Assert.AreEqual(1, document.Split("<script", StringSplitOptions.None).Length - 1);
+        Assert.IsFalse(document.Contains("alert('feed script')", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void ArticleHtmlDocumentBuilderAppliesReaderThemeAndTypographyAfterSanitizingFeedContent()
     {
         var document = ArticleHtmlDocumentBuilder.Build(
@@ -6421,6 +6558,95 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual(1, service.RequestCount);
         Assert.AreEqual(refreshedHtml, article.ReaderContent);
         Assert.AreEqual(retrievedAt, article.ExtractedContentRetrievedAt);
+    }
+
+    [TestMethod]
+    public void AutoLoadUsesFreshCachedArticleWithoutFetchingAgain()
+    {
+        var service = new StubArticleContentService((_, _) =>
+            Task.FromResult(new ExtractedArticleContent(
+                "<article><p>Unexpected refetch.</p></article>",
+                "Fresh story",
+                null,
+                DateTimeOffset.UtcNow)));
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            profilePreferences: new ProfilePreferences(AutoLoadFullArticle: true),
+            articleContentService: service);
+        var cachedHtml = "<article><p>Fresh cached article.</p></article>";
+        var article = new ArticleRowViewModel(
+            "Cached story",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "Feed preview.",
+            articleId: "cached-article",
+            link: "https://example.test/cached-story",
+            content: "<p>Feed preview.</p>",
+            extractedContentHtml: cachedHtml,
+            extractedContentRetrievedAt: DateTimeOffset.UtcNow.AddDays(-1));
+
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        Assert.AreEqual(0, service.RequestCount);
+        Assert.AreEqual(cachedHtml, article.ReaderContent);
+        Assert.IsFalse(viewModel.IsLoadingArticleContent);
+    }
+
+    [TestMethod]
+    public async Task AutoLoadShowsStaleCacheWhileRefreshingIt()
+    {
+        const string staleHtml = "<article><p>Previously cached story.</p></article>";
+        const string refreshedHtml = "<article><p>Freshly refreshed story.</p></article>";
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<ExtractedArticleContent>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StubArticleContentService((_, _) =>
+        {
+            requestStarted.TrySetResult();
+            return response.Task;
+        });
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            profilePreferences: new ProfilePreferences(AutoLoadFullArticle: true),
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Cached story",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "Feed preview.",
+            articleId: "stale-article",
+            link: "https://example.test/stale-story",
+            content: "<p>Feed preview.</p>",
+            extractedContentHtml: staleHtml,
+            extractedContentRetrievedAt: DateTimeOffset.UtcNow.AddDays(-8));
+
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.AreEqual(staleHtml, article.ReaderContent);
+        Assert.IsTrue(article.IsShowingStaleExtractedContent);
+        Assert.IsFalse(article.IsWaitingForFullArticle);
+        Assert.IsTrue(viewModel.IsLoadingArticleContent);
+
+        response.SetResult(new ExtractedArticleContent(
+            refreshedHtml,
+            "Refreshed story",
+            null,
+            DateTimeOffset.UtcNow));
+        await WaitForArticleContentLoadAsync(viewModel);
+
+        Assert.AreEqual(refreshedHtml, article.ReaderContent);
+        Assert.IsFalse(article.IsShowingStaleExtractedContent);
     }
 
     [TestMethod]
@@ -6808,7 +7034,11 @@ public sealed class MainWindowViewModelTests
                 PumpDispatcherUntil(loadTask);
                 StringAssert.Contains(articleViewer.CurrentDocument, "Full publisher text.");
                 Assert.IsTrue(articleViewer.CurrentDocument.Contains("Extracted story", StringComparison.Ordinal));
-                Assert.IsFalse(articleViewer.CurrentDocument.Contains("<script", StringComparison.OrdinalIgnoreCase));
+                Assert.AreEqual(
+                    1,
+                    articleViewer.CurrentDocument.Split("<script", StringSplitOptions.None).Length - 1);
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains("alert('unsafe')", StringComparison.Ordinal));
+                StringAssert.Contains(articleViewer.CurrentDocument, "script-src 'sha256-");
                 Assert.AreEqual(Visibility.Visible, loadButton.Visibility);
                 Assert.AreEqual("Refresh full article", viewModel.FullArticleActionLabel);
                 Assert.AreEqual(Visibility.Visible, previewButton.Visibility);

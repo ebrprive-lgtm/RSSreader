@@ -159,7 +159,15 @@ internal sealed class SqliteArticleStore(SqliteConnectionFactory connections)
                         Content = $content,
                         ImageUrl = $imageUrl,
                         Author = $author,
-                        SourceXml = COALESCE($sourceXml, SourceXml)
+                        SourceXml = COALESCE($sourceXml, SourceXml),
+                        ExtractedContentHtml = CASE
+                            WHEN Link IS NOT $link THEN NULL
+                            ELSE ExtractedContentHtml
+                        END,
+                        ExtractedContentRetrievedAt = CASE
+                            WHEN Link IS NOT $link THEN NULL
+                            ELSE ExtractedContentRetrievedAt
+                        END
                     WHERE Id = $id;
                     """;
                 await command.ExecuteNonQueryAsync(cancellationToken);

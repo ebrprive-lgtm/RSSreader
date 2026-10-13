@@ -193,7 +193,8 @@
             <ListBox x:Name="ArticleRowsList"
                      Grid.Row="3"
                      Style="{StaticResource VirtualizedArticleListStyle}"
-                     ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                     local:SmoothScrollBehavior.IsEnabled="{Binding SmoothArticleScrolling}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ItemsSource="{Binding ArticleListView}"
                      ItemTemplate="{StaticResource ArticleRowTemplate}"
                      Visibility="{Binding IsListView, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -225,7 +226,8 @@
             <ListBox x:Name="ArticleMagazineList"
                      Grid.Row="3"
                      Style="{StaticResource VirtualizedArticleListStyle}"
-                     ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                     local:SmoothScrollBehavior.IsEnabled="{Binding SmoothArticleScrolling}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ItemsSource="{Binding ArticleListView}"
                      ItemTemplate="{StaticResource ArticleMagazineTemplate}"
                      Visibility="{Binding IsMagazineView, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -257,6 +259,7 @@
             <ListBox x:Name="ArticleCardsList"
                      Grid.Row="3"
                      Style="{StaticResource DateArticleCardsListStyle}"
+                     local:SmoothScrollBehavior.IsEnabled="{Binding SmoothArticleScrolling}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ItemsSource="{Binding DateSortedArticleListView}"
                      ItemTemplate="{StaticResource ArticleCardTemplate}">
@@ -264,6 +267,7 @@
             <ListBox x:Name="ArticleFolderCardsList"
                      Grid.Row="3"
                      Style="{StaticResource FolderArticleCardsListStyle}"
+                     local:SmoothScrollBehavior.IsEnabled="{Binding SmoothArticleScrolling}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
                      ItemsSource="{Binding FolderSortedArticleListView}"
                      ItemTemplate="{StaticResource ArticleCardTemplate}">

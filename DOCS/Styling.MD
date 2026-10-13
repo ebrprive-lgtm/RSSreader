@@ -51,6 +51,7 @@ Use `Segoe MDL2 Assets` for the existing icon glyphs. Pair icons with clear text
 Display text using its intended Unicode characters. Repair mojibake or misdecoded feed, category, and collection text before rendering; never leave encoding artifacts visible in labels or tree children.
 
 Article text size, line spacing, and font family are selected from the article viewer's compact typography popup; these settings affect article content only. Available font families are Segoe UI, Georgia, and Consolas.
+The article reader uses a thin accent progress indicator and a compact article-position label; keep both visually secondary to the article text. Show a muted warning when displaying stale cached article content.
 
 ## Layout and Shape
 
@@ -59,6 +60,8 @@ Article text size, line spacing, and font family are selected from the article v
 - Keep article-card hover and keyboard-focus feedback visible but restrained; use the same clickable green publisher-topic pills in cards, magazine, and article views, and render clickable user-created feed-tag pills in light blue so they navigate to that tag's article list. Preserve a consistent `UniformToFill` image crop.
 - Selecting a publisher-topic pill filters the current article list; from the article view, it returns through navigation history with that topic selected.
 - Keep the title-only article list focused on the headline, with publisher and age as compact metadata; show folder labels and folder groups only in folder-sort mode, and keep date-sort mode as one global newest-first list.
+- Keep article-list scrollbars discoverable in every presentation mode. Smooth article-list scrolling is a profile preference and can be disabled without changing keyboard or scrollbar navigation.
+- Keep previous/next and next-unread article controls compact, with tooltips and accessible names; the reading progress indicator must not intercept scrolling or pointer input.
 - Keep the unsaved read-later bookmark hidden until its row is hovered or keyboard-focused; saved bookmarks remain visible.
 - Use the existing 286 px navigation sidebar and restrained content margins in the main window.
 - Keep Catalog Master > Feeds results at a fixed width of 1280 device-independent units, with horizontal scrolling on narrower viewports; stretch Follow Sources results across the available viewport so the source list and selected-feed preview can use the space. Collapse hidden row commands so category labels can use the row's right edge. Inset row actions from the scroll edge so every icon remains visible, and make the same row actions available from each feed's context menu.
@@ -109,6 +112,7 @@ Article text size, line spacing, and font family are selected from the article v
 - Context-menu items have a colored icon before every command label with a small, consistent gap between icon and text. Use the shared accent icon style for neutral actions, green for constructive actions such as add/import/check, and red for destructive actions such as remove/delete/logout. Popup menus and dropdowns use the shared layered frame around their white surface, subtle shadow, compact padding, neutral hover, accent submenu selection, and custom separator. Avoid native gray menu gutters and borders.
 - Scrollbars use a slim rounded thumb with neutral, hover, and drag states. Keep a 2 px inset between the scrollbar and the viewport edge so it does not touch the content frame.
 - Preferences actions use the shared primary, secondary, and icon action styles; do not fall back to native gray button chrome.
+- In **Preferences → Data & backups**, keep backup actions text-labeled, use a neutral action for creating a backup and destructive semantic text for restore, and explain that backups include all profiles and are unencrypted.
 - Avoid the default gray WPF button appearance: apply an explicit shared or feature-level button style.
 
 ## Resources

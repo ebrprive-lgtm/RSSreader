@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using System.IO;
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using RssReader.Domain;
@@ -11,6 +12,10 @@ namespace RssReader.App;
 
 public partial class ArticleHtmlViewer : UserControl
 {
+    private const int ScrollPositionCacheCapacity = 50;
+    private readonly Dictionary<string, (double Progress, LinkedListNode<string> Node)> _scrollPositions =
+        new(StringComparer.Ordinal);
+    private readonly LinkedList<string> _scrollPositionOrder = new();
     private readonly DispatcherTimer _resizeRedrawTimer = new(DispatcherPriority.Background)
     {
         Interval = TimeSpan.FromMilliseconds(250)
@@ -23,7 +28,16 @@ public partial class ArticleHtmlViewer : UserControl
     private Task _initializationTask = Task.CompletedTask;
     private bool _isArticleDocumentNavigationPending;
     private ulong? _articleDocumentNavigationId;
+    private string? _articleId;
+    private double _pendingScrollRestoreProgress;
+    private long _documentNavigationStartedAt;
     private readonly TaskCompletionSource _navigationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public static readonly DependencyProperty ReadingProgressProperty = DependencyProperty.Register(
+        nameof(ReadingProgress),
+        typeof(double),
+        typeof(ArticleHtmlViewer),
+        new PropertyMetadata(0d));
 
     public ArticleHtmlViewer()
     {
@@ -43,6 +57,13 @@ public partial class ArticleHtmlViewer : UserControl
 
     public event Action<Uri>? ExternalLinkRequested;
     internal event Action? ArticleDocumentNavigationCompleted;
+    internal event Action<double>? ReadingProgressChanged;
+
+    public double ReadingProgress
+    {
+        get => (double)GetValue(ReadingProgressProperty);
+        private set => SetValue(ReadingProgressProperty, value);
+    }
 
     internal string CurrentDocument => _document;
     internal Task InitializationTask => _initializationTask;
@@ -63,9 +84,26 @@ public partial class ArticleHtmlViewer : UserControl
         ProfileReaderTheme readerTheme = ProfileReaderTheme.Light,
         ProfileReaderTextSize textSize = ProfileReaderTextSize.Medium,
         ProfileReaderLineSpacing lineSpacing = ProfileReaderLineSpacing.Normal,
-        ProfileReaderFontFamily fontFamily = ProfileReaderFontFamily.SansSerif)
+        ProfileReaderFontFamily fontFamily = ProfileReaderFontFamily.SansSerif,
+        string? articleId = null)
     {
         _fallbackText = summary;
+        var articleChanged = !string.Equals(_articleId, articleId, StringComparison.Ordinal);
+        if (articleChanged)
+        {
+            StoreCurrentScrollPosition();
+            _articleId = articleId;
+            _pendingScrollRestoreProgress = articleId is not null &&
+                TryGetScrollPosition(articleId, out var storedProgress)
+                    ? storedProgress
+                    : 0;
+            ReadingProgress = _pendingScrollRestoreProgress;
+        }
+        else
+        {
+            _pendingScrollRestoreProgress = ReadingProgress;
+        }
+
         var document = ArticleHtmlDocumentBuilder.Build(
             content,
             summary,
@@ -77,7 +115,7 @@ public partial class ArticleHtmlViewer : UserControl
             textSize,
             lineSpacing,
             fontFamily);
-        if (string.Equals(_document, document, StringComparison.Ordinal))
+        if (!articleChanged && string.Equals(_document, document, StringComparison.Ordinal))
         {
             return;
         }
@@ -95,6 +133,7 @@ public partial class ArticleHtmlViewer : UserControl
         _isUnloaded = false;
         if (_isInitialized)
         {
+            _pendingScrollRestoreProgress = ReadingProgress;
             NavigateArticleDocument();
             return;
         }
@@ -120,12 +159,13 @@ public partial class ArticleHtmlViewer : UserControl
             }
 
             var core = Browser.CoreWebView2;
-            core.Settings.IsScriptEnabled = false;
-            core.Settings.IsWebMessageEnabled = false;
+            core.Settings.IsScriptEnabled = true;
+            core.Settings.IsWebMessageEnabled = true;
             core.Settings.AreDefaultScriptDialogsEnabled = false;
             Browser.NavigationStarting += Browser_NavigationStarting;
             core.NewWindowRequested += CoreWebView2_NewWindowRequested;
             core.NavigationCompleted += CoreWebView2_NavigationCompleted;
+            core.WebMessageReceived += CoreWebView2_WebMessageReceived;
 
             _isInitialized = true;
             Browser.Visibility = Visibility.Visible;
@@ -173,6 +213,7 @@ public partial class ArticleHtmlViewer : UserControl
         _resizeRedrawTimer.Stop();
         if (_isInitialized && !_isUnloaded && Browser.CoreWebView2 is not null)
         {
+            _pendingScrollRestoreProgress = ReadingProgress;
             NavigateArticleDocument();
         }
     }
@@ -223,9 +264,82 @@ public partial class ArticleHtmlViewer : UserControl
         _articleDocumentNavigationId = null;
         LastNavigationSucceeded = e.IsSuccess;
         LastNavigationErrorStatus = e.WebErrorStatus;
+        Trace.WriteLine(
+            $"[ArticleReaderPerf] WebView document navigation completed in " +
+            $"{Stopwatch.GetElapsedTime(_documentNavigationStartedAt).TotalMilliseconds:F0} ms " +
+            $"(success={e.IsSuccess}).");
         _navigationCompletion.TrySetResult();
-        ArticleDocumentNavigationCompleted?.Invoke();
         HandleNavigationResult(e.IsSuccess, e.WebErrorStatus);
+        if (e.IsSuccess)
+        {
+            Browser.CoreWebView2?.PostWebMessageAsJson(
+                JsonSerializer.Serialize(new
+                {
+                    kind = "reader-restore",
+                    progress = _pendingScrollRestoreProgress
+                }));
+        }
+
+        ArticleDocumentNavigationCompleted?.Invoke();
+    }
+
+    private void CoreWebView2_WebMessageReceived(
+        object? sender,
+        CoreWebView2WebMessageReceivedEventArgs eventArgs)
+    {
+        using var message = JsonDocument.Parse(eventArgs.WebMessageAsJson);
+        var root = message.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("kind", out var kind) ||
+            kind.ValueKind != JsonValueKind.String ||
+            kind.GetString() != "reader-progress" ||
+            !root.TryGetProperty("progress", out var progressElement) ||
+            !progressElement.TryGetDouble(out var progress) ||
+            !double.IsFinite(progress))
+        {
+            return;
+        }
+
+        ReadingProgress = Math.Clamp(progress, 0, 1);
+        StoreCurrentScrollPosition();
+        ReadingProgressChanged?.Invoke(ReadingProgress);
+    }
+
+    private void StoreCurrentScrollPosition()
+    {
+        if (_articleId is null)
+        {
+            return;
+        }
+
+        if (_scrollPositions.TryGetValue(_articleId, out var existing))
+        {
+            _scrollPositionOrder.Remove(existing.Node);
+        }
+        else if (_scrollPositions.Count >= ScrollPositionCacheCapacity)
+        {
+            var oldestArticleId = _scrollPositionOrder.First!.Value;
+            _scrollPositionOrder.RemoveFirst();
+            _scrollPositions.Remove(oldestArticleId);
+        }
+
+        var node = _scrollPositionOrder.AddLast(_articleId);
+        _scrollPositions[_articleId] = (ReadingProgress, node);
+    }
+
+    private bool TryGetScrollPosition(string articleId, out double progress)
+    {
+        if (!_scrollPositions.TryGetValue(articleId, out var cached))
+        {
+            progress = 0;
+            return false;
+        }
+
+        _scrollPositionOrder.Remove(cached.Node);
+        var node = _scrollPositionOrder.AddLast(articleId);
+        _scrollPositions[articleId] = (cached.Progress, node);
+        progress = cached.Progress;
+        return true;
     }
 
     internal void HandleNavigationResult(bool isSuccess, CoreWebView2WebErrorStatus webErrorStatus)
@@ -271,6 +385,7 @@ public partial class ArticleHtmlViewer : UserControl
     {
         _articleDocumentNavigationId = null;
         _isArticleDocumentNavigationPending = true;
+        _documentNavigationStartedAt = Stopwatch.GetTimestamp();
         DocumentNavigationCount++;
         try
         {

@@ -37,3 +37,11 @@ Right-click an article in any list presentation for actions to open it in the re
 Feed, folder, tag, and All entries show an unread-count badge when they contain unread articles. Fresh articles published within the last 24 hours are labeled **New**; read articles show a **Read** marker and use lighter typography, so state is not conveyed by color alone.
 
 Empty article lists explain the current route or filter and offer a relevant action when possible. Initial library loading and refresh activity are shown separately from empty results. A failed initial library load keeps its error visible and offers a retry.
+
+## Local data and backups
+
+Open **Preferences → Data & backups** to see the size of the local database and its write-ahead log or create a full library backup. A backup contains all local profiles, subscriptions, article content, reading state, and preferences; backup files are not encrypted.
+
+Restoring a backup replaces the complete local library. RSS Reader validates and stages the selected file, closes, then applies the restore on the next launch. Before replacing the current database, it creates a safety backup in the local application-data folder and reports its location after startup. Keep both exported and safety backup files somewhere secure.
+
+Startup failures write diagnostic details to `%LOCALAPPDATA%\RssReader\Logs\startup.log`. This log stays on the device; review it before sharing because exception details can include local file paths.

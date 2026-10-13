@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Net.Http;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,9 +35,22 @@ public partial class App : System.Windows.Application
 				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
 				"RssReader",
 				"rssreader.db");
+			var libraryBackupService = new SqliteLibraryBackupService(databasePath);
+			var restoreResult = await libraryBackupService.ApplyPendingRestoreAsync();
+			if (restoreResult is { Applied: true, SafetyBackupPath: not null })
+			{
+				Trace.TraceInformation(
+					$"The library backup was restored. A safety copy was saved to '{restoreResult.SafetyBackupPath}'.");
+			}
+			else if (restoreResult is { Applied: false })
+			{
+				Trace.TraceError($"The staged library restore was not applied: {restoreResult.ErrorMessage}");
+			}
+
 			_host = Host.CreateDefaultBuilder()
 				.ConfigureServices(services =>
 				{
+					services.AddSingleton<ILibraryBackupService>(libraryBackupService);
 					services.AddSingleton<IProfileStore>(_ => new SqliteProfileStore(databasePath));
 					services.AddSingleton<ICatalogStore>(_ => new SqliteCatalogStore(databasePath));
 					services.AddSingleton(_ => new SqliteReaderStore(databasePath));
@@ -65,16 +79,36 @@ public partial class App : System.Windows.Application
 			await _host.Services.GetRequiredService<SqliteReaderStore>().InitializeAsync();
 			await UpdateStartupStatusAsync("Opening the profile chooser...");
 			await ShowProfileChooserAsync();
+			if (restoreResult is not null)
+			{
+				MessageDialogWindow.Show(
+					_profileChooserWindow,
+					restoreResult.Applied
+						? restoreResult.SafetyBackupPath is null
+							? "The library backup was restored."
+							: $"The library backup was restored. A safety copy of the previous library is available at:{Environment.NewLine}{restoreResult.SafetyBackupPath}"
+						: $"The library restore could not be applied. The current library remains available. {restoreResult.ErrorMessage}",
+					System.Windows.MessageBoxButton.OK,
+					restoreResult.Applied
+						? System.Windows.MessageBoxImage.Information
+						: System.Windows.MessageBoxImage.Warning);
+			}
+
 			_splashWindow.Close();
 			_splashWindow = null;
 			ShutdownMode = ShutdownMode.OnLastWindowClose;
 		}
-		catch (Exception)
+		catch (Exception exception)
 		{
+			var logPath = await StartupFailureLogger.WriteAsync(
+				Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+				exception);
 			await UpdateStartupStatusAsync("Startup failed. See the error message for details.");
 			MessageDialogWindow.Show(
 				_splashWindow,
-				"RSS Reader could not start. Check local application data permissions and try again.",
+				logPath is null
+					? "RSS Reader could not start. Diagnostic details could not be written."
+					: $"RSS Reader could not start. Diagnostic details were written to:{Environment.NewLine}{logPath}",
 				System.Windows.MessageBoxButton.OK,
 				System.Windows.MessageBoxImage.Error);
 			_splashWindow?.Close();
@@ -181,8 +215,25 @@ public partial class App : System.Windows.Application
 		{
 			var profileService = _host!.Services.GetRequiredService<ProfileService>();
 			var preferences = await profileService.GetPreferencesAsync(viewModel.ActiveProfile.Id);
-			var dialog = new PreferencesWindow(preferences) { Owner = owner };
-			if (dialog.ShowDialog() == true)
+			var dialog = new PreferencesWindow(
+				preferences,
+				_host.Services.GetRequiredService<ILibraryBackupService>())
+			{
+				Owner = owner
+			};
+			var dialogResult = dialog.ShowDialog();
+			if (dialog.RestorePending)
+			{
+				MessageDialogWindow.Show(
+					owner,
+					"The library restore is prepared. RSS Reader will close now; reopen it to apply the backup.",
+					System.Windows.MessageBoxButton.OK,
+					System.Windows.MessageBoxImage.Information);
+				Shutdown(0);
+				return;
+			}
+
+			if (dialogResult == true)
 			{
 				await profileService.SavePreferencesAsync(viewModel.ActiveProfile.Id, dialog.Preferences);
 				viewModel.ApplyPreferences(dialog.Preferences);

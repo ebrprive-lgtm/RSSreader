@@ -144,7 +144,8 @@ public partial class ArticleReaderView : UserControl
             _viewModel?.ReaderTheme ?? ProfileReaderTheme.Light,
             _viewModel?.ReaderTextSize ?? ProfileReaderTextSize.Medium,
             _viewModel?.ReaderLineSpacing ?? ProfileReaderLineSpacing.Normal,
-            _viewModel?.ReaderFontFamily ?? ProfileReaderFontFamily.SansSerif);
+            _viewModel?.ReaderFontFamily ?? ProfileReaderFontFamily.SansSerif,
+            article?.ArticleId);
     }
 
     private void ReaderTypographyButton_Click(object sender, RoutedEventArgs e)

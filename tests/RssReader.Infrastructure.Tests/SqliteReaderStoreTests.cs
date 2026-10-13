@@ -93,6 +93,44 @@ public sealed class SqliteReaderStoreTests
     }
 
     [TestMethod]
+    public async Task SaveArticlesInvalidatesExtractedCacheWhenSourceLinkChanges()
+    {
+        using var database = new TemporaryDatabase();
+        var profiles = new SqliteProfileStore(database.Path);
+        var catalog = new SqliteCatalogStore(database.Path);
+        var reader = new SqliteReaderStore(database.Path);
+        await profiles.InitializeAsync();
+        await catalog.InitializeAsync();
+        await reader.InitializeAsync();
+        var profile = Profile.CreateRegular("Reader");
+        var feed = new CatalogFeed("feed-1", "Example", "https://example.com/feed.xml", null, null);
+        await profiles.AddAsync(profile);
+        await catalog.AddFeedAsync(feed);
+        await reader.AddFolderAsync(profile.Id, "News");
+        await reader.SubscribeAsync(profile.Id, feed.Id, "News");
+        var article = new FeedArticle(
+            "article-1",
+            feed.Id,
+            "item-1",
+            "Headline",
+            "https://example.com/old-story",
+            DateTimeOffset.UtcNow,
+            "Summary",
+            "<p>Preview</p>");
+        await reader.SaveArticlesAsync(feed.Id, [article]);
+        await reader.SaveExtractedArticleContentAsync(
+            article.Id,
+            "<article>Cached story</article>",
+            DateTimeOffset.UtcNow);
+
+        await reader.SaveArticlesAsync(feed.Id, [article with { Link = "https://example.com/new-story" }]);
+
+        var storedArticle = (await reader.GetArticlesAsync(profile.Id)).Single().Article;
+        Assert.IsNull(storedArticle.ExtractedContentHtml);
+        Assert.IsNull(storedArticle.ExtractedContentRetrievedAt);
+    }
+
+    [TestMethod]
     public async Task SaveArticlesReplacesArticleCategoriesOnRefresh()
     {
         using var database = new TemporaryDatabase();

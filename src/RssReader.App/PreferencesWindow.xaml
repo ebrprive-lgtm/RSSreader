@@ -161,6 +161,11 @@
                                  GroupName="PreferenceSections"
                                  Style="{StaticResource PreferenceNavigationStyle}"
                                  Click="DebuggingNavigation_Click" />
+                    <RadioButton x:Name="DataNavigation"
+                                 Content="Data &amp; backups"
+                                 GroupName="PreferenceSections"
+                                 Style="{StaticResource PreferenceNavigationStyle}"
+                                 Click="DataNavigation_Click" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -263,6 +268,22 @@
                                    Foreground="{DynamicResource MutedTextBrush}"
                                    Margin="24,3,0,12"
                                    TextWrapping="Wrap" />
+                        <CheckBox x:Name="PreloadNextArticleCheckBox"
+                                  Content="Preload the next article"
+                                  AutomationProperties.Name="Preload the next article"
+                                  FontSize="13"
+                                  Margin="0,4,0,0"
+                                  Padding="2" />
+                        <TextBlock Text="When enabled, quietly cache the next article in the current reading order."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="24,3,0,12"
+                                   TextWrapping="Wrap" />
+                        <CheckBox x:Name="SmoothArticleScrollingCheckBox"
+                                  Content="Smooth article-list scrolling"
+                                  AutomationProperties.Name="Smooth article-list scrolling"
+                                  FontSize="13"
+                                  Margin="0,4,0,0"
+                                  Padding="2" />
                         <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
                         <TextBlock Text="Folder article limit" FontSize="13" FontWeight="SemiBold" />
                         <TextBlock Text="Maximum articles shown per feed inside a folder."
@@ -321,6 +342,48 @@
                                   AutomationProperties.Name="Show XML in the article viewer"
                                   FontSize="13"
                                   Padding="2" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="DataPanel" Visibility="Collapsed">
+                        <TextBlock Text="Local library storage" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="The local database contains all profiles, subscriptions, articles, reading state, and preferences."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,4,0,10"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="StorageUsageText"
+                                   Text="Checking local storage..."
+                                   AutomationProperties.Name="Local library storage usage"
+                                   FontSize="13" />
+                        <Button Content="Refresh storage size"
+                                Style="{StaticResource SecondaryActionButtonStyle}"
+                                HorizontalAlignment="Left"
+                                Margin="0,8,0,0"
+                                Padding="12,7"
+                                Click="RefreshStorageSize_Click" />
+                        <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="0,24,0,20" />
+                        <TextBlock Text="Back up or restore the library" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="Backups include every local profile and are not encrypted. Store backup files somewhere secure."
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,4,0,12"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="CreateLibraryBackupButton"
+                                    Content="Create backup..."
+                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                    Padding="12,7"
+                                    Margin="0,0,8,0"
+                                    Click="CreateLibraryBackup_Click" />
+                            <Button x:Name="RestoreLibraryBackupButton"
+                                    Content="Restore backup..."
+                                    Style="{StaticResource SecondaryActionButtonStyle}"
+                                    Foreground="{DynamicResource DestructiveBrush}"
+                                    Padding="12,7"
+                                    Click="RestoreLibraryBackup_Click" />
+                        </StackPanel>
+                        <TextBlock x:Name="DataOperationStatus"
+                                   Foreground="{DynamicResource MutedTextBrush}"
+                                   Margin="0,10,0,0"
+                                   TextWrapping="Wrap" />
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

@@ -32,6 +32,8 @@ public sealed class ArticleRowViewModel(
     string? extractedContentHtml = null,
     DateTimeOffset? extractedContentRetrievedAt = null) : ObservableObject
 {
+    internal static readonly TimeSpan ExtractedContentFreshnessWindow = TimeSpan.FromDays(7);
+
     private bool _isRead = isRead;
     private bool _isSaved = isSaved;
     private bool _isBulkSelected;
@@ -76,6 +78,10 @@ public sealed class ArticleRowViewModel(
     public string? ExtractedContentHtml => _extractedContentHtml;
     public DateTimeOffset? ExtractedContentRetrievedAt => _extractedContentRetrievedAt;
     public bool HasExtractedContent => !string.IsNullOrWhiteSpace(_extractedContentHtml);
+    public bool IsExtractedContentStale =>
+        HasExtractedContent && !IsExtractedContentFresh(DateTimeOffset.UtcNow);
+    public bool IsShowingStaleExtractedContent =>
+        IsShowingExtractedContent && IsExtractedContentStale;
     public bool IsShowingExtractedContent => _isShowingExtractedContent;
     public bool IsWaitingForFullArticle => _isWaitingForFullArticle;
     public string? ReaderContent => IsWaitingForFullArticle
@@ -137,7 +143,20 @@ public sealed class ArticleRowViewModel(
             ref _extractedContentRetrievedAt,
             retrievedAt,
             nameof(ExtractedContentRetrievedAt));
+        OnPropertyChanged(nameof(IsExtractedContentStale));
+        OnPropertyChanged(nameof(IsShowingStaleExtractedContent));
         ShowExtractedContent();
+    }
+
+    internal bool IsExtractedContentFresh(DateTimeOffset now) =>
+        HasExtractedContent &&
+        _extractedContentRetrievedAt is { } retrievedAt &&
+        now - retrievedAt.ToUniversalTime() <= ExtractedContentFreshnessWindow;
+
+    internal void RefreshExtractedContentFreshness()
+    {
+        OnPropertyChanged(nameof(IsExtractedContentStale));
+        OnPropertyChanged(nameof(IsShowingStaleExtractedContent));
     }
 
     public void ShowExtractedContent()
@@ -145,6 +164,7 @@ public sealed class ArticleRowViewModel(
         if (HasExtractedContent && SetProperty(ref _isShowingExtractedContent, true, nameof(IsShowingExtractedContent)))
         {
             OnPropertyChanged(nameof(ReaderContent));
+            OnPropertyChanged(nameof(IsShowingStaleExtractedContent));
         }
     }
 
@@ -153,6 +173,7 @@ public sealed class ArticleRowViewModel(
         if (SetProperty(ref _isShowingExtractedContent, false, nameof(IsShowingExtractedContent)))
         {
             OnPropertyChanged(nameof(ReaderContent));
+            OnPropertyChanged(nameof(IsShowingStaleExtractedContent));
         }
     }
 

@@ -1,4 +1,7 @@
 using System.Net;
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using HtmlAgilityPack;
 using RssReader.Domain;
 
@@ -6,6 +9,39 @@ namespace RssReader.App;
 
 internal static class ArticleHtmlDocumentBuilder
 {
+    private const string ReaderProgressScript = """
+        (() => {
+          let scheduled = false;
+          const reportProgress = () => {
+            scheduled = false;
+            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            const progress = maxScroll === 0 ? 0 : Math.min(1, Math.max(0, window.scrollY / maxScroll));
+            window.chrome.webview.postMessage({ kind: "reader-progress", progress });
+          };
+          const scheduleProgress = () => {
+            if (!scheduled) {
+              scheduled = true;
+              window.requestAnimationFrame(reportProgress);
+            }
+          };
+          window.addEventListener("scroll", scheduleProgress, { passive: true });
+          window.addEventListener("resize", scheduleProgress);
+          window.addEventListener("load", scheduleProgress, true);
+          window.chrome.webview.addEventListener("message", event => {
+            if (event.data?.kind !== "reader-restore" ||
+                !Number.isFinite(event.data.progress)) {
+              return;
+            }
+
+            const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            window.scrollTo(0, maxScroll * Math.min(1, Math.max(0, event.data.progress)));
+            scheduleProgress();
+          });
+          scheduleProgress();
+        })();
+        """;
+    private static readonly string ReaderProgressScriptHash = Convert.ToBase64String(
+        SHA256.HashData(Encoding.UTF8.GetBytes(ReaderProgressScript)));
     private static readonly string[] LazyImageSourceAttributes =
     [
         "data-img-url",
@@ -97,6 +133,7 @@ internal static class ArticleHtmlDocumentBuilder
         ProfileReaderLineSpacing lineSpacing = ProfileReaderLineSpacing.Normal,
         ProfileReaderFontFamily fontFamily = ProfileReaderFontFamily.SansSerif)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         var baseUrl = GetWebUrl(articleUrl) ?? GetWebUrl(feedUrl);
         var isFeedPreview = IsFeedPreview(content, summary);
         var bodyFragment = string.IsNullOrWhiteSpace(content)
@@ -121,19 +158,28 @@ internal static class ArticleHtmlDocumentBuilder
             sanitizedFragment = AddLeadingThumbnail(sanitizedFragment, imageUrl, baseUrl);
         }
         var readerStyles = BuildReaderStyles(readerTheme, textSize, lineSpacing, fontFamily);
+        var contentSecurityPolicy =
+            $"default-src 'none'; img-src http: https:; style-src 'unsafe-inline'; " +
+            $"script-src 'sha256-{ReaderProgressScriptHash}'; connect-src 'none'; " +
+            "object-src 'none'; base-uri 'none'; form-action 'none'";
 
-        return $"""
+        var document = $"""
             <!doctype html>
             <html lang="en">
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
-              <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+              <meta http-equiv="Content-Security-Policy" content="{contentSecurityPolicy}">
               <style>{readerStyles}{widthLimitStyle}</style>
             </head>
-            <body><main>{sanitizedFragment}</main></body>
+            <body><main>{sanitizedFragment}</main><script>{ReaderProgressScript}</script></body>
             </html>
             """;
+        Trace.WriteLine(
+            $"[ArticleReaderPerf] Reader document prepared in " +
+            $"{Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:F0} ms " +
+            $"({document.Length} characters).");
+        return document;
     }
 
     internal static string? FindFirstWebImageUrl(
