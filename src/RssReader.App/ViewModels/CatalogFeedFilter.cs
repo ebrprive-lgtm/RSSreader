@@ -7,12 +7,11 @@ internal static class CatalogFeedFilter
     public static bool IsVisible(
         CatalogFeedListItem feed,
         string searchQuery,
-        bool showMetadataGapsOnly,
         string? categoryId,
         CatalogCollectionFilterOption? collectionFilter,
         CatalogFeedHealthFilter healthFilter)
     {
-        if ((showMetadataGapsOnly && !feed.HasMetadataGaps) ||
+        if (!feed.IsCategoryEnabled ||
             (categoryId is not null && feed.CategoryId != categoryId) ||
             (collectionFilter?.CollectionId is not null && !collectionFilter.FeedIds.Contains(feed.Id)))
         {

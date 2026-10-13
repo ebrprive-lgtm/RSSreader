@@ -54,6 +54,7 @@
             <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource DestructiveBrush}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -75,6 +76,24 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <Style x:Key="ProfileRowCommandStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource DeleteProfileButtonStyle}">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Grid}}"
+                             Value="True">
+                    <Setter Property="Opacity" Value="1" />
+                    <Setter Property="IsHitTestVisible" Value="True" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Grid}}"
+                             Value="True">
+                    <Setter Property="Opacity" Value="1" />
+                    <Setter Property="IsHitTestVisible" Value="True" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -175,12 +194,12 @@
                                             HorizontalAlignment="Right"
                                             VerticalAlignment="Center"
                                             Margin="0,0,12,8"
-                                            Style="{StaticResource DeleteProfileButtonStyle}"
+                                            Style="{StaticResource ProfileRowCommandStyle}"
                                             Click="DeleteProfile_Click"
                                             ToolTip="Delete profile"
                                             AutomationProperties.Name="Delete profile"
                                             Visibility="Collapsed">
-                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                                        <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" FontSize="14" Style="{StaticResource RowCommandDestructiveIconStyle}" />
                                     </Button>
                                 </Grid>
                                 <DataTemplate.Triggers>

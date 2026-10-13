@@ -44,14 +44,16 @@ public enum ProfileReaderTextSize
 {
     Small,
     Medium,
-    Large
+    Large,
+    XLarge
 }
 
 public enum ProfileReaderLineSpacing
 {
     Compact,
     Normal,
-    Relaxed
+    Relaxed,
+    ExtraCompact
 }
 
 public enum ProfileReaderFontFamily

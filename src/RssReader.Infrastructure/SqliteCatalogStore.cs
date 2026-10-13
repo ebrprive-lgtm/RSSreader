@@ -31,7 +31,8 @@ public sealed class SqliteCatalogStore : ICatalogStore
         command.CommandText = """
             CREATE TABLE IF NOT EXISTS CatalogCategories (
                 Id TEXT NOT NULL PRIMARY KEY,
-                Name TEXT NOT NULL COLLATE NOCASE UNIQUE
+                Name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                IsEnabled INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE IF NOT EXISTS CatalogCollections (
                 Id TEXT NOT NULL PRIMARY KEY,
@@ -46,6 +47,8 @@ public sealed class SqliteCatalogStore : ICatalogStore
                 WebsiteUrl TEXT NULL,
                 LastHealthCheckedAt TEXT NULL,
                 LastHealthCheckSucceeded INTEGER NULL,
+                IsEnabled INTEGER NOT NULL DEFAULT 1,
+                IsEnabledInCategory INTEGER NOT NULL DEFAULT 1,
                 IsSharedCatalog INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE IF NOT EXISTS CatalogCollectionFeeds (
@@ -55,9 +58,12 @@ public sealed class SqliteCatalogStore : ICatalogStore
             );
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await EnsureCatalogCategoryColumnAsync(connection, "IsEnabled", "INTEGER NOT NULL DEFAULT 1", cancellationToken);
         await EnsureCatalogFeedColumnAsync(connection, "WebsiteUrl", "TEXT NULL", cancellationToken);
         await EnsureCatalogFeedColumnAsync(connection, "LastHealthCheckedAt", "TEXT NULL", cancellationToken);
         await EnsureCatalogFeedColumnAsync(connection, "LastHealthCheckSucceeded", "INTEGER NULL", cancellationToken);
+        await EnsureCatalogFeedColumnAsync(connection, "IsEnabled", "INTEGER NOT NULL DEFAULT 1", cancellationToken);
+        await EnsureCatalogFeedColumnAsync(connection, "IsEnabledInCategory", "INTEGER NOT NULL DEFAULT 1", cancellationToken);
         await EnsureCatalogFeedColumnAsync(connection, "IsSharedCatalog", "INTEGER NOT NULL DEFAULT 1", cancellationToken);
         await using var profileFeedsCommand = connection.CreateCommand();
         profileFeedsCommand.CommandText = """
@@ -86,21 +92,46 @@ public sealed class SqliteCatalogStore : ICatalogStore
         string columnDefinition,
         CancellationToken cancellationToken)
     {
-        var hasWebsiteUrl = false;
+        var hasColumn = false;
         await using (var columnsCommand = connection.CreateCommand())
         {
             columnsCommand.CommandText = "PRAGMA table_info(CatalogFeeds);";
             await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken);
             while (await columnsReader.ReadAsync(cancellationToken))
             {
-                hasWebsiteUrl |= string.Equals(columnsReader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase);
+                hasColumn |= string.Equals(columnsReader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase);
             }
         }
 
-        if (!hasWebsiteUrl)
+        if (!hasColumn)
         {
             await using var migrationCommand = connection.CreateCommand();
             migrationCommand.CommandText = $"ALTER TABLE CatalogFeeds ADD COLUMN {columnName} {columnDefinition};";
+            await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static async Task EnsureCatalogCategoryColumnAsync(
+        SqliteConnection connection,
+        string columnName,
+        string columnDefinition,
+        CancellationToken cancellationToken)
+    {
+        var hasColumn = false;
+        await using (var columnsCommand = connection.CreateCommand())
+        {
+            columnsCommand.CommandText = "PRAGMA table_info(CatalogCategories);";
+            await using var columnsReader = await columnsCommand.ExecuteReaderAsync(cancellationToken);
+            while (await columnsReader.ReadAsync(cancellationToken))
+            {
+                hasColumn |= string.Equals(columnsReader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        if (!hasColumn)
+        {
+            await using var migrationCommand = connection.CreateCommand();
+            migrationCommand.CommandText = $"ALTER TABLE CatalogCategories ADD COLUMN {columnName} {columnDefinition};";
             await migrationCommand.ExecuteNonQueryAsync(cancellationToken);
         }
     }
@@ -110,7 +141,7 @@ public sealed class SqliteCatalogStore : ICatalogStore
         await using var connection = await OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded
+            SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded, IsEnabled, IsEnabledInCategory
             FROM CatalogFeeds
             WHERE IsSharedCatalog = 1
             ORDER BY Name COLLATE NOCASE;
@@ -133,7 +164,7 @@ public sealed class SqliteCatalogStore : ICatalogStore
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT feed.Id, feed.Name, feed.FeedUrl, feed.Description, feed.CategoryId, feed.WebsiteUrl,
-                   feed.LastHealthCheckedAt, feed.LastHealthCheckSucceeded
+                   feed.LastHealthCheckedAt, feed.LastHealthCheckSucceeded, feed.IsEnabled, feed.IsEnabledInCategory
             FROM CatalogFeeds AS feed
             WHERE feed.IsSharedCatalog = 1
                OR EXISTS (
@@ -191,8 +222,8 @@ public sealed class SqliteCatalogStore : ICatalogStore
             insertFeed.Transaction = transaction;
             insertFeed.CommandText = """
                 INSERT INTO CatalogFeeds (
-                    Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, IsSharedCatalog)
-                VALUES ($id, $name, $feedUrl, $description, NULL, $websiteUrl, 0);
+                    Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, IsEnabled, IsSharedCatalog)
+                VALUES ($id, $name, $feedUrl, $description, NULL, $websiteUrl, 1, 0);
                 """;
             insertFeed.Parameters.AddWithValue("$id", feed.Id);
             insertFeed.Parameters.AddWithValue("$name", feed.Name);
@@ -218,7 +249,7 @@ public sealed class SqliteCatalogStore : ICatalogStore
         await using var select = connection.CreateCommand();
         select.Transaction = transaction;
         select.CommandText = """
-            SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded
+            SELECT Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded, IsEnabled, IsEnabledInCategory
             FROM CatalogFeeds WHERE Id = $feedId;
             """;
         select.Parameters.AddWithValue("$feedId", feedId);
@@ -262,7 +293,9 @@ public sealed class SqliteCatalogStore : ICatalogStore
             reader.IsDBNull(4) ? null : reader.GetString(4),
             reader.IsDBNull(5) ? null : reader.GetString(5),
             reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
-            reader.IsDBNull(7) ? null : reader.GetInt64(7) == 1);
+            reader.IsDBNull(7) ? null : reader.GetInt64(7) == 1,
+            reader.GetInt64(8) == 1,
+            reader.GetInt64(9) == 1);
 
     public Task<IReadOnlyList<CatalogCategory>> GetCategoriesAsync(CancellationToken cancellationToken = default) =>
         _taxonomy.GetCategoriesAsync(cancellationToken);
@@ -281,8 +314,8 @@ public sealed class SqliteCatalogStore : ICatalogStore
 
     public Task AddFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => ExecuteAsync(
         """
-        INSERT INTO CatalogFeeds (Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded)
-        VALUES ($id, $name, $feedUrl, $description, $categoryId, $websiteUrl, $lastHealthCheckedAt, $lastHealthCheckSucceeded);
+        INSERT INTO CatalogFeeds (Id, Name, FeedUrl, Description, CategoryId, WebsiteUrl, LastHealthCheckedAt, LastHealthCheckSucceeded, IsEnabled, IsEnabledInCategory)
+        VALUES ($id, $name, $feedUrl, $description, $categoryId, $websiteUrl, $lastHealthCheckedAt, $lastHealthCheckSucceeded, $isEnabled, $isEnabledInCategory);
         """,
         cancellationToken,
         ("$id", feed.Id),
@@ -292,7 +325,9 @@ public sealed class SqliteCatalogStore : ICatalogStore
         ("$categoryId", (object?)feed.CategoryId ?? DBNull.Value),
         ("$websiteUrl", (object?)feed.WebsiteUrl ?? DBNull.Value),
         ("$lastHealthCheckedAt", (object?)feed.LastHealthCheckedAt?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value),
-        ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } insertSucceeded ? (object)(insertSucceeded ? 1 : 0) : DBNull.Value));
+        ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } insertSucceeded ? (object)(insertSucceeded ? 1 : 0) : DBNull.Value),
+        ("$isEnabled", feed.IsEnabled ? 1 : 0),
+        ("$isEnabledInCategory", feed.IsEnabledInCategory ? 1 : 0));
 
     public Task UpdateFeedAsync(CatalogFeed feed, CancellationToken cancellationToken = default) => ExecuteAsync(
         """
@@ -303,7 +338,9 @@ public sealed class SqliteCatalogStore : ICatalogStore
             CategoryId = $categoryId,
             WebsiteUrl = $websiteUrl,
             LastHealthCheckedAt = $lastHealthCheckedAt,
-            LastHealthCheckSucceeded = $lastHealthCheckSucceeded
+            LastHealthCheckSucceeded = $lastHealthCheckSucceeded,
+            IsEnabled = $isEnabled,
+            IsEnabledInCategory = $isEnabledInCategory
         WHERE Id = $id;
         """,
         cancellationToken,
@@ -314,7 +351,9 @@ public sealed class SqliteCatalogStore : ICatalogStore
         ("$categoryId", (object?)feed.CategoryId ?? DBNull.Value),
         ("$websiteUrl", (object?)feed.WebsiteUrl ?? DBNull.Value),
         ("$lastHealthCheckedAt", (object?)feed.LastHealthCheckedAt?.ToString("O", CultureInfo.InvariantCulture) ?? DBNull.Value),
-        ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } updateSucceeded ? (object)(updateSucceeded ? 1 : 0) : DBNull.Value));
+        ("$lastHealthCheckSucceeded", feed.LastHealthCheckSucceeded is { } updateSucceeded ? (object)(updateSucceeded ? 1 : 0) : DBNull.Value),
+        ("$isEnabled", feed.IsEnabled ? 1 : 0),
+        ("$isEnabledInCategory", feed.IsEnabledInCategory ? 1 : 0));
 
     public Task DeleteFeedAsync(string feedId, CancellationToken cancellationToken = default) => ExecuteAsync(
         "DELETE FROM CatalogFeeds WHERE Id = $id AND IsSharedCatalog = 1;",

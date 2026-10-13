@@ -23,7 +23,8 @@ public sealed record FeedImportSummary(
 public sealed record CatalogFeedHealthCheckResult(
     bool IsSuccessful,
     DateTimeOffset CheckedAt,
-    string? ErrorMessage = null);
+    string? ErrorMessage = null,
+    int? EntryCount = null);
 
 public sealed class CatalogService
 {
@@ -107,6 +108,13 @@ public sealed class CatalogService
         CancellationToken cancellationToken = default) =>
         _categories.UpdateCategoryAsync(actor, categoryId, name, cancellationToken);
 
+    public Task<CatalogCategory> SetCategoryEnabledAsync(
+        Profile actor,
+        string categoryId,
+        bool isEnabled,
+        CancellationToken cancellationToken = default) =>
+        _categories.SetCategoryEnabledAsync(actor, categoryId, isEnabled, cancellationToken);
+
     public Task MergeCategoriesAsync(
         Profile actor,
         string sourceCategoryId,
@@ -158,4 +166,18 @@ public sealed class CatalogService
         string feedId,
         CancellationToken cancellationToken = default) =>
         _feeds.DeleteFeedAsync(actor, feedId, cancellationToken);
+
+    public Task SetFeedEnabledAsync(
+        Profile actor,
+        string feedId,
+        bool isEnabled,
+        CancellationToken cancellationToken = default) =>
+        _feeds.SetFeedEnabledAsync(actor, feedId, isEnabled, cancellationToken);
+
+    public Task SetFeedEnabledInCategoryAsync(
+        Profile actor,
+        string feedId,
+        bool isEnabled,
+        CancellationToken cancellationToken = default) =>
+        _feeds.SetFeedEnabledInCategoryAsync(actor, feedId, isEnabled, cancellationToken);
 }

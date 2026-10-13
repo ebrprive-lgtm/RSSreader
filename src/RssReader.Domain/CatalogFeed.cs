@@ -8,4 +8,6 @@ public sealed record CatalogFeed(
     string? CategoryId,
     string? WebsiteUrl = null,
     DateTimeOffset? LastHealthCheckedAt = null,
-    bool? LastHealthCheckSucceeded = null);
+    bool? LastHealthCheckSucceeded = null,
+    bool IsEnabled = true,
+    bool IsEnabledInCategory = true);

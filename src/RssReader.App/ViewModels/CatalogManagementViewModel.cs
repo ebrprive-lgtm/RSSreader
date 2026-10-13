@@ -10,6 +10,12 @@ namespace RssReader.App.ViewModels;
 
 public sealed record CatalogCategoryFilterOption(string? CategoryId, string Name);
 public sealed record CatalogCollectionFilterOption(string? CollectionId, string Name, IReadOnlySet<string> FeedIds);
+public sealed record CatalogFeedScanProgress(
+    int CompletedCount,
+    int TotalCount,
+    int CurrentFeedNumber,
+    string CurrentFeedName,
+    int DisabledCount);
 public enum CatalogFeedHealthFilter { All, NotChecked, Succeeded, Failed }
 public sealed record CatalogHealthFilterOption(CatalogFeedHealthFilter Filter, string Name);
 
@@ -37,7 +43,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
     private string _errorMessage = string.Empty;
     private string _importMessage = string.Empty;
     private string _searchQuery = string.Empty;
-    private bool _showMetadataGapsOnly;
     private CatalogCategoryFilterOption? _selectedCategoryFilter;
     private CatalogCollectionFilterOption? _selectedCollectionFilter;
     private CatalogHealthFilterOption? _selectedHealthFilter;
@@ -66,6 +71,10 @@ public sealed class CatalogManagementViewModel : ObservableObject
         CheckFeedHealthCommand = new AsyncCommand<CatalogFeedListItem>(CheckFeedHealthAsync);
         LoadStarterPackCommand = new AsyncCommand(LoadStarterPackAsync);
         DeleteFeedCommand = new AsyncCommand<CatalogFeedListItem>(DeleteFeedAsync);
+        SetGlobalFeedAvailabilityCommand = new AsyncCommand<CatalogFeedListItem>(SetGlobalFeedAvailabilityAsync);
+        SetCategoryFeedAvailabilityCommand = new AsyncCommand<CatalogTaxonomyTreeNode>(SetCategoryFeedAvailabilityAsync);
+        SetCategoryAvailabilityCommand = new AsyncCommand<CatalogTaxonomyTreeNode>(SetCategoryAvailabilityAsync);
+        RemoveCollectionTreeFeedCommand = new AsyncCommand<CatalogTaxonomyTreeNode>(RemoveCollectionTreeFeedAsync);
         ClearFiltersCommand = new RelayCommand(ClearFilters);
         DismissImportMessageCommand = new RelayCommand(() => ImportMessage = string.Empty);
         AddCategoryCommand = new AsyncCommand(_taxonomyManagement.AddCategoryAsync);
@@ -102,6 +111,8 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public ICollectionView VisibleFeeds { get; private set; }
     public ObservableCollection<CatalogCategory> Categories { get; } = [];
     public ObservableCollection<CatalogCollection> Collections { get; } = [];
+    public ObservableCollection<CatalogTaxonomyTreeNode> CategoryTreeNodes { get; } = [];
+    public ObservableCollection<CatalogTaxonomyTreeNode> CollectionTreeNodes { get; } = [];
     public ObservableCollection<CatalogCategoryFilterOption> CategoryFilterOptions { get; } = [];
     public ObservableCollection<CatalogCollectionFilterOption> CollectionFilterOptions { get; } = [];
     public ObservableCollection<CatalogHealthFilterOption> HealthFilterOptions { get; } = [];
@@ -111,6 +122,10 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public AsyncCommand<CatalogFeedListItem> CheckFeedHealthCommand { get; }
     public AsyncCommand LoadStarterPackCommand { get; }
     public AsyncCommand<CatalogFeedListItem> DeleteFeedCommand { get; }
+    public AsyncCommand<CatalogFeedListItem> SetGlobalFeedAvailabilityCommand { get; }
+    public AsyncCommand<CatalogTaxonomyTreeNode> SetCategoryFeedAvailabilityCommand { get; }
+    public AsyncCommand<CatalogTaxonomyTreeNode> SetCategoryAvailabilityCommand { get; }
+    public AsyncCommand<CatalogTaxonomyTreeNode> RemoveCollectionTreeFeedCommand { get; }
     public RelayCommand ClearFiltersCommand { get; }
     public RelayCommand DismissImportMessageCommand { get; }
     public AsyncCommand AddCategoryCommand { get; }
@@ -121,7 +136,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
     public AsyncCommand AddFeedToCollectionCommand { get; }
     public AsyncCommand RemoveFeedFromCollectionCommand { get; }
 
-    public string MetadataReviewSummary => $"Metadata gaps: {Feeds.Count(feed => feed.HasMetadataGaps)}";
     public int VisibleFeedCount => VisibleFeeds.Cast<CatalogFeedListItem>().Count();
     public string FeedResultsSummary => $"Showing {VisibleFeedCount} of {Feeds.Count} feeds";
     public bool IsFeedResultsEmpty => VisibleFeeds.IsEmpty;
@@ -171,18 +185,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _selectedHealthFilter, value))
-            {
-                RefreshVisibleFeeds();
-            }
-        }
-    }
-
-    public bool ShowMetadataGapsOnly
-    {
-        get => _showMetadataGapsOnly;
-        set
-        {
-            if (SetProperty(ref _showMetadataGapsOnly, value))
             {
                 RefreshVisibleFeeds();
             }
@@ -403,13 +405,13 @@ public sealed class CatalogManagementViewModel : ObservableObject
         {
             Collections.Add(collection);
         }
+        RebuildTaxonomyTrees(snapshot.Feeds);
 
         SelectedFeed = Feeds.FirstOrDefault(feed => feed.Id == selectedFeedId);
         SelectedCollection = Collections.FirstOrDefault(collection => collection.Id == selectedManagementCollectionId);
         VisibleFeeds = CreateVisibleFeedView(Feeds);
         OnPropertyChanged(nameof(Feeds));
         OnPropertyChanged(nameof(VisibleFeeds));
-        OnPropertyChanged(nameof(MetadataReviewSummary));
         OnPropertyChanged(nameof(FeedResultsEmptyMessage));
         RefreshVisibleFeeds();
 
@@ -425,7 +427,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
             CatalogFeedFilter.IsVisible(
                 feed,
                 SearchQuery,
-                ShowMetadataGapsOnly,
                 SelectedCategoryFilter?.CategoryId,
                 SelectedCollectionFilter,
                 SelectedHealthFilter?.Filter ?? CatalogFeedHealthFilter.All),
@@ -456,7 +457,6 @@ public sealed class CatalogManagementViewModel : ObservableObject
         SelectedCategoryFilter = CategoryFilterOptions.FirstOrDefault(option => option.CategoryId is null);
         SelectedCollectionFilter = CollectionFilterOptions.FirstOrDefault(option => option.CollectionId is null);
         SelectedHealthFilter = HealthFilterOptions[0];
-        ShowMetadataGapsOnly = false;
     }
 
     private async Task AddFeedAsync()
@@ -545,6 +545,162 @@ public sealed class CatalogManagementViewModel : ObservableObject
         await RefreshAsync();
     }
 
+    private async Task SetGlobalFeedAvailabilityAsync(CatalogFeedListItem feed)
+    {
+        await _catalogService.SetFeedEnabledAsync(_actor, feed.Id, !feed.IsEnabled);
+        await RefreshAsync();
+    }
+
+    private async Task SetCategoryFeedAvailabilityAsync(CatalogTaxonomyTreeNode node)
+    {
+        if (node.Feed is not { } feed || !node.IsCategoryFeed)
+        {
+            return;
+        }
+
+        await _catalogService.SetFeedEnabledInCategoryAsync(_actor, feed.Id, !feed.IsEnabledInCategory);
+        await RefreshAsync();
+    }
+
+    private async Task SetCategoryAvailabilityAsync(CatalogTaxonomyTreeNode node)
+    {
+        if (node.Category is not { } category)
+        {
+            return;
+        }
+
+        await _catalogService.SetCategoryEnabledAsync(_actor, category.Id, !category.IsEnabled);
+        await RefreshAsync();
+    }
+
+    private async Task RemoveCollectionTreeFeedAsync(CatalogTaxonomyTreeNode node)
+    {
+        if (node.Kind != CatalogTaxonomyTreeNodeKind.Feed ||
+            node.ParentId is not { } collectionId ||
+            node.Feed is not { } feed)
+        {
+            return;
+        }
+
+        var feedIds = GetFeedIdsForCollection(collectionId)
+            .Where(feedId => feedId != feed.Id)
+            .ToArray();
+        await UpdateCollectionFeedsAsync(collectionId, feedIds);
+    }
+
+    public void LoadTaxonomyChildren(CatalogTaxonomyTreeNode node)
+    {
+        if (node.IsChildrenLoaded)
+        {
+            return;
+        }
+
+        node.Children.Clear();
+        IEnumerable<CatalogFeedListItem> children = node.Kind switch
+        {
+            CatalogTaxonomyTreeNodeKind.Category =>
+                node.Id.Length == 0
+                    ? Feeds.Where(feed => feed.CategoryId is null)
+                    : Feeds.Where(feed => feed.CategoryId == node.Id),
+            CatalogTaxonomyTreeNodeKind.Collection =>
+                CollectionFeeds(node.Id),
+            _ => []
+        };
+
+        foreach (var feed in children.OrderBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            node.Children.Add(new CatalogTaxonomyTreeNode(
+                CatalogTaxonomyTreeNodeKind.Feed,
+                feed.Id,
+                feed.Name,
+                this,
+                feed: feed,
+                parentId: node.Kind == CatalogTaxonomyTreeNodeKind.Collection ? node.Id : null));
+        }
+
+        node.IsChildrenLoaded = true;
+    }
+
+    private IEnumerable<CatalogFeedListItem> CollectionFeeds(string collectionId)
+    {
+        var feedIds = GetFeedIdsForCollection(collectionId);
+        return Feeds.Where(feed => feedIds.Contains(feed.Id) && feed.IsCategoryEnabled);
+    }
+
+    public IReadOnlyList<CatalogFeedListItem> GetFeedsForCategory(string categoryId) =>
+        Feeds.Where(feed => feed.CategoryId == categoryId).ToArray();
+
+    public async Task AddCategoryFeedsToCollectionAsync(string collectionId, string categoryId)
+    {
+        var feedIds = GetFeedIdsForCollection(collectionId)
+            .Concat(GetFeedsForCategory(categoryId).Select(feed => feed.Id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        await UpdateCollectionFeedsAsync(collectionId, feedIds);
+    }
+
+    private void RebuildTaxonomyTrees(IReadOnlyList<CatalogFeedListItem> feeds)
+    {
+        var expandedCategories = CategoryTreeNodes
+            .Where(node => node.IsExpanded)
+            .Select(node => node.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        var expandedCollections = CollectionTreeNodes
+            .Where(node => node.IsExpanded)
+            .Select(node => node.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+        CategoryTreeNodes.Clear();
+        foreach (var category in Categories.OrderBy(category => category.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var node = CreateTreeParent(
+                CatalogTaxonomyTreeNodeKind.Category,
+                category.Id,
+                category.Name,
+                category: category);
+            node.IsExpanded = expandedCategories.Contains(node.Id);
+            CategoryTreeNodes.Add(node);
+        }
+
+        if (feeds.Any(feed => feed.CategoryId is null))
+        {
+            var node = CreateTreeParent(
+                CatalogTaxonomyTreeNodeKind.Category,
+                string.Empty,
+                "Uncategorized");
+            node.IsExpanded = expandedCategories.Contains(node.Id);
+            CategoryTreeNodes.Add(node);
+        }
+
+        CollectionTreeNodes.Clear();
+        foreach (var collection in Collections.OrderBy(collection => collection.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var node = CreateTreeParent(
+                CatalogTaxonomyTreeNodeKind.Collection,
+                collection.Id,
+                collection.Name,
+                collection: collection);
+            node.IsExpanded = expandedCollections.Contains(node.Id);
+            CollectionTreeNodes.Add(node);
+        }
+    }
+
+    private CatalogTaxonomyTreeNode CreateTreeParent(
+        CatalogTaxonomyTreeNodeKind kind,
+        string id,
+        string name,
+        CatalogCategory? category = null,
+        CatalogCollection? collection = null)
+    {
+        var node = new CatalogTaxonomyTreeNode(kind, id, name, this, category, collection);
+        node.Children.Add(new CatalogTaxonomyTreeNode(
+            CatalogTaxonomyTreeNodeKind.Placeholder,
+            string.Empty,
+            string.Empty,
+            this));
+        return node;
+    }
+
     private async Task CheckFeedHealthAsync(CatalogFeedListItem feed)
     {
         ErrorMessage = string.Empty;
@@ -566,6 +722,94 @@ public sealed class CatalogManagementViewModel : ObservableObject
         finally
         {
             feed.IsHealthCheckInProgress = false;
+        }
+    }
+
+    public async Task<int> CheckAllVisibleFeedsAsync(
+        IProgress<CatalogFeedScanProgress> progress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(progress);
+        return await CheckFeedsAsync(
+            VisibleFeeds.Cast<CatalogFeedListItem>().ToArray(),
+            "visible feed sources",
+            progress,
+            cancellationToken);
+    }
+
+    public async Task<int> CheckCategoryFeedsAsync(
+        string categoryId,
+        IProgress<CatalogFeedScanProgress> progress,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(categoryId);
+        ArgumentNullException.ThrowIfNull(progress);
+        var category = Categories.FirstOrDefault(candidate => candidate.Id == categoryId)
+            ?? throw new InvalidOperationException("That category no longer exists in the catalog.");
+        var categoryFeeds = GetFeedsForCategory(categoryId);
+        return await CheckFeedsAsync(
+            categoryFeeds,
+            $"feeds in {category.Name}",
+            progress,
+            cancellationToken);
+    }
+
+    private async Task<int> CheckFeedsAsync(
+        IReadOnlyList<CatalogFeedListItem> feedsToCheck,
+        string feedScope,
+        IProgress<CatalogFeedScanProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        ErrorMessage = string.Empty;
+        var disabledCount = 0;
+
+        try
+        {
+            for (var index = 0; index < feedsToCheck.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var feed = feedsToCheck[index];
+                feed.IsHealthCheckInProgress = true;
+                progress.Report(new CatalogFeedScanProgress(
+                    index,
+                    feedsToCheck.Count,
+                    index + 1,
+                    feed.Name,
+                    disabledCount));
+
+                try
+                {
+                    var result = await _catalogService.CheckFeedHealthAsync(_actor, feed.Id, cancellationToken);
+                    if (!result.IsSuccessful || result.EntryCount is <= 2)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        await _catalogService.SetFeedEnabledAsync(_actor, feed.Id, false, cancellationToken);
+                        disabledCount++;
+                    }
+                }
+                finally
+                {
+                    feed.IsHealthCheckInProgress = false;
+                }
+
+                progress.Report(new CatalogFeedScanProgress(
+                    index + 1,
+                    feedsToCheck.Count,
+                    index + 1,
+                    feed.Name,
+                    disabledCount));
+            }
+
+            return disabledCount;
+        }
+        finally
+        {
+            foreach (var feed in feedsToCheck)
+            {
+                feed.IsHealthCheckInProgress = false;
+            }
+
+            await RefreshAsync();
         }
     }
 

@@ -38,6 +38,7 @@ public sealed class ArticleRowViewModel(
     private string? _extractedContentHtml = extractedContentHtml;
     private DateTimeOffset? _extractedContentRetrievedAt = extractedContentRetrievedAt;
     private bool _isShowingExtractedContent = !string.IsNullOrWhiteSpace(extractedContentHtml);
+    private bool _isWaitingForFullArticle;
 
     public string Title { get; } = FeedTextEncodingRepair.Repair(title);
     public string Source { get; } = FeedTextEncodingRepair.Repair(source);
@@ -76,7 +77,12 @@ public sealed class ArticleRowViewModel(
     public DateTimeOffset? ExtractedContentRetrievedAt => _extractedContentRetrievedAt;
     public bool HasExtractedContent => !string.IsNullOrWhiteSpace(_extractedContentHtml);
     public bool IsShowingExtractedContent => _isShowingExtractedContent;
-    public string? ReaderContent => IsShowingExtractedContent ? _extractedContentHtml : Content;
+    public bool IsWaitingForFullArticle => _isWaitingForFullArticle;
+    public string? ReaderContent => IsWaitingForFullArticle
+        ? null
+        : IsShowingExtractedContent
+            ? _extractedContentHtml
+            : Content;
     public bool HasAuthor => !string.IsNullOrWhiteSpace(Author);
     public string ReadLaterAutomationName => IsSaved ? "Remove from read later" : "Add to read later";
     public string BulkSelectionAutomationName =>
@@ -117,9 +123,14 @@ public sealed class ArticleRowViewModel(
     public void SetExtractedContent(string html, DateTimeOffset retrievedAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(html);
-        if (SetProperty(ref _extractedContentHtml, html, nameof(ExtractedContentHtml)))
+        var contentChanged = SetProperty(ref _extractedContentHtml, html, nameof(ExtractedContentHtml));
+        if (contentChanged)
         {
             OnPropertyChanged(nameof(HasExtractedContent));
+            if (_isShowingExtractedContent)
+            {
+                OnPropertyChanged(nameof(ReaderContent));
+            }
         }
 
         SetProperty(
@@ -140,6 +151,14 @@ public sealed class ArticleRowViewModel(
     public void ShowFeedPreview()
     {
         if (SetProperty(ref _isShowingExtractedContent, false, nameof(IsShowingExtractedContent)))
+        {
+            OnPropertyChanged(nameof(ReaderContent));
+        }
+    }
+
+    public void SetWaitingForFullArticle(bool isWaiting)
+    {
+        if (SetProperty(ref _isWaitingForFullArticle, isWaiting, nameof(IsWaitingForFullArticle)))
         {
             OnPropertyChanged(nameof(ReaderContent));
         }

@@ -88,6 +88,35 @@ public sealed class SqliteCatalogStoreTests
     }
 
     [TestMethod]
+    public async Task InitializeMigratesExistingCatalogCategoriesTable()
+    {
+        using var database = new TemporaryDatabase();
+        await using (var connection = new SqliteConnection($"Data Source={database.Path}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE CatalogCategories (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL COLLATE NOCASE UNIQUE
+                );
+                INSERT INTO CatalogCategories (Id, Name) VALUES ('legacy-category', 'Legacy category');
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store = new SqliteCatalogStore(database.Path);
+        await store.InitializeAsync();
+        var migratedCategory = (await store.GetCategoriesAsync()).Single();
+        Assert.AreEqual("legacy-category", migratedCategory.Id);
+        Assert.IsTrue(migratedCategory.IsEnabled);
+
+        await store.UpdateCategoryAsync(migratedCategory with { IsEnabled = false });
+        var reloadedCategory = (await new SqliteCatalogStore(database.Path).GetCategoriesAsync()).Single();
+        Assert.IsFalse(reloadedCategory.IsEnabled);
+    }
+
+    [TestMethod]
     public async Task DeletingCategoryAndFeedMaintainsRelationshipsAcrossProfiles()
     {
         using var database = new TemporaryDatabase();
@@ -155,11 +184,13 @@ public sealed class SqliteCatalogStoreTests
         await store.AddCategoryAsync(category);
         await store.AddFeedAsync(feed);
 
-        await store.UpdateCategoryAsync(category with { Name = "Comics and cartoons" });
+        await store.UpdateCategoryAsync(category with { Name = "Comics and cartoons", IsEnabled = false });
 
         var reloadedStore = new SqliteCatalogStore(database.Path);
-        Assert.AreEqual(category.Id, (await reloadedStore.GetCategoriesAsync()).Single().Id);
-        Assert.AreEqual("Comics and cartoons", (await reloadedStore.GetCategoriesAsync()).Single().Name);
+        var reloadedCategory = (await reloadedStore.GetCategoriesAsync()).Single();
+        Assert.AreEqual(category.Id, reloadedCategory.Id);
+        Assert.AreEqual("Comics and cartoons", reloadedCategory.Name);
+        Assert.IsFalse(reloadedCategory.IsEnabled);
         Assert.AreEqual(category.Id, (await reloadedStore.GetFeedsAsync()).Single().CategoryId);
     }
 

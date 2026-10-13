@@ -27,7 +27,7 @@ public static class ArticleHtmlSanitizer
             "a", "abbr", "address", "article", "aside", "b", "blockquote", "br", "caption", "cite",
             "code", "dd", "del", "div", "dl", "dt", "em", "figcaption", "figure", "footer", "h1",
             "h2", "h3", "h4", "h5", "h6", "header", "hr", "i", "img", "ins", "kbd", "li", "main",
-            "ol", "p", "pre", "q", "s", "samp", "section", "small", "span", "strong", "sub", "sup",
+            "ol", "p", "picture", "pre", "q", "s", "samp", "section", "small", "span", "strong", "sub", "sup",
             "table", "tbody", "td", "tfoot", "th", "thead", "time", "tr", "u", "ul", "wbr"
         ]);
 

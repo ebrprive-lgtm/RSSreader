@@ -40,15 +40,25 @@
                     <TextBlock Text="Feed name" FontWeight="SemiBold" />
                     <TextBox x:Name="FeedNameBox"
                              AutomationProperties.Name="Feed name"
+                             TextChanged="EntryField_TextChanged"
                              Margin="0,5,0,12"
                              Padding="9,7"
                              MaxLength="160" />
                     <TextBlock Text="Public RSS or Atom URL" FontWeight="SemiBold" />
                     <TextBox x:Name="FeedUrlBox"
                              AutomationProperties.Name="Feed URL"
+                             TextChanged="EntryField_TextChanged"
                              Margin="0,5,0,0"
                              Padding="9,7" />
-                    <TextBlock Text="This feed is private to your profile and will be added to Unfiled."
+                    <TextBlock Text="Category" FontWeight="SemiBold" Margin="0,12,0,0" />
+                    <ComboBox x:Name="CategoryBox"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              AutomationProperties.Name="Feed category"
+                              SelectionChanged="CategoryBox_SelectionChanged"
+                              Margin="0,5,0,0"
+                              Padding="7,5" />
+                    <TextBlock Text="This feed is private to your profile. Choose an existing category or enter a new one."
                                Margin="0,9,0,0"
                                Foreground="{DynamicResource MutedTextBrush}"
                                TextWrapping="Wrap" />
@@ -57,10 +67,13 @@
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             Margin="0,22,0,0">
-                    <Button Content="Add feed"
+                    <Button x:Name="AddFeedButton"
+                            Content="Add feed"
                             Click="Add_Click"
                             IsDefault="True"
+                            IsEnabled="False"
                             Style="{StaticResource PrimaryActionButtonStyle}"
+                            AutomationProperties.Name="Add feed"
                             MinWidth="86"
                             Padding="12,7" />
                     <Button Content="Cancel"

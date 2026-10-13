@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opml version="2.0">
+  <head>
+    <title>Food and Beverage RSS Feeds</title>
+    <dateCreated>Sun, 11 Oct 2026 13:06:23 GMT</dateCreated>
+    <ownerName>Feedspot</ownerName>
+    <ownerId>https://rss.feedspot.com/food_and_beverage_rss_feeds/</ownerId>
+  </head>
+  <body>
+    <outline text="Food and Beverage" title="Food and Beverage">
+      <outline text="Food Business News RSS Feed" title="Food Business News RSS Feed" type="rss" xmlUrl="https://www.foodbusinessnews.net/rss/articles" htmlUrl="https://www.foodbusinessnews.net/" />
+      <outline text="Food Dive RSS Feed" title="Food Dive RSS Feed" type="rss" xmlUrl="https://www.fooddive.com/feeds/news/" htmlUrl="https://www.fooddive.com/" />
+      <outline text="F&amp;B News RSS Feed" title="F&amp;B News RSS Feed" type="rss" xmlUrl="http://www.fnbnews.com/xml/Top-NewsRSS.XML" htmlUrl="http://www.fnbnews.com/" />
+      <outline text="Food and Drink Business RSS Feed" title="Food and Drink Business RSS Feed" type="rss" xmlUrl="https://www.fdbusiness.com/feed/" htmlUrl="https://www.fdbusiness.com/" />
+      <outline text="Vegconomist - Food and Beverage RSS Feed" title="Vegconomist - Food and Beverage RSS Feed" type="rss" xmlUrl="https://vegconomist.com/category/food-and-beverage/feed/" htmlUrl="https://vegconomist.com/category/food-and-beverage/" />
+      <outline text="FoodGrads Blog RSS Feed" title="FoodGrads Blog RSS Feed" type="rss" xmlUrl="https://foodgrads.com/feed/" htmlUrl="https://foodgrads.com/blog/" />
+      <outline text="Food and Beverage Manitoba Blog RSS Feed" title="Food and Beverage Manitoba Blog RSS Feed" type="rss" xmlUrl="https://foodbeveragemb.ca/feed/" htmlUrl="https://foodbeveragemb.ca/blog/" />
+      <outline text="Food and Drink Lover Blog RSS Feed" title="Food and Drink Lover Blog RSS Feed" type="rss" xmlUrl="https://foodanddrinklover.blog/feed/" htmlUrl="https://foodanddrinklover.blog/" />
+      <outline text="Eater RSS Feed" title="Eater RSS Feed" type="rss" xmlUrl="https://www.eater.com/rss/index.xml" htmlUrl="https://www.eater.com/" />
+      <outline text="Mezcal Pro Blog RSS Feed" title="Mezcal Pro Blog RSS Feed" type="rss" xmlUrl="https://mezcalpro.com/feed/" htmlUrl="https://mezcalpro.com/blog/" />
+      <outline text="Mallot Creek Group Blog RSS Feed" title="Mallot Creek Group Blog RSS Feed" type="rss" xmlUrl="https://www.mallotcreek.com/feed/" htmlUrl="https://www.mallotcreek.com/blog/" />
+      <outline text="CORE Food and Beverage Profit Consulting Blog RSS Feed" title="CORE Food and Beverage Profit Consulting Blog RSS Feed" type="rss" xmlUrl="https://corefoodconsulting.com/feed/" htmlUrl="https://corefoodconsulting.com/blog/" />
+      <outline text="Food Magazine RSS Feed" title="Food Magazine RSS Feed" type="rss" xmlUrl="https://www.foodmag.com.au/feed/" htmlUrl="https://www.foodmag.com.au/" />
+      <outline text="Food and Beverage Asia RSS Feed" title="Food and Beverage Asia RSS Feed" type="rss" xmlUrl="https://foodbeverageasia.com/feed/" htmlUrl="https://foodbeverageasia.com/" />
+      <outline text="Food and Beverage Reporter RSS Feed" title="Food and Beverage Reporter RSS Feed" type="rss" xmlUrl="https://fbreporter.co.za/feed/" htmlUrl="https://fbreporter.co.za/latest-news/" />
+      <outline text="Specialty Food and Beverage Insurance Blog RSS Feed" title="Specialty Food and Beverage Insurance Blog RSS Feed" type="rss" xmlUrl="https://www.specialtyfoodbeverage.com/feed/" htmlUrl="https://www.specialtyfoodbeverage.com/blog/" />
+      <outline text="Titan Brands Blog RSS Feed" title="Titan Brands Blog RSS Feed" type="rss" xmlUrl="https://www.titanbrands.co.uk//feed/rss2" htmlUrl="https://www.titanbrands.co.uk/blog" />
+      <outline text="CMTC Manufacturing Blog - Food and Beverage RSS Feed" title="CMTC Manufacturing Blog - Food and Beverage RSS Feed" type="rss" xmlUrl="https://www.cmtc.com/blog/topic/food-and-beverage/rss.xml" htmlUrl="https://www.cmtc.com/blog/topic/food-and-beverage" />
+      <outline text="Nourishing Food Marketing Blog RSS Feed" title="Nourishing Food Marketing Blog RSS Feed" type="rss" xmlUrl="https://www.nourishingfoodmarketing.com/feed/" />
+    </outline>
+  </body>
+</opml>

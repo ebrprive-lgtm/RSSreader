@@ -10,12 +10,12 @@ internal sealed class SqliteCatalogTaxonomyStore(SqliteConnectionFactory connect
     {
         await using var connection = await connections.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name FROM CatalogCategories ORDER BY Name COLLATE NOCASE;";
+        command.CommandText = "SELECT Id, Name, IsEnabled FROM CatalogCategories ORDER BY Name COLLATE NOCASE;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         var categories = new List<CatalogCategory>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            categories.Add(new CatalogCategory(reader.GetString(0), reader.GetString(1)));
+            categories.Add(new CatalogCategory(reader.GetString(0), reader.GetString(1), reader.GetInt64(2) != 0));
         }
 
         return categories;
@@ -82,17 +82,19 @@ internal sealed class SqliteCatalogTaxonomyStore(SqliteConnectionFactory connect
 
     public Task AddCategoryAsync(CatalogCategory category, CancellationToken cancellationToken) =>
         connections.ExecuteAsync(
-            "INSERT INTO CatalogCategories (Id, Name) VALUES ($id, $name);",
+            "INSERT INTO CatalogCategories (Id, Name, IsEnabled) VALUES ($id, $name, $isEnabled);",
             cancellationToken,
             ("$id", category.Id),
-            ("$name", category.Name));
+            ("$name", category.Name),
+            ("$isEnabled", category.IsEnabled ? 1 : 0));
 
     public Task UpdateCategoryAsync(CatalogCategory category, CancellationToken cancellationToken) =>
         connections.ExecuteAsync(
-            "UPDATE CatalogCategories SET Name = $name WHERE Id = $id;",
+            "UPDATE CatalogCategories SET Name = $name, IsEnabled = $isEnabled WHERE Id = $id;",
             cancellationToken,
             ("$id", category.Id),
-            ("$name", category.Name));
+            ("$name", category.Name),
+            ("$isEnabled", category.IsEnabled ? 1 : 0));
 
     public async Task MergeCategoriesAsync(
         string sourceCategoryId,

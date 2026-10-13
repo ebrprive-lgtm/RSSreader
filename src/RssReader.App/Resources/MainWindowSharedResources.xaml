@@ -3,6 +3,41 @@
                     xmlns:local="clr-namespace:RssReader.App"
                     xmlns:vwp="clr-namespace:WpfToolkit.Controls;assembly=VirtualizingWrapPanel">
     <local:OptionalUriConverter x:Key="OptionalUriConverter" />
+    <Style x:Key="RowCommandPanelStyle" TargetType="StackPanel">
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}"
+                         Value="True">
+                <Setter Property="Opacity" Value="1" />
+                <Setter Property="IsHitTestVisible" Value="True" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=Border}}"
+                         Value="True">
+                <Setter Property="Opacity" Value="1" />
+                <Setter Property="IsHitTestVisible" Value="True" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                         Value="True">
+                <Setter Property="Opacity" Value="1" />
+                <Setter Property="IsHitTestVisible" Value="True" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=TreeViewItem}}"
+                         Value="True">
+                <Setter Property="Opacity" Value="1" />
+                <Setter Property="IsHitTestVisible" Value="True" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+    <Style x:Key="FeedSourceLinkStyle" TargetType="{x:Type Hyperlink}">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="TextDecorations" Value="{x:Null}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="TextDecorations" Value="Underline" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
     <Geometry x:Key="BackTrailIconGeometry">M 8,3 L 4,7 L 8,11 M 4,7 L 10,7 M 12,3 L 17,3 M 12,7 L 17,7 M 12,11 L 17,11</Geometry>
     <Geometry x:Key="SplitPaneIconGeometry">M 2,2 L 18,2 L 18,16 L 2,16 Z M 9,2 L 9,16</Geometry>
     <Style x:Key="SidebarResizeSplitterStyle" TargetType="{x:Type GridSplitter}">

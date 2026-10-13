@@ -112,6 +112,26 @@ public sealed class ProfileFeedServiceTests
     }
 
     [TestMethod]
+    public async Task PersonalFeedCanBeAddedToASelectedCategory()
+    {
+        using var database = new TemporaryDatabase();
+        var (profiles, catalog, reader) = await CreateStoresAsync(database.Path);
+        var profile = Profile.CreateRegular("Reader");
+        await profiles.AddAsync(profile);
+        var service = new ProfileFeedService(catalog, reader);
+
+        var feed = await service.AddFeedAsync(
+            profile,
+            "Technology feed",
+            "https://example.com/technology.xml",
+            categoryName: " Technology ");
+
+        Assert.AreEqual("Technology", (await reader.GetSubscriptionsAsync(profile.Id)).Single().FolderName);
+        CollectionAssert.Contains((await reader.GetFoldersAsync(profile.Id)).ToArray(), "Technology");
+        Assert.AreEqual(feed.Id, (await catalog.GetFeedsForProfileAsync(profile.Id)).Single().Id);
+    }
+
+    [TestMethod]
     public async Task PersonalFeedCanReuseSharedCatalogUrlWithoutMakingItPrivate()
     {
         using var database = new TemporaryDatabase();

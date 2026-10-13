@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Runtime.InteropServices;
 using RssReader.App.ViewModels;
 
@@ -72,6 +73,15 @@ public partial class CatalogFeedPreviewWindow : Window
     {
         _cancellation.Cancel();
         _cancellation.Dispose();
+    }
+
+    private void PreviewThumbnail_ImageFailed(object sender, ExceptionRoutedEventArgs e)
+    {
+        if (sender is Image image)
+        {
+            System.Diagnostics.Trace.TraceWarning($"Could not load feed preview thumbnail: {e.ErrorException}");
+            image.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

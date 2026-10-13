@@ -117,7 +117,9 @@ internal sealed class CatalogFeedService(ICatalogStore store, IFeedDownloader? f
             categoryId,
             normalizedWebsiteUrl,
             existingFeed.LastHealthCheckedAt,
-            existingFeed.LastHealthCheckSucceeded);
+            existingFeed.LastHealthCheckSucceeded,
+            existingFeed.IsEnabled,
+            existingFeed.CategoryId == categoryId && existingFeed.IsEnabledInCategory);
         await store.UpdateFeedAsync(updatedFeed, cancellationToken);
         return updatedFeed;
     }
@@ -138,10 +140,12 @@ internal sealed class CatalogFeedService(ICatalogStore store, IFeedDownloader? f
             ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
 
         var isSuccessful = false;
+        int? entryCount = null;
         string? errorMessage = null;
         try
         {
-            await feedDownloader.DownloadAsync(feed, cancellationToken);
+            var items = await feedDownloader.DownloadAsync(feed, cancellationToken);
+            entryCount = items.Count;
             isSuccessful = true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -159,7 +163,33 @@ internal sealed class CatalogFeedService(ICatalogStore store, IFeedDownloader? f
             LastHealthCheckedAt = checkedAt,
             LastHealthCheckSucceeded = isSuccessful
         }, cancellationToken);
-        return new CatalogFeedHealthCheckResult(isSuccessful, checkedAt, errorMessage);
+        return new CatalogFeedHealthCheckResult(isSuccessful, checkedAt, errorMessage, entryCount);
+    }
+
+    public async Task SetFeedEnabledAsync(
+        Profile actor,
+        string feedId,
+        bool isEnabled,
+        CancellationToken cancellationToken)
+    {
+        CatalogServiceRules.EnsureCatalogMaster(actor);
+        var feed = (await store.GetFeedsAsync(cancellationToken))
+            .FirstOrDefault(candidate => candidate.Id == feedId)
+            ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
+        await store.UpdateFeedAsync(feed with { IsEnabled = isEnabled }, cancellationToken);
+    }
+
+    public async Task SetFeedEnabledInCategoryAsync(
+        Profile actor,
+        string feedId,
+        bool isEnabled,
+        CancellationToken cancellationToken)
+    {
+        CatalogServiceRules.EnsureCatalogMaster(actor);
+        var feed = (await store.GetFeedsAsync(cancellationToken))
+            .FirstOrDefault(candidate => candidate.Id == feedId)
+            ?? throw new InvalidOperationException("That feed no longer exists in the catalog.");
+        await store.UpdateFeedAsync(feed with { IsEnabledInCategory = isEnabled }, cancellationToken);
     }
 
     public async Task<FeedImportSummary> ImportFeedsAsync(

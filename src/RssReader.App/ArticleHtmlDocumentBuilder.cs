@@ -8,6 +8,7 @@ internal static class ArticleHtmlDocumentBuilder
 {
     private static readonly string[] LazyImageSourceAttributes =
     [
+        "data-img-url",
         "data-src",
         "data-lazy-src",
         "data-original",
@@ -39,10 +40,12 @@ internal static class ArticleHtmlDocumentBuilder
         {
             ProfileReaderTextSize.Small => "14px",
             ProfileReaderTextSize.Large => "18px",
+            ProfileReaderTextSize.XLarge => "20px",
             _ => "16px"
         };
         var lineHeight = lineSpacing switch
         {
+            ProfileReaderLineSpacing.ExtraCompact => "1.3",
             ProfileReaderLineSpacing.Compact => "1.45",
             ProfileReaderLineSpacing.Relaxed => "1.85",
             _ => "1.65"

@@ -116,13 +116,31 @@ public partial class ArticleReaderView : UserControl
     {
         UpdateReaderTypographyControls();
         var article = _viewModel?.SelectedArticle;
+        var isWaitingForFullArticle = article?.IsWaitingForFullArticle == true;
+        if (Uri.TryCreate(article?.Link, UriKind.Absolute, out var articleUri) &&
+            (articleUri.DnsSafeHost.Equals("gamesradar.com", StringComparison.OrdinalIgnoreCase) ||
+             articleUri.DnsSafeHost.EndsWith(".gamesradar.com", StringComparison.OrdinalIgnoreCase)))
+        {
+            var contentSource = isWaitingForFullArticle
+                ? "waiting for extracted content"
+                : article?.IsShowingExtractedContent == true
+                    ? "extracted content"
+                    : "feed preview";
+            Trace.WriteLine(
+                $"[GameRadar] Reader input: source={contentSource}; " +
+                $"hasExtractedContent={article?.HasExtractedContent}; " +
+                $"retrievedAt={article?.ExtractedContentRetrievedAt:O}; " +
+                $"htmlChars={article?.ReaderContent?.Length ?? 0}; " +
+                $"url={articleUri.GetLeftPart(UriPartial.Path)}.");
+        }
+
         SelectedArticleHtmlViewer.SetArticle(
-            article?.ReaderContent,
-            article?.Summary,
+            isWaitingForFullArticle ? null : article?.ReaderContent,
+            isWaitingForFullArticle ? null : article?.Summary,
             article?.Link,
             article?.FeedUrl,
             _viewModel?.LimitArticleWidth ?? true,
-            article?.CardImageUrl,
+            isWaitingForFullArticle ? null : article?.CardImageUrl,
             _viewModel?.ReaderTheme ?? ProfileReaderTheme.Light,
             _viewModel?.ReaderTextSize ?? ProfileReaderTextSize.Medium,
             _viewModel?.ReaderLineSpacing ?? ProfileReaderLineSpacing.Normal,

@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented. SmartReader 0.11.1 was selected after static-fixture extraction tests; the existing feed-row action layout was verified and extended with narrow-width coverage.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                Implemented. SmartReader 0.11.1 was selected after static-fixture extraction tests; the existing feed-row action layout was verified and extended with narrow-width coverage.
 
 ## Goals
 

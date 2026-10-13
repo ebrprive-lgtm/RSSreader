@@ -11,6 +11,37 @@ public sealed class HttpArticleContentServiceTests
     private static readonly IPAddress PublicAddress = IPAddress.Parse("93.184.216.34");
 
     [TestMethod]
+    public async Task PrefersSemanticArticleBodyOverPageWidgets()
+    {
+        var paragraphs = string.Concat(Enumerable.Range(1, 5).Select(index => $"""
+            <p>Article paragraph {index} contains useful reporting and supporting details about the subject, with enough context to distinguish article copy from nearby page widgets.</p>
+            """));
+        var page = $$"""
+            <!doctype html>
+            <html>
+              <head><title>Gearbox improves Risk of Rain 2</title></head>
+              <body>
+                <div id="content" class="widget flw-article-text-content flw-article-sponsored-disclaimer">
+                  <div class="popular-box__article-list__content">
+                    <p>A popular community story provides enough text to look like an article, but it is only a link to another story and must not be selected as the current article content.</p>
+                  </div>
+                  <div id="article-body" class="text-copy bodyCopy auto">{{paragraphs}}</div>
+                </div>
+              </body>
+            </html>
+            """;
+        var service = CreateService((_, _) => Task.FromResult(HtmlResponse(page)));
+        using (service)
+        {
+            var result = await service.ExtractAsync(
+                new Uri("https://publisher.example/news/story"));
+
+            StringAssert.Contains(result.Html, "Article paragraph 1");
+            Assert.IsFalse(result.Html.Contains("popular community story", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [TestMethod]
     public async Task ExtractsReadableArticleAndResolvesRelativeResources()
     {
         var service = CreateService((_, _) => Task.FromResult(HtmlResponse(CreateReadablePage())));

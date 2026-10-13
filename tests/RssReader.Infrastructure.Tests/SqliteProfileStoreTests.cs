@@ -115,7 +115,7 @@ public sealed class SqliteProfileStoreTests
     }
 
     [TestMethod]
-    public async Task Initialize_AddsMissingPreferencesToExistingProfilePreferences()
+    public async Task Initialize_AddsMissingPreferencesAndWidensReaderTypographyConstraints()
     {
         using var database = new TemporaryDatabase();
         await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = database.Path }.ToString()))
@@ -138,7 +138,9 @@ public sealed class SqliteProfileStoreTests
                     HideReadArticles INTEGER NOT NULL CHECK (HideReadArticles IN (0, 1)),
                     FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100),
                     RefreshFeedsWhenOpened INTEGER NOT NULL DEFAULT 1 CHECK (RefreshFeedsWhenOpened IN (0, 1)),
-                    AutoRefreshIntervalMinutes INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240))
+                    AutoRefreshIntervalMinutes INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240)),
+                    ReaderTextSize INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2)),
+                    ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2))
                 );
                 INSERT INTO Profiles (Id, Name, IsCatalogMaster) VALUES ('profile-1', 'Reader', 0);
                 INSERT INTO ProfilePreferences (ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed)
@@ -154,6 +156,15 @@ public sealed class SqliteProfileStoreTests
         Assert.IsTrue((await store.GetPreferencesAsync("profile-1")).LimitArticleWidth);
         Assert.IsFalse((await store.GetPreferencesAsync("profile-1")).HideFollowedCatalogFeeds);
         Assert.AreEqual(new ProfilePreferences(), await store.GetPreferencesAsync("profile-1"));
+
+        var preferences = (await store.GetPreferencesAsync("profile-1")) with
+        {
+            ReaderTextSize = ProfileReaderTextSize.XLarge,
+            ReaderLineSpacing = ProfileReaderLineSpacing.ExtraCompact
+        };
+        await store.SavePreferencesAsync("profile-1", preferences);
+
+        Assert.AreEqual(preferences, await store.GetPreferencesAsync("profile-1"));
     }
 
     [TestMethod]

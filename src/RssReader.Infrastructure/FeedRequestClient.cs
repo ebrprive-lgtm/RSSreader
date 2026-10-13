@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 
@@ -12,31 +13,16 @@ internal sealed class FeedRequestClient(HttpClient httpClient)
         Uri uri,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.UserAgent.ParseAdd("RssReader/1.0");
+        using var request = CreateRequest(uri);
         var stopwatch = Stopwatch.StartNew();
-        HttpResponseMessage response;
-        try
+        var response = await SendHttpRequestAsync(uri, request, stopwatch, cancellationToken)
+            .ConfigureAwait(false);
+        if (GetHttpsUpgradeTarget(response) is { } httpsUpgradeTarget)
         {
-            response = await httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (HttpRequestException exception)
-        {
-            stopwatch.Stop();
-            throw new HttpRequestException(
-                FormatTransportFailure(uri, request, stopwatch.Elapsed, exception),
-                exception,
-                exception.StatusCode);
-        }
-        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            stopwatch.Stop();
-            throw new TaskCanceledException(
-                FormatTransportFailure(uri, request, stopwatch.Elapsed, exception),
-                exception);
+            response.Dispose();
+            using var httpsRequest = CreateRequest(httpsUpgradeTarget);
+            response = await SendHttpRequestAsync(uri, httpsRequest, stopwatch, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         if (response.IsSuccessStatusCode)
@@ -55,6 +41,71 @@ internal sealed class FeedRequestClient(HttpClient httpClient)
                 response.StatusCode);
         }
     }
+
+    private async Task<HttpResponseMessage> SendHttpRequestAsync(
+        Uri originalUri,
+        HttpRequestMessage request,
+        Stopwatch stopwatch,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await httpClient.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception)
+        {
+            stopwatch.Stop();
+            throw new HttpRequestException(
+                FormatTransportFailure(originalUri, request, stopwatch.Elapsed, exception),
+                exception,
+                exception.StatusCode);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            stopwatch.Stop();
+            throw new TaskCanceledException(
+                FormatTransportFailure(originalUri, request, stopwatch.Elapsed, exception),
+                exception);
+        }
+    }
+
+    private static HttpRequestMessage CreateRequest(Uri uri)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.UserAgent.ParseAdd("RssReader/1.0");
+        return request;
+    }
+
+    private static Uri? GetHttpsUpgradeTarget(HttpResponseMessage response)
+    {
+        if (!IsRedirect(response.StatusCode) ||
+            response.RequestMessage?.RequestUri is not { } responseUri ||
+            !string.Equals(responseUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            response.Headers.Location is not { } location ||
+            !Uri.TryCreate(responseUri, location, out var redirectUri) ||
+            redirectUri.Scheme != Uri.UriSchemeHttp ||
+            !redirectUri.IsDefaultPort)
+        {
+            return null;
+        }
+
+        var builder = new UriBuilder(redirectUri)
+        {
+            Scheme = Uri.UriSchemeHttps,
+            Port = -1
+        };
+        return builder.Uri;
+    }
+
+    private static bool IsRedirect(HttpStatusCode statusCode) =>
+        statusCode is HttpStatusCode.MovedPermanently or
+            HttpStatusCode.Redirect or
+            HttpStatusCode.RedirectMethod or
+            HttpStatusCode.TemporaryRedirect or
+            HttpStatusCode.PermanentRedirect;
 
     private static string FormatTransportFailure(
         Uri uri,

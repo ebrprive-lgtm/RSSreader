@@ -28,6 +28,20 @@ public sealed class MainWindowViewModelTests
     public TestContext TestContext { get; set; } = null!;
 
     [TestMethod]
+    public void CatalogFeedWebsiteLabelShowsItsDomainWithoutPath()
+    {
+        var feed = new CatalogFeedListItem(
+            "example-feed",
+            "Example Feed",
+            "https://feeds.example.com/rss",
+            null,
+            null,
+            websiteUrl: "https://www.publisher.example/articles");
+
+        Assert.AreEqual("publisher.example", feed.PublisherWebsiteLabel);
+    }
+
+    [TestMethod]
     public void RawFeedWindowShowsCachedBadgeOnlyForCachedContent()
     {
         WpfTestHost.Run(() =>
@@ -49,6 +63,66 @@ public sealed class MainWindowViewModelTests
                 cachedWindow.Close();
                 liveWindow.Close();
             }
+        });
+    }
+
+    [TestMethod]
+    public void CatalogFeedScanProgressWindowCancelsTheActiveScan()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var scanStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var scanCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var window = new CatalogFeedScanProgressWindow(
+                2,
+                async (_, cancellationToken) =>
+                {
+                    scanStarted.TrySetResult();
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, cancellationToken);
+                    }
+                    finally
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            scanCancelled.TrySetResult();
+                        }
+                    }
+
+                    return 0;
+                });
+            Assert.AreEqual(WindowStyle.None, window.WindowStyle);
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
+            timer.Tick += (_, _) =>
+            {
+                if (!scanStarted.Task.IsCompleted)
+                {
+                    return;
+                }
+
+                var cancelButton = (Button)window.FindName("CancelButton")!;
+                if (!cancelButton.IsEnabled)
+                {
+                    return;
+                }
+
+                if (Equals(cancelButton.Content, "Cancel"))
+                {
+                    cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }
+                else if (Equals(cancelButton.Content, "Close"))
+                {
+                    timer.Stop();
+                    cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }
+            };
+            timer.Start();
+
+            window.ShowDialog();
+
+            Assert.IsTrue(scanCancelled.Task.IsCompleted);
+            StringAssert.Contains(((TextBlock)window.FindName("StatusText")!).Text, "cancelled");
         });
     }
 
@@ -159,13 +233,13 @@ public sealed class MainWindowViewModelTests
                     new RoutedEventArgs(Button.ClickEvent));
                 Assert.IsTrue(popup.IsOpen);
 
-                ((ComboBox)readerView.FindName("ReaderTextSizeComboBox")!).SelectedIndex = 2;
+                ((ComboBox)readerView.FindName("ReaderTextSizeComboBox")!).SelectedIndex = 3;
                 ((ComboBox)readerView.FindName("ReaderFontFamilyComboBox")!).SelectedIndex = 1;
-                ((ComboBox)readerView.FindName("ReaderLineSpacingComboBox")!).SelectedIndex = 2;
+                ((ComboBox)readerView.FindName("ReaderLineSpacingComboBox")!).SelectedIndex = 0;
 
-                Assert.AreEqual(ProfileReaderTextSize.Large, viewModel.ReaderTextSize);
+                Assert.AreEqual(ProfileReaderTextSize.XLarge, viewModel.ReaderTextSize);
                 Assert.AreEqual(ProfileReaderFontFamily.Serif, viewModel.ReaderFontFamily);
-                Assert.AreEqual(ProfileReaderLineSpacing.Relaxed, viewModel.ReaderLineSpacing);
+                Assert.AreEqual(ProfileReaderLineSpacing.ExtraCompact, viewModel.ReaderLineSpacing);
             }
             finally
             {
@@ -437,6 +511,23 @@ public sealed class MainWindowViewModelTests
         Assert.AreEqual(new Size(286, 346), viewModel.ArticleCardItemSize);
         viewModel.ApplyPreferences(new ProfilePreferences(ArticleListDensity: ProfileArticleListDensity.Spacious));
         Assert.AreEqual(new Size(346, 410), viewModel.ArticleCardItemSize);
+    }
+
+    [TestMethod]
+    public void EmptySplitPaneReaderPlaceholderIsHiddenOnFollowSources()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        viewModel.ApplyPreferences(new ProfilePreferences(ReadingLayout: ProfileReadingLayout.SplitPane));
+        viewModel.UpdateSplitPaneViewportWidth(800);
+
+        Assert.IsTrue(viewModel.IsSplitPaneEmptyReaderPlaceholderVisible);
+        viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
+
+        Assert.IsFalse(viewModel.IsSplitPaneEmptyReaderPlaceholderVisible);
+
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+
+        Assert.IsTrue(viewModel.IsSplitPaneEmptyReaderPlaceholderVisible);
     }
 
     [TestMethod]
@@ -733,6 +824,10 @@ public sealed class MainWindowViewModelTests
                 var unfollowButton = FindVisualChildren<Button>(actionPanel)
                     .Single(button => AutomationProperties.GetName(button) == "Unfollow Comics by Keith Knight");
                 var destructiveBrush = (SolidColorBrush)window.FindResource("DestructiveBrush");
+                var neutralActionBrush = (SolidColorBrush)window.FindResource("NeutralActionBrush");
+                Assert.AreEqual(FontWeights.Bold, tagButton.FontWeight);
+                Assert.AreEqual(neutralActionBrush.Color, ((SolidColorBrush)tagButton.Foreground).Color);
+                Assert.AreEqual(FontWeights.Bold, unfollowButton.FontWeight);
                 Assert.AreEqual(destructiveBrush.Color, ((SolidColorBrush)unfollowButton.Foreground).Color);
                 Assert.IsTrue(GetBounds(tagButton, feedRow).Right <= GetBounds(unfollowButton, feedRow).Left);
                 Assert.IsTrue(GetBounds(unfollowButton, feedRow).Right <= GetBounds(unreadBadge, feedRow).Left);
@@ -758,6 +853,7 @@ public sealed class MainWindowViewModelTests
                     .Single(button => AutomationProperties.GetName(button) == "Delete folder");
                 folderRow.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
                 window.UpdateLayout();
+                Assert.AreEqual(FontWeights.Bold, deleteButton.FontWeight);
                 Assert.AreEqual(destructiveBrush.Color, ((SolidColorBrush)deleteButton.Foreground).Color);
             }
             finally
@@ -1374,10 +1470,8 @@ public sealed class MainWindowViewModelTests
                 catalogMenu.IsOpen = false;
             }
 
-            var metadataGapsCheckBox = FindVisualChildren<CheckBox>(catalogTabs)
-                .Single(checkBox => checkBox.Content?.ToString() == "Metadata gaps only");
-            metadataGapsCheckBox.ApplyTemplate();
-            Assert.IsNotNull(metadataGapsCheckBox.Template.FindName("CheckBorder", metadataGapsCheckBox));
+            Assert.IsFalse(FindVisualChildren<CheckBox>(catalogTabs)
+                .Any(checkBox => checkBox.Content?.ToString() == "Metadata gaps only"));
         }
         finally
         {
@@ -1557,6 +1651,28 @@ public sealed class MainWindowViewModelTests
             inspect: window => Assert.AreEqual(
                 "Search folders",
                 AutomationProperties.GetName((TextBox)window.FindName("FolderSearchBox")!)));
+
+        ShowAndCloseModal(
+            new ProfileFeedEntryWindow(["Technology"]),
+            "Close dialog",
+            inspect: window =>
+            {
+                var feedNameBox = (TextBox)window.FindName("FeedNameBox")!;
+                var feedUrlBox = (TextBox)window.FindName("FeedUrlBox")!;
+                var categoryBox = (ComboBox)window.FindName("CategoryBox")!;
+                var addFeedButton = (Button)window.FindName("AddFeedButton")!;
+                Assert.AreEqual(string.Empty, categoryBox.Text);
+                Assert.IsFalse(addFeedButton.IsEnabled);
+
+                feedNameBox.Text = "Technology news";
+                Assert.IsFalse(addFeedButton.IsEnabled);
+                feedUrlBox.Text = "https://example.com/feed.xml";
+                Assert.IsFalse(addFeedButton.IsEnabled);
+                categoryBox.Text = "Technology";
+                Assert.IsTrue(addFeedButton.IsEnabled);
+                categoryBox.Text = " ";
+                Assert.IsFalse(addFeedButton.IsEnabled);
+            });
 
         var catalogManagement = new CatalogManagementViewModel(
             Profile.CreateCatalogMaster(),
@@ -1742,6 +1858,76 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void FollowedCatalogFeedsUseLightGreenCardBackground()
+    {
+        Exception? failure = null;
+        WpfTestHost.Run(() =>
+        {
+            Window? window = null;
+            try
+            {
+                var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+                var followedFeed = new CatalogFeedListItem(
+                    "feed-followed",
+                    "Followed feed",
+                    "https://example.com/followed.xml",
+                    null,
+                    "Comics")
+                {
+                    IsSubscribed = true
+                };
+                var availableFeed = new CatalogFeedListItem(
+                    "feed-available",
+                    "Available feed",
+                    "https://example.com/available.xml",
+                    null,
+                    "Comics");
+                viewModel.CatalogFeeds.Add(followedFeed);
+                viewModel.CatalogFeeds.Add(availableFeed);
+
+                window = CreateTestMainWindow(viewModel);
+                window.Show();
+                window.UpdateLayout();
+                viewModel.NavigateCommand.Execute(viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"));
+                window.UpdateLayout();
+
+                var catalogBrowser = (UserControl)window.FindName("CatalogBrowserView")!;
+                var catalogResults = (ListBox)catalogBrowser.FindName("CatalogFeedResultsList");
+                catalogResults.UpdateLayout();
+
+                var followedContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(followedFeed);
+                var availableContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(availableFeed);
+                Assert.IsNotNull(followedContainer);
+                Assert.IsNotNull(availableContainer);
+                var followedCard = FindVisualChildren<Border>(followedContainer!)
+                    .Single(border => border.ContextMenu is not null);
+                var availableCard = FindVisualChildren<Border>(availableContainer!)
+                    .Single(border => border.ContextMenu is not null);
+
+                Assert.AreEqual(
+                    ((SolidColorBrush)window.FindResource("SuccessWashBrush")).Color,
+                    ((SolidColorBrush)followedCard.Background).Color);
+                Assert.AreEqual(
+                    ((SolidColorBrush)window.FindResource("SidebarBrush")).Color,
+                    ((SolidColorBrush)availableCard.Background).Color);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+            finally
+            {
+                if (window?.IsVisible == true)
+                {
+                    window.Close();
+                }
+            }
+        });
+
+        Assert.IsNull(failure, failure?.ToString());
+    }
+
+    [TestMethod]
     public void MainWindowCanBeConstructedForARegularProfile()
     {
         Exception? failure = null;
@@ -1756,7 +1942,8 @@ public sealed class MainWindowViewModelTests
                     "https://example.com/comics.xml",
                     "A sample comic feed",
                     "Comics",
-                    "category-comics");
+                    "category-comics",
+                    "https://example.com/comics");
                 var feedWithoutDescription = new CatalogFeedListItem(
                     "feed-no-description",
                     "Example feed without description",
@@ -1923,18 +2110,97 @@ public sealed class MainWindowViewModelTests
                 var hideFollowedCheckBox = (CheckBox)catalogBrowser.FindName("HideFollowedCatalogCheckBox");
                 hideFollowedCheckBox.IsChecked = true;
                 Assert.IsTrue(viewModel.HideFollowedCatalogFeeds);
+                var activeCatalogFilters = (ItemsControl)catalogBrowser.FindName("CatalogActiveFilterChips");
+                Assert.AreEqual(2, activeCatalogFilters.Items.Count);
+                Assert.AreEqual(Visibility.Visible, activeCatalogFilters.Visibility);
+                Assert.AreEqual("Active feed filters", AutomationProperties.GetName(activeCatalogFilters));
+                Assert.IsNotNull(viewModel.SelectedCatalogFeed);
                 var catalogResults = (ListBox)catalogBrowser.FindName("CatalogFeedResultsList");
                 Assert.AreEqual("Catalog feed results", AutomationProperties.GetName(catalogResults));
                 Assert.IsTrue(VirtualizingPanel.GetIsVirtualizing(catalogResults));
                 Assert.AreEqual(VirtualizationMode.Recycling, VirtualizingPanel.GetVirtualizationMode(catalogResults));
                 catalogResults.UpdateLayout();
+                var catalogResultsContainer = (Grid)catalogBrowser.FindName("CatalogFeedResultsContainer");
+                Assert.IsTrue(double.IsPositiveInfinity(catalogResultsContainer.MaxWidth));
+                Assert.AreEqual(HorizontalAlignment.Stretch, catalogResultsContainer.HorizontalAlignment);
+                Assert.AreEqual(
+                    ((FrameworkElement)catalogBrowser.FindName("CatalogBrowserLayout")!).ActualWidth,
+                    catalogResultsContainer.ActualWidth,
+                    1);
+                var selectedFeedPreviewPane = (Border)catalogBrowser.FindName("SelectedCatalogFeedPreviewPane");
+                Assert.AreEqual(2, Grid.GetColumn(selectedFeedPreviewPane));
+                Assert.AreEqual(
+                    "Selected feed details and recent articles",
+                    AutomationProperties.GetName(selectedFeedPreviewPane));
                 var feedContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(accessibilityFeed);
                 Assert.IsNotNull(feedContainer);
+                var feedRowItem = (ListBoxItem)feedContainer!;
+                feedRowItem.RaiseEvent(new MouseButtonEventArgs(
+                    Mouse.PrimaryDevice,
+                    Environment.TickCount,
+                    MouseButton.Left)
+                {
+                    RoutedEvent = UIElement.MouseLeftButtonDownEvent
+                });
+                window.UpdateLayout();
+                Assert.IsTrue(feedRowItem.Focusable);
+                Assert.IsTrue(feedRowItem.IsSelected);
+                Assert.AreSame(accessibilityFeed, viewModel.SelectedCatalogFeed);
+                Keyboard.ClearFocus();
+                window.UpdateLayout();
+                var feedWithoutDescriptionContainer = catalogResults.ItemContainerGenerator
+                    .ContainerFromItem(feedWithoutDescription);
+                Assert.IsNotNull(feedWithoutDescriptionContainer);
+                var feedWithoutDescriptionRowItem = (ListBoxItem)feedWithoutDescriptionContainer!;
+                feedWithoutDescriptionRowItem.RaiseEvent(new MouseButtonEventArgs(
+                    Mouse.PrimaryDevice,
+                    Environment.TickCount,
+                    MouseButton.Left)
+                {
+                    RoutedEvent = UIElement.MouseLeftButtonDownEvent
+                });
+                window.UpdateLayout();
+                Assert.IsTrue(feedWithoutDescriptionRowItem.IsSelected);
+                Assert.AreSame(feedWithoutDescription, viewModel.SelectedCatalogFeed);
+                Assert.IsTrue(FindVisualChildren<TextBlock>(selectedFeedPreviewPane)
+                    .Any(text => text.Text == feedWithoutDescription.Name));
+                Keyboard.ClearFocus();
+                window.UpdateLayout();
+                Assert.AreEqual(
+                    Colors.Transparent,
+                    ((SolidColorBrush)((Border)feedRowItem.Template.FindName("ItemSurface", feedRowItem)!).Background).Color);
+                feedRowItem.IsSelected = false;
+                var feedRowContainer = (FrameworkElement)feedContainer!;
                 var descriptionText = FindVisualChildren<TextBlock>(feedContainer!)
                     .Single(text => AutomationProperties.GetName(text) == "Catalog feed description");
                 Assert.AreEqual(Visibility.Visible, descriptionText.Visibility);
-                var feedWithoutDescriptionContainer = catalogResults.ItemContainerGenerator.ContainerFromItem(feedWithoutDescription);
-                Assert.IsNotNull(feedWithoutDescriptionContainer);
+                Assert.IsNull(descriptionText.ToolTip);
+                var categoryLabel = FindVisualChildren<TextBlock>(feedContainer!)
+                    .Single(text => text.Text == "Comics");
+                Assert.AreEqual(12, categoryLabel.FontSize);
+                Assert.AreEqual(VerticalAlignment.Center, categoryLabel.VerticalAlignment);
+                var catalogSourceLinks = FindVisualChildren<TextBlock>(feedContainer!)
+                    .SelectMany(text => text.Inlines.OfType<Hyperlink>())
+                    .ToArray();
+                CollectionAssert.AreEquivalent(
+                    new[] { "https://example.com/comics.xml", "https://example.com/comics" },
+                    catalogSourceLinks.Select(link => link.NavigateUri.AbsoluteUri).ToArray());
+                var feedUrlText = FindVisualChildren<TextBlock>(feedContainer!)
+                    .Single(text => text.Inlines.OfType<Hyperlink>().Any(link =>
+                        link.NavigateUri.AbsoluteUri == "https://example.com/comics.xml"));
+                Assert.AreEqual("Feed: ", feedUrlText.Inlines.OfType<Run>().First().Text);
+                var websiteUrlText = FindVisualChildren<TextBlock>(feedContainer!)
+                    .Single(text => text.Inlines.OfType<Hyperlink>().Any(link =>
+                        link.NavigateUri.AbsoluteUri == "https://example.com/comics"));
+                Assert.AreEqual("Website: ", websiteUrlText.Inlines.OfType<Run>().First().Text);
+                var feedLink = feedUrlText.Inlines.OfType<Hyperlink>().Single();
+                var publisherWebsiteSourceLink = websiteUrlText.Inlines.OfType<Hyperlink>().Single();
+                Assert.AreEqual(feedLink.Foreground, publisherWebsiteSourceLink.Foreground);
+                Assert.AreEqual("RSS feed", feedLink.Inlines.OfType<Run>().Single().Text);
+                Assert.AreEqual("example.com", publisherWebsiteSourceLink.Inlines.OfType<Run>().Single().Text);
+                Assert.IsNotNull(feedLink.Style);
+                var hoverUnderlineTrigger = feedLink.Style.Triggers.OfType<Trigger>().Single();
+                Assert.AreEqual("TextDecorations", hoverUnderlineTrigger.Setters.OfType<Setter>().Single().Property.Name);
                 var hiddenDescriptionText = FindVisualChildren<TextBlock>(feedWithoutDescriptionContainer!)
                     .Single(text => AutomationProperties.GetName(text) == "Catalog feed description");
                 Assert.AreEqual(Visibility.Collapsed, hiddenDescriptionText.Visibility);
@@ -1947,35 +2213,95 @@ public sealed class MainWindowViewModelTests
                     AutomationProperties.GetName(button) == "Preview Example comic feed");
                 var subscriptionButton = feedButtons.Single(button =>
                     AutomationProperties.GetName(button) == "Follow Example comic feed");
+                Assert.AreEqual(new FontFamily("Segoe UI"), previewButton.FontFamily);
+                Assert.AreEqual(new FontFamily("Segoe UI"), subscriptionButton.FontFamily);
+                Assert.AreEqual(FontWeights.Bold, previewButton.FontWeight);
+                Assert.AreEqual(FontWeights.Bold, subscriptionButton.FontWeight);
+                var previewContent = (StackPanel)previewButton.Content;
+                var subscriptionContent = (StackPanel)subscriptionButton.Content;
+                var previewIcon = (TextBlock)previewContent.Children[0];
+                var subscriptionIcon = (TextBlock)subscriptionContent.Children[0];
+                Assert.AreEqual(FontWeights.Bold, previewIcon.FontWeight);
+                Assert.AreEqual(FontWeights.Bold, subscriptionIcon.FontWeight);
+                Assert.AreEqual(window.FindResource("NeutralActionBrush"), previewIcon.Foreground);
+                Assert.AreEqual(window.FindResource("SuccessBrush"), subscriptionIcon.Foreground);
+                var rowCommandPanel = FindVisualChildren<StackPanel>(feedContainer!)
+                    .Single(panel => Grid.GetColumn(panel) == 2);
+                var feedRowGrid = (Grid)VisualTreeHelper.GetParent(rowCommandPanel)!;
                 Assert.AreEqual("Select Example comic feed for follow", AutomationProperties.GetName(feedCheckBox));
                 Assert.IsTrue(feedCheckBox.IsTabStop);
                 Assert.AreEqual(Visibility.Visible, feedCheckBox.Visibility);
                 Assert.AreEqual(Visibility.Visible, selectableFeedCheckBox.Visibility);
+                Assert.AreEqual(Visibility.Collapsed, rowCommandPanel.Visibility);
+                Assert.AreEqual(0, rowCommandPanel.Opacity);
+                Assert.IsFalse(rowCommandPanel.IsHitTestVisible);
+                Assert.AreEqual(0, feedRowGrid.ColumnDefinitions[2].ActualWidth, 0.1);
+                var categoryLabelRight = categoryLabel.TranslatePoint(new Point(categoryLabel.ActualWidth, 0), feedRowContainer).X;
+                Assert.AreEqual(feedRowContainer.ActualWidth - 15, categoryLabelRight, 2);
                 Assert.AreEqual("Preview Example comic feed", AutomationProperties.GetName(previewButton));
-                Assert.AreEqual("\uE890", ((TextBlock)previewButton.Content).Text);
+                Assert.AreEqual("Preview", ((TextBlock)previewContent.Children[1]).Text);
                 Assert.IsTrue(previewButton.IsTabStop);
                 Assert.AreEqual("Follow Example comic feed", AutomationProperties.GetName(subscriptionButton));
-                Assert.AreEqual("\uE710", ((TextBlock)subscriptionButton.Content).Text);
+                Assert.AreEqual("Follow", ((TextBlock)subscriptionContent.Children[1]).Text);
                 accessibilityFeed.IsSubscribed = true;
                 window.UpdateLayout();
                 Assert.AreEqual(Visibility.Collapsed, feedCheckBox.Visibility);
+                Assert.AreEqual(Visibility.Visible, FindVisualChildren<TextBlock>(feedContainer!)
+                    .Single(text => text.Text == "Following").Visibility);
                 var followedFeedText = FindVisualChildren<StackPanel>(feedContainer!)
-                    .Single(panel => Grid.GetColumn(panel) == 1);
+                    .Single(panel => Grid.GetColumn(panel) == 1 &&
+                        panel.Children.OfType<TextBlock>()
+                            .Any(text => AutomationProperties.GetName(text) == "Catalog feed description"));
                 var unfollowedFeedText = FindVisualChildren<StackPanel>(feedWithoutDescriptionContainer!)
-                    .Single(panel => Grid.GetColumn(panel) == 1);
+                    .Single(panel => Grid.GetColumn(panel) == 1 &&
+                        panel.Children.OfType<TextBlock>()
+                            .Any(text => AutomationProperties.GetName(text) == "Catalog feed description"));
                 var followedFeedTextLeft = followedFeedText.TranslatePoint(new Point(0, 0), catalogResults).X;
                 var unfollowedFeedTextLeft = unfollowedFeedText.TranslatePoint(new Point(0, 0), catalogResults).X;
                 Assert.AreEqual(followedFeedTextLeft, unfollowedFeedTextLeft, 0.1);
                 Assert.AreEqual("Unfollow Example comic feed", AutomationProperties.GetName(subscriptionButton));
-                Assert.AreEqual("\uE738", ((TextBlock)subscriptionButton.Content).Text);
+                Assert.AreEqual("Unfollow", ((TextBlock)subscriptionContent.Children[1]).Text);
+                Assert.AreEqual(window.FindResource("DestructiveBrush"), subscriptionIcon.Foreground);
                 var selectAllCatalogFeedsCheckBox = (CheckBox)catalogBrowser.FindName("SelectAllCatalogFeedsCheckBox");
                 Assert.IsTrue(selectAllCatalogFeedsCheckBox.IsThreeState);
                 Assert.AreEqual(0, Grid.GetColumn(selectAllCatalogFeedsCheckBox));
+                Assert.AreEqual(18, selectAllCatalogFeedsCheckBox.Width);
+                Assert.IsTrue(double.IsNaN(selectAllCatalogFeedsCheckBox.Height));
+                Assert.AreEqual(18, selectAllCatalogFeedsCheckBox.ActualWidth);
+                Assert.AreEqual(24, selectAllCatalogFeedsCheckBox.ActualHeight);
+                var selectionToolbar = (Grid)VisualTreeHelper.GetParent(selectAllCatalogFeedsCheckBox)!;
+                Assert.AreEqual(32, selectionToolbar.ColumnDefinitions[0].ActualWidth);
                 var batchFollowButton = (Button)catalogBrowser.FindName("BatchFollowSelectedButton");
-                Assert.AreEqual("\uE710", batchFollowButton.Content);
+                Assert.AreEqual(new FontFamily("Segoe UI"), batchFollowButton.FontFamily);
+                Assert.IsTrue(double.IsNaN(batchFollowButton.Width));
+                Assert.IsTrue(batchFollowButton.ActualWidth > 80);
                 Assert.AreEqual("Follow selected feeds", AutomationProperties.GetName(batchFollowButton));
                 Assert.AreEqual("Follow selected (0)", AutomationProperties.GetHelpText(batchFollowButton));
+                Assert.AreEqual("Follow selected (0)", FindVisualChildren<TextBlock>(batchFollowButton)
+                    .Single(text => text.Text == "Follow selected (0)").Text);
+                Assert.AreEqual(FontWeights.Bold, batchFollowButton.FontWeight);
+                Assert.AreEqual("#FF218739", batchFollowButton.Foreground.ToString());
+                batchFollowButton.ApplyTemplate();
+                Assert.AreEqual(
+                    "#FFE8F4EA",
+                    ((Border)batchFollowButton.Template.FindName("ActionBorder", batchFollowButton)!).Background.ToString());
                 Assert.IsFalse(batchFollowButton.IsEnabled);
+                var unfollowAllButton = (Button)catalogBrowser.FindName("UnfollowAllCatalogFeedsButton");
+                Assert.AreEqual(new FontFamily("Segoe UI"), unfollowAllButton.FontFamily);
+                Assert.IsTrue(double.IsNaN(unfollowAllButton.Width));
+                Assert.IsTrue(unfollowAllButton.ActualWidth > 80);
+                Assert.AreEqual("Unfollow visible feeds", AutomationProperties.GetName(unfollowAllButton));
+                var unfollowContent = (StackPanel)unfollowAllButton.Content;
+                Assert.AreEqual("\uE738", ((TextBlock)unfollowContent.Children[0]).Text);
+                var unfollowLabel = ((TextBlock)unfollowContent.Children[1]).Text;
+                Assert.AreEqual(unfollowLabel, AutomationProperties.GetHelpText(unfollowAllButton));
+                StringAssert.StartsWith(unfollowLabel, "Unfollow visible (");
+                Assert.AreEqual(FontWeights.Bold, unfollowAllButton.FontWeight);
+                Assert.AreEqual("#FFA33C35", unfollowAllButton.Foreground.ToString());
+                unfollowAllButton.ApplyTemplate();
+                Assert.AreEqual(
+                    "#FFFCE8E6",
+                    ((Border)unfollowAllButton.Template.FindName("ActionBorder", unfollowAllButton)!).Background.ToString());
                 Assert.IsNull(window.FindName("ClearSelectedCatalogFeedsButton"));
                 viewModel.ClearCatalogFiltersCommand.Execute(null);
                 window.UpdateLayout();
@@ -2200,15 +2526,63 @@ public sealed class MainWindowViewModelTests
                     "comics",
                     null,
                     lastHealthCheckedAt: checkedAt,
-                    lastHealthCheckSucceeded: false);
+                    lastHealthCheckSucceeded: false,
+                    isEnabled: false);
                 catalogManagement.Feeds.Add(managedFeed);
-                catalogManagement.Categories.Add(new CatalogCategory("comics", "Comics RSS"));
-                catalogManagement.Collections.Add(new CatalogCollection("editor-picks", "Editor's picks"));
+                var managedCategory = new CatalogCategory("comics", "Comics RSS");
+                catalogManagement.Categories.Add(managedCategory);
+                var categoryTreeNode = new CatalogTaxonomyTreeNode(
+                    CatalogTaxonomyTreeNodeKind.Category,
+                    managedCategory.Id,
+                    managedCategory.Name,
+                    catalogManagement,
+                    category: managedCategory);
+                categoryTreeNode.Children.Add(new CatalogTaxonomyTreeNode(
+                    CatalogTaxonomyTreeNodeKind.Placeholder,
+                    string.Empty,
+                    string.Empty,
+                    catalogManagement));
+                catalogManagement.CategoryTreeNodes.Add(categoryTreeNode);
+                var disabledCategory = new CatalogCategory("disabled-category", "Disabled category", false);
+                catalogManagement.Categories.Add(disabledCategory);
+                var disabledCategoryTreeNode = new CatalogTaxonomyTreeNode(
+                    CatalogTaxonomyTreeNodeKind.Category,
+                    disabledCategory.Id,
+                    disabledCategory.Name,
+                    catalogManagement,
+                    category: disabledCategory);
+                disabledCategoryTreeNode.Children.Add(new CatalogTaxonomyTreeNode(
+                    CatalogTaxonomyTreeNodeKind.Placeholder,
+                    string.Empty,
+                    string.Empty,
+                    catalogManagement));
+                catalogManagement.CategoryTreeNodes.Add(disabledCategoryTreeNode);
+
+                var managedCollection = new CatalogCollection("editor-picks", "Editor's picks");
+                catalogManagement.Collections.Add(managedCollection);
+                var collectionTreeNode = new CatalogTaxonomyTreeNode(
+                    CatalogTaxonomyTreeNodeKind.Collection,
+                    managedCollection.Id,
+                    managedCollection.Name,
+                    catalogManagement,
+                    collection: managedCollection);
+                collectionTreeNode.Children.Add(new CatalogTaxonomyTreeNode(
+                    CatalogTaxonomyTreeNodeKind.Feed,
+                    managedFeed.Id,
+                    managedFeed.Name,
+                    catalogManagement,
+                    feed: managedFeed,
+                    parentId: managedCollection.Id));
+                collectionTreeNode.IsChildrenLoaded = true;
+                catalogManagement.CollectionTreeNodes.Add(collectionTreeNode);
 
                 var catalogMasterWindow = CreateTestMainWindow(catalogMasterViewModel);
                 catalogMasterWindow.Show();
                 catalogMasterWindow.UpdateLayout();
                 var catalogMasterAdminView = (UserControl)catalogMasterWindow.FindName("CatalogAdminView")!;
+                var checkAllButton = FindVisualChildren<Button>(catalogMasterAdminView)
+                    .Single(button => AutomationProperties.GetName(button) == "Check All");
+                Assert.AreEqual("Check All", checkAllButton.Content);
                 var catalogImportReport = (Grid)catalogMasterAdminView.FindName("CatalogImportReport");
                 var dismissImportReportButton = (Button)catalogMasterAdminView.FindName("DismissCatalogImportReportButton");
                 Assert.AreEqual(Visibility.Collapsed, catalogImportReport.Visibility);
@@ -2226,55 +2600,355 @@ public sealed class MainWindowViewModelTests
                 Assert.IsTrue(catalogMasterViewModel.IsCatalogAdminVisible);
                 Assert.IsTrue(managementList.IsLoaded, $"Feed list loaded: {managementList.IsLoaded}; height: {managementList.ActualHeight}");
                 Assert.IsTrue(managementList.ActualHeight > 0, $"Feed list height: {managementList.ActualHeight}");
+                Assert.AreEqual(1280, managementList.Parent is Grid feedResultsContainer
+                    ? feedResultsContainer.Width
+                    : double.NaN);
                 managementList.ScrollIntoView(managedFeed);
                 catalogMasterWindow.UpdateLayout();
                 managementList.UpdateLayout();
                 var managedFeedContainer = managementList.ItemContainerGenerator.ContainerFromItem(managedFeed)
                     ?? throw new AssertFailedException("The Catalog Master feed row was not created.");
+                var managedFeedRow = FindVisualChildren<Border>(managedFeedContainer)
+                    .Single(border => ReferenceEquals(border.DataContext, managedFeed) && border.ContextMenu is not null);
+                Assert.AreSame(catalogMasterWindow.FindResource("DestructiveWashBrush"), managedFeedRow.Background);
                 var managementActions = FindVisualChildren<Button>(managedFeedContainer).ToArray();
                 CollectionAssert.AreEquivalent(
                     new[] { "Preview feed", "Edit feed", "Choose collections for feed", "Check feed", "Remove feed" },
                     managementActions.Select(button => AutomationProperties.GetName(button)).ToArray());
+                Assert.IsTrue(managementActions.All(button => button.FontWeight == FontWeights.Bold));
+                Assert.IsTrue(managementActions.All(button =>
+                    FindVisualChildren<TextBlock>(button).Single().FontWeight == FontWeights.Bold));
+                Assert.AreEqual(
+                    catalogMasterWindow.FindResource("NeutralActionBrush"),
+                    FindVisualChildren<TextBlock>(managementActions.Single(button =>
+                        AutomationProperties.GetName(button) == "Preview feed")).Single().Foreground);
+                Assert.AreEqual(
+                    catalogMasterWindow.FindResource("SuccessBrush"),
+                    FindVisualChildren<TextBlock>(managementActions.Single(button =>
+                        AutomationProperties.GetName(button) == "Check feed")).Single().Foreground);
+                Assert.AreEqual(
+                    catalogMasterWindow.FindResource("DestructiveBrush"),
+                    FindVisualChildren<TextBlock>(managementActions.Single(button =>
+                        AutomationProperties.GetName(button) == "Remove feed")).Single().Foreground);
+                var managementActionPanel = FindVisualChildren<StackPanel>(managedFeedContainer)
+                    .Single(panel => Grid.GetColumn(panel) == 1 && panel.Children.OfType<Button>().Any());
+                Assert.AreEqual(Visibility.Collapsed, managementActionPanel.Visibility);
+                var managementDeleteButton = managementActions.Single(button =>
+                    AutomationProperties.GetName(button) == "Remove feed");
+                Assert.AreEqual(28, managementDeleteButton.Width);
+                Assert.AreEqual(28, managementActionPanel.Margin.Right);
+                var managedCategoryLabel = FindVisualChildren<TextBlock>(managedFeedContainer)
+                    .Single(text => text.Text == managedFeed.CategoryName);
+                var managedCategoryLabelRight = managedCategoryLabel
+                    .TranslatePoint(new Point(managedCategoryLabel.ActualWidth, 0), managedFeedRow).X;
+                Assert.AreEqual(managedFeedRow.ActualWidth - 14, managedCategoryLabelRight, 3);
+                managementActionPanel.Visibility = Visibility.Visible;
+                managementActionPanel.Opacity = 1;
+                catalogMasterWindow.UpdateLayout();
+                var managementDeleteRight = managementDeleteButton
+                    .TranslatePoint(new Point(managementDeleteButton.ActualWidth, 0), managementList).X;
+                Assert.IsTrue(
+                    managementDeleteRight <= managementList.ActualWidth - 20,
+                    $"The delete icon is too close to the list edge ({managementDeleteRight} of {managementList.ActualWidth}).");
+                managementActionPanel.ClearValue(UIElement.VisibilityProperty);
+                managementActionPanel.ClearValue(UIElement.OpacityProperty);
+                catalogMasterWindow.UpdateLayout();
+                var collectionsAction = managementActions.Single(button =>
+                    AutomationProperties.GetName(button) == "Choose collections for feed");
+                Assert.AreEqual("\uE8D4", (collectionsAction.Content as TextBlock)?.Text);
                 var managedTitle = FindVisualChildren<TextBlock>(managedFeedContainer).Single(text => text.Text == managedFeed.Name);
                 Assert.AreEqual(14, managedTitle.FontSize);
+                Assert.IsTrue(managedTitle.TextDecorations.Any(decoration =>
+                    decoration.Location == TextDecorationLocation.Strikethrough));
                 var managedDescription = FindVisualChildren<TextBlock>(managedFeedContainer)
                     .Single(text => AutomationProperties.GetName(text) == "Catalog feed description");
                 Assert.AreEqual(Visibility.Collapsed, managedDescription.Visibility);
-                var metadataIcon = FindVisualChildren<TextBlock>(managedFeedContainer)
-                    .Single(text => AutomationProperties.GetName(text).StartsWith("Metadata gaps:", StringComparison.Ordinal));
-                Assert.AreEqual(managedFeed.MetadataReviewDisplay, metadataIcon.ToolTip);
+                Assert.IsFalse(FindVisualChildren<TextBlock>(managedFeedContainer)
+                    .Any(text => text.Text == "\uE7BA"));
                 var healthIcon = FindVisualChildren<TextBlock>(managedFeedContainer)
                     .Single(text => AutomationProperties.GetName(text).StartsWith("Check failed - checked", StringComparison.Ordinal));
                 Assert.AreEqual(managedFeed.HealthCheckDisplay, healthIcon.ToolTip);
                 Assert.AreEqual("\uE711", healthIcon.Text);
 
+                var disabledFeed = new CatalogFeedListItem(
+                    "disabled-comic-feed",
+                    "Disabled comic feed",
+                    "https://example.com/disabled-comic.xml",
+                    null,
+                    "Comics RSS",
+                    managedCategory.Id,
+                    isEnabledInCategory: false);
+                catalogManagement.Feeds.Add(disabledFeed);
+
                 var managementTabs = (TabControl)catalogMasterAdminView.FindName("CatalogManagementTabs");
                 managementTabs.SelectedIndex = 1;
                 catalogMasterWindow.UpdateLayout();
+                catalogManagement.LoadTaxonomyChildren(categoryTreeNode);
+                categoryTreeNode.IsExpanded = true;
+                catalogMasterWindow.UpdateLayout();
                 var renameButton = FindVisualChildren<Button>(catalogMasterWindow)
-                    .Single(button => AutomationProperties.GetName(button) == "Rename category");
+                    .First(button => button.IsVisible && AutomationProperties.GetName(button) == "Rename category");
                 var removeCategoryButton = FindVisualChildren<Button>(catalogMasterWindow)
-                    .Single(button => AutomationProperties.GetName(button) == "Remove category");
-                Assert.AreEqual(0, renameButton.Opacity);
-                Assert.AreEqual(0, removeCategoryButton.Opacity);
-                renameButton.Focus();
-                catalogMasterWindow.UpdateLayout();
+                    .First(button => button.IsVisible && AutomationProperties.GetName(button) == "Remove category");
+                var checkCategoryFeedsButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .First(button => button.IsVisible && AutomationProperties.GetName(button) == "Check feeds");
                 Assert.AreEqual(1, renameButton.Opacity);
+                Assert.AreEqual(1, removeCategoryButton.Opacity);
+                Assert.AreEqual(FontWeights.Bold, renameButton.FontWeight);
+                Assert.AreEqual(FontWeights.Bold, checkCategoryFeedsButton.FontWeight);
+                Assert.AreEqual(FontWeights.Bold, removeCategoryButton.FontWeight);
+                Assert.AreEqual("\uE72A", FindVisualChildren<TextBlock>(checkCategoryFeedsButton).Single().Text);
+                Assert.AreEqual(FontWeights.Bold, FindVisualChildren<TextBlock>(checkCategoryFeedsButton).Single().FontWeight);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("SuccessBrush"),
+                    FindVisualChildren<TextBlock>(checkCategoryFeedsButton).Single().Foreground);
                 var renameCollectionButton = FindVisualChildren<Button>(catalogMasterWindow)
-                    .Single(button => AutomationProperties.GetName(button) == "Rename collection");
+                    .Single(button => button.IsVisible && AutomationProperties.GetName(button) == "Rename collection");
                 var manageCollectionFeedsButton = FindVisualChildren<Button>(catalogMasterWindow)
-                    .Single(button => AutomationProperties.GetName(button) == "Manage feeds in collection");
+                    .Single(button => button.IsVisible && AutomationProperties.GetName(button) == "Manage feeds in collection");
                 var removeCollectionButton = FindVisualChildren<Button>(catalogMasterWindow)
-                    .Single(button => AutomationProperties.GetName(button) == "Remove collection");
-                Assert.AreEqual(0, manageCollectionFeedsButton.Opacity);
-                Assert.AreEqual(0, renameCollectionButton.Opacity);
-                Assert.AreEqual(0, removeCollectionButton.Opacity);
-                manageCollectionFeedsButton.Focus();
-                catalogMasterWindow.UpdateLayout();
+                    .Single(button => button.IsVisible && AutomationProperties.GetName(button) == "Remove collection");
                 Assert.AreEqual(1, manageCollectionFeedsButton.Opacity);
-                renameCollectionButton.Focus();
-                catalogMasterWindow.UpdateLayout();
                 Assert.AreEqual(1, renameCollectionButton.Opacity);
+                Assert.AreEqual(1, removeCollectionButton.Opacity);
+                var addCategoryButton = FindVisualChildren<Button>(catalogMasterWindow)
+                    .Single(button => button.IsVisible && AutomationProperties.GetName(button) == "Add category to collection");
+                Assert.AreEqual(1, addCategoryButton.Opacity);
+                Assert.AreNotEqual(
+                    FindVisualChildren<TextBlock>(addCategoryButton).Single().Text,
+                    FindVisualChildren<TextBlock>(manageCollectionFeedsButton).Single().Text);
+                Assert.AreEqual(catalogMasterWindow.FindResource("NeutralActionBrush"),
+                    FindVisualChildren<TextBlock>(renameButton).Single().Foreground);
+                Assert.AreEqual(catalogMasterWindow.FindResource("DestructiveBrush"),
+                    FindVisualChildren<TextBlock>(removeCategoryButton).Single().Foreground);
+                Assert.AreEqual(catalogMasterWindow.FindResource("SuccessBrush"),
+                    FindVisualChildren<TextBlock>(addCategoryButton).Single().Foreground);
+                Assert.AreEqual(catalogMasterWindow.FindResource("NeutralActionBrush"),
+                    FindVisualChildren<TextBlock>(manageCollectionFeedsButton).Single().Foreground);
+
+                var taxonomyTrees = FindVisualChildren<TreeView>(catalogMasterAdminView);
+                var categoryTree = taxonomyTrees.Single(tree =>
+                    ReferenceEquals(tree.ItemsSource, catalogManagement.CategoryTreeNodes));
+                var taxonomyViewport = (Grid)catalogMasterAdminView.FindName("CatalogTaxonomyViewport");
+                var taxonomyLayout = (Grid)catalogMasterAdminView.FindName("CatalogTaxonomyLayout");
+                Assert.AreEqual(HorizontalAlignment.Left, taxonomyLayout.HorizontalAlignment);
+                Assert.AreEqual(0, taxonomyLayout.TranslatePoint(new Point(0, 0), taxonomyViewport).X, 1);
+                Assert.IsTrue(taxonomyLayout.ActualWidth <= 1280);
+                var initialCategoryTreeWidth = categoryTree.ActualWidth;
+                Assert.AreEqual(
+                    Color.FromRgb(217, 234, 248),
+                    ((SolidColorBrush)categoryTree.FindResource(SystemColors.HighlightBrushKey)).Color);
+                Assert.AreEqual(
+                    Color.FromRgb(32, 41, 39),
+                    ((SolidColorBrush)categoryTree.FindResource(SystemColors.HighlightTextBrushKey)).Color);
+                var initialCollectionTreeWidth = taxonomyTrees.Single(tree =>
+                    ReferenceEquals(tree.ItemsSource, catalogManagement.CollectionTreeNodes)).ActualWidth;
+                for (var layoutPass = 0; layoutPass < 4; layoutPass++)
+                {
+                    catalogMasterWindow.UpdateLayout();
+                }
+
+                Assert.IsTrue(categoryTree.ActualWidth > 300, "The category tree should retain a practical pane width.");
+                Assert.AreEqual(initialCategoryTreeWidth, categoryTree.ActualWidth, 1);
+                var collectionTree = taxonomyTrees.Single(tree =>
+                    ReferenceEquals(tree.ItemsSource, catalogManagement.CollectionTreeNodes));
+                Assert.IsTrue(collectionTree.ActualWidth > 300, "The collection tree should retain a practical pane width.");
+                Assert.AreEqual(initialCollectionTreeWidth, collectionTree.ActualWidth, 1);
+                var categoryTreeItem = (TreeViewItem?)categoryTree.ItemContainerGenerator.ContainerFromItem(categoryTreeNode)
+                    ?? throw new AssertFailedException("The category tree item was not created.");
+                var disabledFeedNode = categoryTreeNode.Children.Single(node => node.Feed?.Id == disabledFeed.Id);
+                var disabledFeedItem = (TreeViewItem?)categoryTreeItem.ItemContainerGenerator.ContainerFromItem(disabledFeedNode)
+                    ?? throw new AssertFailedException("The disabled category feed tree item was not created.");
+                var categoryRow = FindVisualChildren<Border>(categoryTreeItem)
+                    .Single(border => ReferenceEquals(border.DataContext, categoryTreeNode) && border.ContextMenu is not null);
+                var disabledFeedRow = FindVisualChildren<Border>(disabledFeedItem)
+                    .Single(border => ReferenceEquals(border.DataContext, disabledFeedNode) && border.ContextMenu is not null);
+                var failedCategoryFeedNode = categoryTreeNode.Children.Single(node => node.Feed?.Id == managedFeed.Id);
+                var failedCategoryFeedItem = (TreeViewItem?)categoryTreeItem.ItemContainerGenerator
+                    .ContainerFromItem(failedCategoryFeedNode)
+                    ?? throw new AssertFailedException("The failed category feed tree item was not created.");
+                var failedCategoryFeedRow = FindVisualChildren<Border>(failedCategoryFeedItem)
+                    .Single(border => ReferenceEquals(border.DataContext, failedCategoryFeedNode) && border.ContextMenu is not null);
+                Assert.AreEqual(40, categoryRow.Height);
+                Assert.AreEqual(40, disabledFeedRow.Height);
+                Assert.AreEqual(HorizontalAlignment.Stretch, categoryRow.HorizontalAlignment);
+                Assert.AreEqual(HorizontalAlignment.Stretch, disabledFeedRow.HorizontalAlignment);
+                Assert.AreEqual(0, ((SolidColorBrush)categoryRow.Background).Color.A);
+                Assert.AreEqual(0, ((SolidColorBrush)disabledFeedRow.Background).Color.A);
+                Assert.AreSame(catalogMasterWindow.FindResource("DestructiveWashBrush"), failedCategoryFeedRow.Background);
+                Assert.AreEqual(1, categoryRow.BorderThickness.Bottom);
+                Assert.AreEqual(1, disabledFeedRow.BorderThickness.Bottom);
+                Assert.AreSame(catalogMasterWindow.FindResource("SeparatorBrush"), disabledFeedRow.BorderBrush);
+                var categoryDisableButton = FindVisualChildren<Button>(categoryRow)
+                    .Single(button => AutomationProperties.GetName(button) == "Disable");
+                Assert.AreEqual("\uE8D7", FindVisualChildren<TextBlock>(categoryDisableButton).Single().Text);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("DestructiveBrush"),
+                    FindVisualChildren<TextBlock>(categoryDisableButton).Single().Foreground);
+                var categoryDisableRight = categoryDisableButton
+                    .TranslatePoint(new Point(categoryDisableButton.ActualWidth, 0), categoryRow).X;
+                var categoryDeleteLeft = removeCategoryButton
+                    .TranslatePoint(new Point(0, 0), categoryRow).X;
+                Assert.IsTrue(
+                    categoryDisableRight < categoryDeleteLeft,
+                    "The category Disable action should be immediately left of Delete.");
+                var removeCategoryButtonRight = removeCategoryButton
+                    .TranslatePoint(new Point(removeCategoryButton.ActualWidth, 0), categoryRow).X;
+                Assert.AreEqual(categoryRow.ActualWidth - 6, removeCategoryButtonRight, 3);
+                var disabledFeedActions = FindVisualChildren<Button>(disabledFeedItem)
+                    .Where(button => button.IsVisible)
+                    .ToArray();
+                CollectionAssert.AreEquivalent(
+                    new[] { "Preview feed", "Enable", "Remove feed permanently" },
+                    disabledFeedActions.Select(button => AutomationProperties.GetName(button)).ToArray());
+                var disabledFeedPreviewButton = disabledFeedActions.Single(button =>
+                    AutomationProperties.GetName(button) == "Preview feed");
+                var enableFeedButton = disabledFeedActions.Single(button => AutomationProperties.GetName(button) == "Enable");
+                var removeFeedButton = disabledFeedActions.Single(button =>
+                    AutomationProperties.GetName(button) == "Remove feed permanently");
+                Assert.AreEqual("\uE890", FindVisualChildren<TextBlock>(disabledFeedPreviewButton).Single().Text);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("AccentBrush"),
+                    FindVisualChildren<TextBlock>(disabledFeedPreviewButton).Single().Foreground);
+                Assert.AreEqual("\uE8D7", FindVisualChildren<TextBlock>(enableFeedButton).Single().Text);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("SuccessBrush"),
+                    FindVisualChildren<TextBlock>(enableFeedButton).Single().Foreground);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("DestructiveBrush"),
+                    FindVisualChildren<TextBlock>(removeFeedButton).Single().Foreground);
+                var removeFeedButtonRight = removeFeedButton
+                    .TranslatePoint(new Point(removeFeedButton.ActualWidth, 0), disabledFeedRow).X;
+                Assert.AreEqual(disabledFeedRow.ActualWidth - 6, removeFeedButtonRight, 3);
+                var categoryActionsRight = removeCategoryButton
+                    .TranslatePoint(new Point(removeCategoryButton.ActualWidth, 0), categoryTree).X;
+                var categoryFeedActionsRight = removeFeedButton
+                    .TranslatePoint(new Point(removeFeedButton.ActualWidth, 0), categoryTree).X;
+                Assert.AreEqual(
+                    categoryActionsRight,
+                    categoryFeedActionsRight,
+                    3,
+                    "Category and child actions should align at the tree's right edge.");
+                var disabledFeedLabel = FindVisualChildren<TextBlock>(disabledFeedItem)
+                    .Single(text => text.Text == disabledFeed.Name);
+                Assert.AreSame(catalogMasterWindow.FindResource("MutedTextBrush"), disabledFeedLabel.Foreground);
+                Assert.IsTrue(disabledFeedLabel.TextDecorations.Any(decoration =>
+                    decoration.Location == TextDecorationLocation.Strikethrough));
+
+                var categoryContextMenu = categoryRow.ContextMenu!;
+                categoryContextMenu.PlacementTarget = categoryRow;
+                categoryContextMenu.IsOpen = true;
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    categoryContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Rename category")).Visibility);
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    categoryContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Remove category")).Visibility);
+                var disableCategoryMenuItem = categoryContextMenu.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Header, "Disable"));
+                Assert.AreEqual(Visibility.Visible, disableCategoryMenuItem.Visibility);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("DestructiveBrush"),
+                    ((TextBlock)disableCategoryMenuItem.Icon).Foreground);
+                categoryContextMenu.IsOpen = false;
+                var disabledFeedContextMenu = disabledFeedRow.ContextMenu!;
+                disabledFeedContextMenu.PlacementTarget = disabledFeedRow;
+                disabledFeedContextMenu.IsOpen = true;
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    disabledFeedContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Preview feed")).Visibility);
+                disabledFeedContextMenu.IsOpen = false;
+
+                var disabledCategoryTreeItem = (TreeViewItem?)categoryTree.ItemContainerGenerator
+                    .ContainerFromItem(disabledCategoryTreeNode)
+                    ?? throw new AssertFailedException("The disabled category tree item was not created.");
+                var disabledCategoryRow = FindVisualChildren<Border>(disabledCategoryTreeItem)
+                    .Single(border => ReferenceEquals(border.DataContext, disabledCategoryTreeNode)
+                        && border.ContextMenu is not null);
+                var disabledCategoryLabel = FindVisualChildren<TextBlock>(disabledCategoryTreeItem)
+                    .Single(text => text.Text == disabledCategory.Name);
+                Assert.IsTrue(disabledCategoryLabel.TextDecorations.Any(decoration =>
+                    decoration.Location == TextDecorationLocation.Strikethrough));
+                var disabledCategoryContextMenu = disabledCategoryRow.ContextMenu!;
+                var enableCategoryButton = FindVisualChildren<Button>(disabledCategoryRow)
+                    .Single(button => AutomationProperties.GetName(button) == "Enable");
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("SuccessBrush"),
+                    FindVisualChildren<TextBlock>(enableCategoryButton).Single().Foreground);
+                disabledCategoryContextMenu.PlacementTarget = disabledCategoryRow;
+                disabledCategoryContextMenu.IsOpen = true;
+                catalogMasterWindow.UpdateLayout();
+                var enableCategoryMenuItem = disabledCategoryContextMenu.Items.OfType<MenuItem>()
+                    .Single(item => Equals(item.Header, "Enable"));
+                Assert.AreEqual(Visibility.Visible, enableCategoryMenuItem.Visibility);
+                Assert.AreSame(
+                    catalogMasterWindow.FindResource("SuccessBrush"),
+                    ((TextBlock)enableCategoryMenuItem.Icon).Foreground);
+                disabledCategoryContextMenu.IsOpen = false;
+
+                var collectionTreeItem = (TreeViewItem?)collectionTree.ItemContainerGenerator.ContainerFromItem(collectionTreeNode)
+                    ?? throw new AssertFailedException("The collection tree item was not created.");
+                var collectionRow = FindVisualChildren<Border>(collectionTreeItem)
+                    .Single(border => ReferenceEquals(border.DataContext, collectionTreeNode) && border.ContextMenu is not null);
+                var collectionContextMenu = collectionRow.ContextMenu!;
+                collectionContextMenu.PlacementTarget = collectionRow;
+                collectionContextMenu.IsOpen = true;
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    collectionContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Add category")).Visibility);
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    collectionContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Manage feeds")).Visibility);
+                collectionContextMenu.IsOpen = false;
+
+                collectionTreeNode.IsExpanded = true;
+                catalogMasterWindow.UpdateLayout();
+                var collectionFeedNode = collectionTreeNode.Children.Single(node => node.Feed?.Id == managedFeed.Id);
+                var collectionFeedItem = (TreeViewItem?)collectionTreeItem.ItemContainerGenerator
+                    .ContainerFromItem(collectionFeedNode)
+                    ?? throw new AssertFailedException("The collection feed tree item was not created.");
+                var removeCollectionTreeButton = removeCollectionButton;
+                var collectionFeedRow = FindVisualChildren<Border>(collectionFeedItem)
+                    .Single(border => ReferenceEquals(border.DataContext, collectionFeedNode) && border.ContextMenu is not null);
+                Assert.AreSame(catalogMasterWindow.FindResource("DestructiveWashBrush"), collectionFeedRow.Background);
+                var collectionFeedActions = FindVisualChildren<Button>(collectionFeedItem)
+                    .Where(button => button.IsVisible)
+                    .ToArray();
+                CollectionAssert.AreEquivalent(
+                    new[] { "Preview feed", "Enable globally", "Remove from collection" },
+                    collectionFeedActions.Select(button => AutomationProperties.GetName(button)).ToArray());
+                Assert.AreEqual(40, collectionFeedRow.Height);
+                Assert.AreEqual(1, collectionFeedRow.BorderThickness.Bottom);
+                var collectionFeedLabel = FindVisualChildren<TextBlock>(collectionFeedItem)
+                    .Single(text => text.Text == managedFeed.Name);
+                Assert.AreSame(catalogMasterWindow.FindResource("MutedTextBrush"), collectionFeedLabel.Foreground);
+                Assert.IsFalse(collectionFeedLabel.TextDecorations.Any(decoration =>
+                    decoration.Location == TextDecorationLocation.Strikethrough));
+                var removeCollectionFeedButton = collectionFeedActions.Single(button =>
+                    AutomationProperties.GetName(button) == "Remove from collection");
+                var collectionFeedPreviewButton = collectionFeedActions.Single(button =>
+                    AutomationProperties.GetName(button) == "Preview feed");
+                Assert.AreEqual("\uE890", FindVisualChildren<TextBlock>(collectionFeedPreviewButton).Single().Text);
+                var removeCollectionFeedButtonRight = removeCollectionFeedButton
+                    .TranslatePoint(new Point(removeCollectionFeedButton.ActualWidth, 0), collectionFeedRow).X;
+                Assert.AreEqual(collectionFeedRow.ActualWidth - 6, removeCollectionFeedButtonRight, 2);
+                var collectionActionsRight = removeCollectionTreeButton
+                    .TranslatePoint(new Point(removeCollectionTreeButton.ActualWidth, 0), collectionTree).X;
+                var collectionFeedActionsRight = removeCollectionFeedButton
+                    .TranslatePoint(new Point(removeCollectionFeedButton.ActualWidth, 0), collectionTree).X;
+                Assert.AreEqual(collectionActionsRight, collectionFeedActionsRight, 3);
+                var collectionFeedContextMenu = collectionFeedRow.ContextMenu!;
+                collectionFeedContextMenu.PlacementTarget = collectionFeedRow;
+                collectionFeedContextMenu.IsOpen = true;
+                catalogMasterWindow.UpdateLayout();
+                Assert.AreEqual(
+                    Visibility.Visible,
+                    collectionFeedContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Preview feed")).Visibility);
+                collectionFeedContextMenu.IsOpen = false;
+
                 var collectionRenameDialogShown = false;
                 var closeCollectionRenameDialogTimer = new System.Windows.Threading.DispatcherTimer
                 {
@@ -2818,11 +3492,16 @@ public sealed class MainWindowViewModelTests
             await viewModel.InitializeAsync();
 
             Assert.AreEqual(1, catalogFeedChangeCount);
+            Assert.AreEqual(chickweed.Id, viewModel.SelectedCatalogFeed?.Id);
             CollectionAssert.AreEqual(
                 new[] { chickweed.Name, dilbert.Name, spaceNews.Name },
                 viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Select(feed => feed.Name).ToArray());
             Assert.AreEqual("Editor's picks (2)", viewModel.CatalogCollectionOptions.Single(option => option.CollectionId == collection.Id).Name);
 
+            viewModel.CatalogSearchQuery = "  brooke   chickweed ";
+            Assert.AreEqual("Search: brooke   chickweed", viewModel.ActiveCatalogFilterChips.Single().Label);
+            viewModel.RemoveCatalogFilterCommand.Execute(viewModel.ActiveCatalogFilterChips.Single());
+            Assert.AreEqual(string.Empty, viewModel.CatalogSearchQuery);
             viewModel.CatalogSearchQuery = "  brooke   chickweed ";
             CollectionAssert.AreEqual(
                 new[] { chickweed.Id },
@@ -2840,9 +3519,18 @@ public sealed class MainWindowViewModelTests
 
             viewModel.CatalogSearchQuery = string.Empty;
             viewModel.SelectedCatalogCategory = viewModel.CatalogCategoryOptions.Single(option => option.CategoryId == comics.Id);
+            Assert.AreEqual($"Category: {comics.Name}", viewModel.ActiveCatalogFilterChips.Single().Label);
+            viewModel.RemoveCatalogFilterCommand.Execute(viewModel.ActiveCatalogFilterChips.Single());
+            Assert.IsNull(viewModel.SelectedCatalogCategory?.CategoryId);
+            viewModel.SelectedCatalogCategory = viewModel.CatalogCategoryOptions.Single(option => option.CategoryId == comics.Id);
             Assert.AreEqual(2, viewModel.CatalogFeedListView.Cast<CatalogFeedListItem>().Count());
+            Assert.AreEqual("Unfollow visible (1)", viewModel.UnfollowVisibleCatalogFeedsLabel);
 
             viewModel.SelectedCatalogCollection = viewModel.CatalogCollectionOptions.Single(option => option.CollectionId == collection.Id);
+            Assert.AreEqual("Unfollow visible (0)", viewModel.UnfollowVisibleCatalogFeedsLabel);
+            Assert.AreEqual(
+                $"Collection: {collection.Name}",
+                viewModel.ActiveCatalogFilterChips.Single(chip => chip.Kind == CatalogFilterKind.Collection).Label);
             Assert.AreEqual("Curated by Catalog Master", viewModel.SelectedCatalogCollectionCuratorLabel);
             CollectionAssert.AreEqual(
                 new[] { chickweed.Id },
@@ -2851,6 +3539,11 @@ public sealed class MainWindowViewModelTests
             Assert.AreEqual(string.Empty, viewModel.SelectedCatalogCollectionCuratorLabel);
             viewModel.SelectedCatalogCollection = viewModel.CatalogCollectionOptions.Single(option => option.CollectionId is null);
 
+            viewModel.HideFollowedCatalogFeeds = true;
+            Assert.IsTrue(viewModel.ActiveCatalogFilterChips.Any(chip => chip.Kind == CatalogFilterKind.HideFollowed));
+            viewModel.RemoveCatalogFilterCommand.Execute(
+                viewModel.ActiveCatalogFilterChips.Single(chip => chip.Kind == CatalogFilterKind.HideFollowed));
+            Assert.IsFalse(viewModel.HideFollowedCatalogFeeds);
             viewModel.HideFollowedCatalogFeeds = true;
             CollectionAssert.AreEqual(
                 new[] { chickweed.Id },
@@ -2981,7 +3674,10 @@ public sealed class MainWindowViewModelTests
 
         Assert.AreEqual(5, preview.Items.Count);
         Assert.AreEqual("Preview headline 1", preview.Items[0].Title);
-        Assert.IsTrue(preview.Items.All(item => item.Content is null && item.ImageUrl is null));
+        Assert.IsTrue(preview.Items.All(item => item.Content is null));
+        CollectionAssert.AreEqual(
+            Enumerable.Range(1, 5).Select(index => $"https://example.com/images/{index}.jpg").ToArray(),
+            preview.Items.Select(item => item.ImageUrl).ToArray());
         Assert.IsFalse(feed.IsSubscribed);
         Assert.AreEqual(1, downloader.RequestedFeedIds.Count);
 
@@ -3285,6 +3981,10 @@ public sealed class MainWindowViewModelTests
             selectedFeeds[1].IsSelectedForFollow = true;
             Assert.AreEqual(2, viewModel.SelectedCatalogFeedCount);
             Assert.IsTrue(viewModel.FollowSelectedCatalogFeedsCommand.CanExecute(null));
+            viewModel.CatalogSearchQuery = "no matching feeds";
+            Assert.AreEqual("0 of 2 feeds; 2 selected outside these results", viewModel.CatalogResultsSummary);
+            Assert.AreEqual("Follow selected (2)", viewModel.FollowSelectedCatalogFeedsLabel);
+            viewModel.CatalogSearchQuery = string.Empty;
 
             var pickerCallCount = 0;
             viewModel.FolderSelectionRequested = (_, _, _) =>
@@ -3458,26 +4158,32 @@ public sealed class MainWindowViewModelTests
 
             string? confirmedFolder = null;
             var confirmedFeedCount = 0;
-            viewModel.ConfirmDeleteFolderRequested = (folderName, feedCount) =>
+            var expectedLocation = new System.Windows.Point(302, 188);
+            System.Windows.Point? confirmedLocation = null;
+            viewModel.FolderDeleteDialogLocationProvider = () => expectedLocation;
+            viewModel.ConfirmDeleteFolderRequested = (folderName, feedCount, location) =>
             {
                 confirmedFolder = folderName;
                 confirmedFeedCount = feedCount;
+                confirmedLocation = location;
                 return Task.FromResult(false);
             };
             await viewModel.DeleteFolderCommand.ExecuteAsync(comicsFolder);
             Assert.AreEqual(2, (await readerStore.GetSubscriptionsAsync(profile.Id)).Count);
             Assert.IsTrue(viewModel.FolderNames.Contains("Comics", StringComparer.OrdinalIgnoreCase));
 
-            viewModel.ConfirmDeleteFolderRequested = (folderName, feedCount) =>
+            viewModel.ConfirmDeleteFolderRequested = (folderName, feedCount, location) =>
             {
                 confirmedFolder = folderName;
                 confirmedFeedCount = feedCount;
+                confirmedLocation = location;
                 return Task.FromResult(true);
             };
             await viewModel.DeleteFolderCommand.ExecuteAsync(comicsFolder);
 
             Assert.AreEqual("Comics", confirmedFolder);
             Assert.AreEqual(1, confirmedFeedCount);
+            Assert.AreEqual(expectedLocation, confirmedLocation);
             var remainingSubscriptions = await readerStore.GetSubscriptionsAsync(profile.Id);
             Assert.AreEqual(newsFeed.Id, remainingSubscriptions.Single().FeedId);
             CollectionAssert.AreEqual(new[] { "News" }, viewModel.FolderNames.ToArray());
@@ -4406,6 +5112,32 @@ public sealed class MainWindowViewModelTests
         viewModel.NavigateCommand.Execute(followSources);
 
         Assert.IsFalse(viewModel.IsArticleCountVisible);
+        Assert.IsFalse(viewModel.IsWorkspaceHeaderVisible);
+    }
+
+    [TestMethod]
+    public void WorkspaceHeaderIsHiddenForViewsWithTheirOwnTopBar()
+    {
+        var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+        var viewsWithoutWorkspaceHeader = new[]
+        {
+            viewModel.PrimaryLinks.Single(link => link.Route == "Follow sources"),
+            viewModel.PrimaryLinks.Single(link => link.Route == "Search"),
+            viewModel.ReadingLinks.Single(link => link.Route == "Read later"),
+            viewModel.ReadingLinks.Single(link => link.Route == "Recently read")
+        };
+
+        foreach (var link in viewsWithoutWorkspaceHeader)
+        {
+            viewModel.NavigateCommand.Execute(link);
+            Assert.IsFalse(viewModel.IsWorkspaceHeaderVisible, $"Workspace header was visible on '{link.Route}'.");
+        }
+
+        viewModel.NavigateCommand.Execute(viewModel.FeedLinks.Single(link => link.Route == "All"));
+        Assert.IsTrue(viewModel.IsWorkspaceHeaderVisible);
+
+        var catalogMaster = new MainWindowViewModel(Profile.CreateCatalogMaster());
+        Assert.IsFalse(catalogMaster.IsWorkspaceHeaderVisible);
     }
 
     [TestMethod]
@@ -5358,6 +6090,20 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public void ArticleHtmlDocumentBuilderAppliesXlargeTextAndExtraCompactLineSpacing()
+    {
+        var document = ArticleHtmlDocumentBuilder.Build(
+            "<p>Article content.</p>",
+            null,
+            null,
+            null,
+            textSize: ProfileReaderTextSize.XLarge,
+            lineSpacing: ProfileReaderLineSpacing.ExtraCompact);
+
+        StringAssert.Contains(document, "font: 20px/1.3");
+    }
+
+    [TestMethod]
     public void ArticleHtmlDocumentBuilderLimitsArticleWidthByDefaultAndCanUseAvailableWidth()
     {
         var limitedDocument = ArticleHtmlDocumentBuilder.Build("<p>Article content.</p>", null, null, null);
@@ -5414,6 +6160,29 @@ public sealed class MainWindowViewModelTests
         Assert.IsFalse(document.Contains("data:image/", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(document.Contains("data-src=", StringComparison.OrdinalIgnoreCase));
         Assert.IsFalse(document.Contains("srcset=", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ArticleHtmlDocumentBuilderRestoresPolygonImageSourceBeforeSanitizing()
+    {
+        const string imageUrl =
+            "https://static0.polygonimages.com/wordpress/wp-content/uploads/2026/09/vs-vimeo-itsthegreatpumpkincharliebrownvideosmoviesonvimeo-4-24.jpg?q=70&fit=crop&w=640&dpr=1";
+        var document = ArticleHtmlDocumentBuilder.Build(
+            """
+            <figure><picture>
+              <source media="(max-width: 767px)" srcset="https://static0.polygonimages.com/wordpress/wp-content/uploads/2026/09/vs-vimeo-itsthegreatpumpkincharliebrownvideosmoviesonvimeo-4-24.jpg?q=70&amp;fit=crop&amp;w=640&amp;dpr=1">
+              <img width="640" height="480" loading="lazy" decoding="async" alt="Linus Great Pumpkin Charlie Brown" data-img-url="https://static0.polygonimages.com/wordpress/wp-content/uploads/2026/09/vs-vimeo-itsthegreatpumpkincharliebrownvideosmoviesonvimeo-4-24.jpg?q=70&amp;fit=crop&amp;w=640&amp;dpr=1" src="https://static0.polygonimages.com/wordpress/wp-content/uploads/2026/09/vs-vimeo-itsthegreatpumpkincharliebrownvideosmoviesonvimeo-4-24.jpg?q=70&amp;fit=crop&amp;w=640&amp;dpr=1" class="img-brightness-opt-out">
+            </picture><figcaption>Image: Charles Schulz</figcaption></figure>
+            """,
+            null,
+            "https://www.polygon.com/great-pumpkin-charlie-brown-best-quote-movie/",
+            null);
+
+        StringAssert.Contains(document, imageUrl.Replace("&", "&amp;", StringComparison.Ordinal));
+        StringAssert.Contains(document, "<picture>");
+        Assert.IsFalse(document.Contains("srcset=", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(document.Contains("data-img-url=", StringComparison.OrdinalIgnoreCase));
+        Assert.AreEqual(1, document.Split("<img", StringSplitOptions.None).Length - 1);
     }
 
     [TestMethod]
@@ -5612,15 +6381,60 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
-    public void AutoLoadFullArticleLoadsPublisherContentWhenArticleIsOpened()
+    public async Task FullArticleActionRefreshesAlreadyDisplayedExtractedContent()
     {
-        const string extractedHtml = "<article><p>Automatically loaded publisher text.</p></article>";
+        const string oldHtml = "<article><p>Previously cached article content.</p></article>";
+        const string refreshedHtml = "<article><p>Updated article content.</p></article>";
+        var retrievedAt = DateTimeOffset.UtcNow;
         var service = new StubArticleContentService(
             (_, _) => Task.FromResult(new ExtractedArticleContent(
-                extractedHtml,
-                "Full story",
+                refreshedHtml,
+                "Updated story",
                 null,
-                DateTimeOffset.UtcNow)));
+                retrievedAt)));
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Feed title",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "A short feed preview.",
+            link: "https://example.test/story",
+            content: "<p>A short feed preview.</p>",
+            extractedContentHtml: oldHtml,
+            extractedContentRetrievedAt: DateTimeOffset.UtcNow.AddDays(-1));
+        viewModel.VisibleArticles.Add(article);
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+
+        Assert.IsTrue(viewModel.IsSelectedArticleFullArticleActionVisible);
+        Assert.AreEqual("Refresh full article", viewModel.FullArticleActionLabel);
+        Assert.AreEqual(oldHtml, article.ReaderContent);
+
+        await viewModel.LoadFullArticleCommand.ExecuteAsync();
+
+        Assert.AreEqual(1, service.RequestCount);
+        Assert.AreEqual(refreshedHtml, article.ReaderContent);
+        Assert.AreEqual(retrievedAt, article.ExtractedContentRetrievedAt);
+    }
+
+    [TestMethod]
+    public async Task AutoLoadFullArticleHidesPreviewUntilPublisherContentLoads()
+    {
+        const string extractedHtml = "<article><p>Automatically loaded publisher text.</p></article>";
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<ExtractedArticleContent>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StubArticleContentService((_, _) =>
+        {
+            requestStarted.TrySetResult();
+            return response.Task;
+        });
         var viewModel = new MainWindowViewModel(
             Profile.CreateRegular("Reader"),
             catalogService: null,
@@ -5639,10 +6453,66 @@ public sealed class MainWindowViewModelTests
             content: "<p>A short feed preview.</p>");
 
         viewModel.OpenArticleInReaderCommand.Execute(article);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.AreEqual(1, service.RequestCount);
+        Assert.IsTrue(viewModel.IsLoadingArticleContent);
+        Assert.IsTrue(article.IsWaitingForFullArticle);
+        Assert.IsNull(article.ReaderContent);
+
+        response.SetResult(new ExtractedArticleContent(
+            extractedHtml,
+            "Full story",
+            null,
+            DateTimeOffset.UtcNow));
+        await WaitForArticleContentLoadAsync(viewModel);
+
         Assert.AreEqual(extractedHtml, article.ReaderContent);
+        Assert.IsFalse(article.IsWaitingForFullArticle);
         Assert.IsTrue(viewModel.IsFeedPreviewActionVisible);
+    }
+
+    [TestMethod]
+    public async Task AutoLoadFullArticleShowsPreviewAfterPublisherContentFails()
+    {
+        const string feedPreview = "<p>A short feed preview.</p>";
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<ExtractedArticleContent>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StubArticleContentService((_, _) =>
+        {
+            requestStarted.TrySetResult();
+            return response.Task;
+        });
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            profilePreferences: new ProfilePreferences(AutoLoadFullArticle: true),
+            articleContentService: service);
+        var article = new ArticleRowViewModel(
+            "Feed title",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "A short feed preview.",
+            link: "https://example.test/story",
+            content: feedPreview);
+
+        viewModel.OpenArticleInReaderCommand.Execute(article);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.IsTrue(article.IsWaitingForFullArticle);
+        Assert.IsNull(article.ReaderContent);
+
+        response.SetException(new ArticleContentExtractionException("The publisher page could not be loaded."));
+        await WaitForArticleContentLoadAsync(viewModel);
+
+        Assert.IsFalse(article.IsWaitingForFullArticle);
+        Assert.AreEqual(feedPreview, article.ReaderContent);
+        Assert.AreEqual("The publisher page could not be loaded.", viewModel.ArticleContentError);
     }
 
     [TestMethod]
@@ -5781,6 +6651,68 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
+    public async Task AutoLoadStartsTheNewSelectionAfterCancellingThePreviousArticleLoad()
+    {
+        var firstRequestStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondRequestStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StubArticleContentService(
+            async (articleUri, cancellationToken) =>
+            {
+                if (articleUri.AbsolutePath == "/first")
+                {
+                    firstRequestStarted.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    throw new InvalidOperationException("Cancelled request unexpectedly completed.");
+                }
+
+                secondRequestStarted.TrySetResult();
+                return new ExtractedArticleContent(
+                    "<p>Second article full text.</p>",
+                    "Second article",
+                    null,
+                    DateTimeOffset.UtcNow);
+            });
+        var viewModel = new MainWindowViewModel(
+            Profile.CreateRegular("Reader"),
+            catalogService: null,
+            readingService: null,
+            feedRefreshService: null,
+            profilePreferences: new ProfilePreferences(AutoLoadFullArticle: true),
+            articleContentService: service);
+        var firstArticle = new ArticleRowViewModel(
+            "First article",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "First preview.",
+            link: "https://example.test/first",
+            content: "<p>First preview.</p>");
+        var secondArticle = new ArticleRowViewModel(
+            "Second article",
+            "Example feed",
+            DateTimeOffset.UtcNow,
+            "News",
+            [],
+            "Second preview.",
+            link: "https://example.test/second",
+            content: "<p>Second preview.</p>");
+
+        viewModel.OpenArticleInReaderCommand.Execute(firstArticle);
+        await firstRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        viewModel.OpenArticleInReaderCommand.Execute(secondArticle);
+        await secondRequestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await WaitForArticleContentLoadAsync(viewModel);
+
+        Assert.AreSame(secondArticle, viewModel.SelectedArticle);
+        Assert.AreEqual(2, service.RequestCount);
+        Assert.AreEqual("<p>Second article full text.</p>", secondArticle.ReaderContent);
+        Assert.IsFalse(secondArticle.IsWaitingForFullArticle);
+    }
+
+    [TestMethod]
     public void MainWindowSelectionPassesBodyHtmlWithoutFeedImageToArticleViewer()
     {
         Exception? failure = null;
@@ -5826,17 +6758,26 @@ public sealed class MainWindowViewModelTests
             try
             {
                 const string summary = "A short feed preview.";
+                var requestCount = 0;
+                var service = new StubArticleContentService(
+                    (_, _) =>
+                    {
+                        requestCount++;
+                        var html = requestCount == 1
+                            ? "<article><script>alert('unsafe')</script><h2>Extracted story</h2><p>Full publisher text.</p></article>"
+                            : "<article><h2>Updated story</h2><p>Refreshed publisher text.</p></article>";
+                        return Task.FromResult(new ExtractedArticleContent(
+                            html,
+                            "Extracted story",
+                            "Publisher Writer",
+                            DateTimeOffset.UtcNow));
+                    });
                 var viewModel = new MainWindowViewModel(
                     Profile.CreateRegular("Reader"),
                     catalogService: null,
                     readingService: null,
                     feedRefreshService: null,
-                    articleContentService: new StubArticleContentService(
-                        (_, _) => Task.FromResult(new ExtractedArticleContent(
-                            "<article><script>alert('unsafe')</script><h2>Extracted story</h2><p>Full publisher text.</p></article>",
-                            "Extracted story",
-                            "Publisher Writer",
-                            DateTimeOffset.UtcNow))));
+                    articleContentService: service);
                 var window = CreateTestMainWindow(viewModel);
                 var article = new ArticleRowViewModel(
                     "Feed title",
@@ -5868,8 +6809,15 @@ public sealed class MainWindowViewModelTests
                 StringAssert.Contains(articleViewer.CurrentDocument, "Full publisher text.");
                 Assert.IsTrue(articleViewer.CurrentDocument.Contains("Extracted story", StringComparison.Ordinal));
                 Assert.IsFalse(articleViewer.CurrentDocument.Contains("<script", StringComparison.OrdinalIgnoreCase));
-                Assert.AreEqual(Visibility.Collapsed, loadButton.Visibility);
+                Assert.AreEqual(Visibility.Visible, loadButton.Visibility);
+                Assert.AreEqual("Refresh full article", viewModel.FullArticleActionLabel);
                 Assert.AreEqual(Visibility.Visible, previewButton.Visibility);
+
+                var refreshTask = viewModel.LoadFullArticleCommand.ExecuteAsync();
+                PumpDispatcherUntil(refreshTask);
+                StringAssert.Contains(articleViewer.CurrentDocument, "Refreshed publisher text.");
+                Assert.IsFalse(articleViewer.CurrentDocument.Contains("Full publisher text.", StringComparison.Ordinal));
+                Assert.AreEqual(2, requestCount);
 
                 viewModel.ShowFeedPreviewCommand.Execute(null);
                 StringAssert.Contains(articleViewer.CurrentDocument, summary);
@@ -5947,7 +6895,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [TestMethod]
-    public void FolderDeleteConfirmationOpensAtTheSelectedFolderAnchor()
+    public void FolderDeleteConfirmationOpensAtTheFeedsSectionLocation()
     {
         WpfTestHost.Run(() =>
         {
@@ -5962,14 +6910,14 @@ public sealed class MainWindowViewModelTests
 
             var sidebar = (SidebarView)owner.FindName("SidebarView")!;
             var folderName = viewModel.FeedLinks.First(link => link.IsFolder).Label;
-            Assert.IsTrue(sidebar.TryGetFolderDeleteAnchor(
-                folderName,
-                owner,
-                out var folderAnchor));
+            var feedsLabelPosition = sidebar.GetFeedsSectionLabelPosition(owner);
+            var sidebarRightEdge = sidebar.GetSidebarPanelRightEdge(owner);
+            var dialogLocation = viewModel.FolderDeleteDialogLocationProvider!.Invoke();
+            Assert.AreEqual(sidebarRightEdge.X + 12, dialogLocation.X, 1);
+            Assert.AreEqual(feedsLabelPosition.Y, dialogLocation.Y, 1);
 
             double? dialogLeft = null;
             double? dialogTop = null;
-            double? dialogHeight = null;
             var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher.CurrentDispatcher)
             {
                 Interval = TimeSpan.FromMilliseconds(50)
@@ -5980,26 +6928,72 @@ public sealed class MainWindowViewModelTests
                 var dialog = System.Windows.Application.Current.Windows.OfType<MessageDialogWindow>().Single();
                 dialogLeft = dialog.Left;
                 dialogTop = dialog.Top;
-                dialogHeight = dialog.ActualHeight;
                 ((Button)dialog.FindName("NoButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             };
             timer.Start();
 
             try
             {
-                var result = MessageDialogWindow.Show(
-                    owner,
-                    $"Delete folder '{folderName}' and unfollow its feeds?",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning,
-                    ownerRelativeAnchor: folderAnchor);
+                var result = viewModel.ConfirmDeleteFolderRequested!(
+                    folderName,
+                    13,
+                    null).GetAwaiter().GetResult();
 
-                Assert.AreEqual(MessageBoxResult.No, result);
-                Assert.AreEqual(owner.Left + folderAnchor.X, dialogLeft);
-                Assert.AreEqual(
-                    owner.Top + folderAnchor.Y - dialogHeight!.Value / 2,
-                    dialogTop!.Value,
-                    1);
+                Assert.IsFalse(result);
+                var compositionTarget = PresentationSource.FromVisual(owner)!.CompositionTarget;
+                var expectedScreenLocation = compositionTarget.TransformFromDevice.Transform(
+                    owner.PointToScreen(dialogLocation));
+                Assert.AreEqual(expectedScreenLocation.X, dialogLeft!.Value, 1);
+                Assert.AreEqual(expectedScreenLocation.Y, dialogTop!.Value, 1);
+            }
+            finally
+            {
+                owner.Close();
+            }
+        });
+    }
+
+    [TestMethod]
+    public void SingleFeedUnfollowConfirmationOpensAtTheFeedsSectionLocation()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var viewModel = new MainWindowViewModel(Profile.CreateRegular("Reader"));
+            var owner = CreateTestMainWindow(viewModel);
+            owner.Left = 40;
+            owner.Top = 40;
+            owner.Width = 1000;
+            owner.Height = 700;
+            owner.Show();
+            owner.UpdateLayout();
+
+            var dialogLocation = viewModel.FolderDeleteDialogLocationProvider!.Invoke();
+            double? dialogLeft = null;
+            double? dialogTop = null;
+            var timer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher.CurrentDispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(50)
+            };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                var dialog = System.Windows.Application.Current.Windows.OfType<MessageDialogWindow>().Single();
+                dialogLeft = dialog.Left;
+                dialogTop = dialog.Top;
+                ((Button)dialog.FindName("NoButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            };
+            timer.Start();
+
+            try
+            {
+                var result = viewModel.ConfirmUnfollowRequested!("Example feed").GetAwaiter().GetResult();
+
+                Assert.IsFalse(result);
+                var compositionTarget = PresentationSource.FromVisual(owner)!.CompositionTarget;
+                var expectedScreenLocation = compositionTarget.TransformFromDevice.Transform(
+                    owner.PointToScreen(dialogLocation));
+                Assert.AreEqual(expectedScreenLocation.X, dialogLeft!.Value, 1);
+                Assert.AreEqual(expectedScreenLocation.Y, dialogTop!.Value, 1);
             }
             finally
             {
@@ -6017,6 +7011,17 @@ public sealed class MainWindowViewModelTests
         }
 
         Assert.IsFalse(viewModel.IsRefreshing, "Feed refresh did not complete in time.");
+    }
+
+    private static async Task WaitForArticleContentLoadAsync(MainWindowViewModel viewModel)
+    {
+        var timeout = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (viewModel.IsLoadingArticleContent && DateTimeOffset.UtcNow < timeout)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.IsFalse(viewModel.IsLoadingArticleContent, "Article content load did not complete in time.");
     }
 
     private static void PumpDispatcherUntil(Task task)

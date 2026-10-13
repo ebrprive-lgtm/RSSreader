@@ -44,6 +44,21 @@ internal sealed class CatalogCategoryService(ICatalogStore store)
         return updatedCategory;
     }
 
+    public async Task<CatalogCategory> SetCategoryEnabledAsync(
+        Profile actor,
+        string categoryId,
+        bool isEnabled,
+        CancellationToken cancellationToken)
+    {
+        CatalogServiceRules.EnsureCatalogMaster(actor);
+        var categories = await store.GetCategoriesAsync(cancellationToken);
+        var category = categories.FirstOrDefault(item => item.Id == categoryId)
+            ?? throw new InvalidOperationException("That category no longer exists.");
+        var updatedCategory = category with { IsEnabled = isEnabled };
+        await store.UpdateCategoryAsync(updatedCategory, cancellationToken);
+        return updatedCategory;
+    }
+
     public async Task MergeCategoriesAsync(
         Profile actor,
         string sourceCategoryId,

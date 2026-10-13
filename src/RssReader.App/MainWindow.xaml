@@ -81,7 +81,7 @@
                 <DockPanel.Style>
                     <Style TargetType="DockPanel">
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsFullPageReadingViewVisible}" Value="True">
+                            <DataTrigger Binding="{Binding IsWorkspaceHeaderVisible}" Value="False">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                         </Style.Triggers>

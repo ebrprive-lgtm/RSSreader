@@ -14,7 +14,7 @@ public sealed class CatalogFeedPreviewService(IFeedDownloader downloader)
         var items = await downloader.DownloadAsync(feed, cancellationToken);
         return items
             .Take(PreviewItemLimit)
-            .Select(item => item with { Content = null, ImageUrl = null })
+            .Select(item => item with { Content = null })
             .ToArray();
     }
 

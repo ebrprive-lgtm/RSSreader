@@ -46,8 +46,8 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
                 ReadingLayout INTEGER NOT NULL DEFAULT 0 CHECK (ReadingLayout IN (0, 1)),
                 ArticleListDensity INTEGER NOT NULL DEFAULT 0 CHECK (ArticleListDensity IN (0, 1, 2)),
                 ReaderTheme INTEGER NOT NULL DEFAULT 0 CHECK (ReaderTheme IN (0, 1, 2)),
-                ReaderTextSize INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2)),
-                ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2)),
+                ReaderTextSize INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2, 3)),
+                ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2, 3)),
                 ReaderFontFamily INTEGER NOT NULL DEFAULT 0 CHECK (ReaderFontFamily IN (0, 1, 2)),
                 SplitPaneListRatio REAL NOT NULL DEFAULT 0.45 CHECK (SplitPaneListRatio BETWEEN 0.3 AND 0.7),
                 AutoLoadFullArticle INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1))
@@ -102,12 +102,12 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         await EnsurePreferenceColumnAsync(
             connection,
             "ReaderTextSize",
-            "INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2))",
+            "INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2, 3))",
             cancellationToken);
         await EnsurePreferenceColumnAsync(
             connection,
             "ReaderLineSpacing",
-            "INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2))",
+            "INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2, 3))",
             cancellationToken);
         await EnsurePreferenceColumnAsync(
             connection,
@@ -124,6 +124,7 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
             "AutoLoadFullArticle",
             "INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1))",
             cancellationToken);
+        await WidenReaderTypographyConstraintsAsync(connection, cancellationToken);
     }
 
     public async Task<ProfilePreferences> GetPreferencesAsync(
@@ -342,6 +343,72 @@ public sealed class SqliteProfileStore(string databasePath) : IProfileStore
         await using var alterCommand = connection.CreateCommand();
         alterCommand.CommandText = $"ALTER TABLE ProfilePreferences ADD COLUMN {columnName} {columnDefinition};";
         await alterCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task WidenReaderTypographyConstraintsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        string tableDefinition;
+        await using (var inspectCommand = connection.CreateCommand())
+        {
+            inspectCommand.CommandText = """
+                SELECT sql
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'ProfilePreferences';
+                """;
+            var result = await inspectCommand.ExecuteScalarAsync(cancellationToken);
+            tableDefinition = result as string
+                ?? throw new InvalidOperationException("The ProfilePreferences table definition could not be read.");
+        }
+
+        if (!tableDefinition.Contains("ReaderTextSize IN (0, 1, 2)", StringComparison.OrdinalIgnoreCase) &&
+            !tableDefinition.Contains("ReaderLineSpacing IN (0, 1, 2)", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        using var transaction = connection.BeginTransaction();
+        await using var migrateCommand = connection.CreateCommand();
+        migrateCommand.Transaction = transaction;
+        migrateCommand.CommandText = """
+            CREATE TABLE ProfilePreferences_migrating (
+                ProfileId TEXT NOT NULL PRIMARY KEY REFERENCES Profiles(Id) ON DELETE CASCADE,
+                StartPage INTEGER NOT NULL CHECK (StartPage BETWEEN 0 AND 2),
+                Presentation INTEGER NOT NULL CHECK (Presentation BETWEEN 0 AND 2),
+                ArticleSort INTEGER NOT NULL CHECK (ArticleSort BETWEEN 0 AND 1),
+                HideReadArticles INTEGER NOT NULL CHECK (HideReadArticles IN (0, 1)),
+                FolderArticleLimitPerFeed INTEGER NOT NULL CHECK (FolderArticleLimitPerFeed BETWEEN 1 AND 100),
+                RefreshFeedsWhenOpened INTEGER NOT NULL DEFAULT 1 CHECK (RefreshFeedsWhenOpened IN (0, 1)),
+                AutoRefreshIntervalMinutes INTEGER NOT NULL DEFAULT 0 CHECK (AutoRefreshIntervalMinutes IN (0, 15, 30, 60, 240)),
+                ShowRawFeedButton INTEGER NOT NULL DEFAULT 0 CHECK (ShowRawFeedButton IN (0, 1)),
+                LimitArticleWidth INTEGER NOT NULL DEFAULT 1 CHECK (LimitArticleWidth IN (0, 1)),
+                HideFollowedCatalogFeeds INTEGER NOT NULL DEFAULT 0 CHECK (HideFollowedCatalogFeeds IN (0, 1)),
+                ReadingLayout INTEGER NOT NULL DEFAULT 0 CHECK (ReadingLayout IN (0, 1)),
+                ArticleListDensity INTEGER NOT NULL DEFAULT 0 CHECK (ArticleListDensity IN (0, 1, 2)),
+                ReaderTheme INTEGER NOT NULL DEFAULT 0 CHECK (ReaderTheme IN (0, 1, 2)),
+                ReaderTextSize INTEGER NOT NULL DEFAULT 1 CHECK (ReaderTextSize IN (0, 1, 2, 3)),
+                ReaderLineSpacing INTEGER NOT NULL DEFAULT 1 CHECK (ReaderLineSpacing IN (0, 1, 2, 3)),
+                ReaderFontFamily INTEGER NOT NULL DEFAULT 0 CHECK (ReaderFontFamily IN (0, 1, 2)),
+                SplitPaneListRatio REAL NOT NULL DEFAULT 0.45 CHECK (SplitPaneListRatio BETWEEN 0.3 AND 0.7),
+                AutoLoadFullArticle INTEGER NOT NULL DEFAULT 0 CHECK (AutoLoadFullArticle IN (0, 1))
+            );
+            INSERT INTO ProfilePreferences_migrating (
+                ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
+                RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
+                HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
+                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle)
+            SELECT
+                ProfileId, StartPage, Presentation, ArticleSort, HideReadArticles, FolderArticleLimitPerFeed,
+                RefreshFeedsWhenOpened, AutoRefreshIntervalMinutes, ShowRawFeedButton, LimitArticleWidth,
+                HideFollowedCatalogFeeds, ReadingLayout, ArticleListDensity, ReaderTheme, ReaderTextSize,
+                ReaderLineSpacing, ReaderFontFamily, SplitPaneListRatio, AutoLoadFullArticle
+            FROM ProfilePreferences;
+            DROP TABLE ProfilePreferences;
+            ALTER TABLE ProfilePreferences_migrating RENAME TO ProfilePreferences;
+            """;
+        await migrateCommand.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static Profile ReadProfile(SqliteDataReader reader) => new(

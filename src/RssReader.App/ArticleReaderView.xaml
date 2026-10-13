@@ -288,7 +288,7 @@
                         Padding="9,4"
                         Margin="0,0,8,0"
                         Style="{StaticResource SecondaryActionButtonStyle}"
-                        ToolTip="Load or show the extracted article from the publisher"
+                        ToolTip="Show the cached article or refresh it from the publisher"
                         AutomationProperties.Name="{Binding FullArticleActionLabel}"
                         Visibility="{Binding IsSelectedArticleFullArticleActionVisible, Converter={StaticResource BooleanToVisibilityConverter}}" />
                 <Button x:Name="ShowFeedPreviewButton"
@@ -428,6 +428,7 @@
                         <ComboBoxItem Content="Small" Tag="0" />
                         <ComboBoxItem Content="Medium" Tag="1" />
                         <ComboBoxItem Content="Large" Tag="2" />
+                        <ComboBoxItem Content="X-Large" Tag="3" />
                     </ComboBox>
                     <TextBlock Text="Font type" FontSize="11" FontWeight="SemiBold" Margin="0,9,0,4" />
                     <ComboBox x:Name="ReaderFontFamilyComboBox"
@@ -443,9 +444,10 @@
                               AutomationProperties.Name="Reader line spacing"
                               SelectionChanged="ReaderTypographyComboBox_SelectionChanged"
                               Padding="6">
-                        <ComboBoxItem Content="Compact" Tag="0" />
-                        <ComboBoxItem Content="Normal" Tag="1" />
-                        <ComboBoxItem Content="Relaxed" Tag="2" />
+                                <ComboBoxItem Content="Extra compact" Tag="3" />
+                                <ComboBoxItem Content="Compact" Tag="0" />
+                                <ComboBoxItem Content="Normal" Tag="1" />
+                                <ComboBoxItem Content="Relaxed" Tag="2" />
                     </ComboBox>
                 </StackPanel>
                 </Border>

@@ -45,6 +45,7 @@ public partial class MainWindow : Window
         viewModel.FolderSelectionRequested = ShowFolderSelectionAsync;
         viewModel.ConfirmUnfollowRequested = ConfirmUnfollowAsync;
         viewModel.ConfirmUnfollowAllRequested = ConfirmUnfollowAllAsync;
+        viewModel.FolderDeleteDialogLocationProvider = GetFeedsSectionDialogLocation;
         viewModel.ConfirmDeleteFolderRequested = ConfirmDeleteFolderAsync;
         if (viewModel.CatalogManagement is { } catalogManagement)
         {
@@ -57,6 +58,7 @@ public partial class MainWindow : Window
         SidebarView.PreferencesRequested += SidebarView_PreferencesRequested;
         ArticleReaderView.SourceLinkRequested += SourceLink_RequestNavigate;
         CatalogAdminView.SourceLinkRequested += SourceLink_RequestNavigate;
+        CatalogBrowserView.SourceLinkRequested += SourceLink_RequestNavigate;
         ArticleReaderView.RawFeedRequested += ShowRawFeed_Click;
         ArticleReaderView.ExternalLinkRequested += ArticleHtmlViewer_ExternalLinkRequested;
         _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
@@ -70,6 +72,7 @@ public partial class MainWindow : Window
             SidebarView.PreferencesRequested -= SidebarView_PreferencesRequested;
             ArticleReaderView.SourceLinkRequested -= SourceLink_RequestNavigate;
             CatalogAdminView.SourceLinkRequested -= SourceLink_RequestNavigate;
+            CatalogBrowserView.SourceLinkRequested -= SourceLink_RequestNavigate;
             ArticleReaderView.RawFeedRequested -= ShowRawFeed_Click;
             ArticleReaderView.ExternalLinkRequested -= ArticleHtmlViewer_ExternalLinkRequested;
         };
@@ -167,29 +170,33 @@ public partial class MainWindow : Window
             this,
             $"Unfollow '{feedName}'? If this is your personal feed and no other profile uses it, its cached articles will also be removed.",
             MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
+            MessageBoxImage.Warning,
+            GetFeedsSectionDialogLocation());
         return Task.FromResult(result == MessageBoxResult.Yes);
     }
 
-    private Task<bool> ConfirmDeleteFolderAsync(string folderName, int feedCount)
+    private Point GetFeedsSectionDialogLocation()
     {
+        var sidebarRightEdge = SidebarView.GetSidebarPanelRightEdge(this);
+        var feedsLabelPosition = SidebarView.GetFeedsSectionLabelPosition(this);
+        return new Point(sidebarRightEdge.X + 12, feedsLabelPosition.Y);
+    }
+
+    private Task<bool> ConfirmDeleteFolderAsync(
+        string folderName,
+        int feedCount,
+        Point? ownerRelativeLocation)
+    {
+        var dialogLocation = ownerRelativeLocation ?? GetFeedsSectionDialogLocation();
         var message = feedCount == 0
             ? $"Delete the empty folder '{folderName}'?"
             : $"Delete folder '{folderName}' and unfollow its {feedCount} feed(s)?";
-        var ownerRelativeAnchor = SidebarView.TryGetFolderDeleteAnchor(
-            folderName,
-            this,
-            out var folderAnchor)
-            ? folderAnchor
-            : new Point(
-                (_viewModel?.SidebarPanelWidth ?? MainWindowViewModel.DefaultSidebarWidth) + 16,
-                ActualHeight / 2);
         var result = MessageDialogWindow.Show(
             this,
             message,
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
-            ownerRelativeAnchor);
+            dialogLocation);
         return Task.FromResult(result == MessageBoxResult.Yes);
     }
 

@@ -12,6 +12,15 @@ namespace RssReader.App.ViewModels;
 
 public sealed record CatalogCategoryOption(string? CategoryId, string Name);
 public sealed record CatalogCollectionOption(string? CollectionId, string Name, IReadOnlySet<string> FeedIds);
+public enum CatalogFilterKind
+{
+    Search,
+    Category,
+    Collection,
+    HideFollowed
+}
+
+public sealed record CatalogFilterChip(CatalogFilterKind Kind, string Label);
 public sealed record ArticleTopicOption(string? Term, string? Scheme, string Name, int Count)
 {
     public string DisplayName => $"{Name} ({Count:N0})";
@@ -217,7 +226,7 @@ public sealed class MainWindowViewModel : ObservableObject
         ToggleSavedCommand = new RelayCommand(ToggleSaved);
         ToggleReadCommand = new RelayCommand(ToggleRead);
         ToggleSplitPaneCommand = new AsyncCommand(ToggleSplitPaneAsync);
-        LoadFullArticleCommand = new AsyncCommand(LoadFullArticleAsync, CanLoadFullArticle);
+        LoadFullArticleCommand = new AsyncCommand(LoadFullArticleCommandAsync, CanLoadFullArticle);
         ShowFeedPreviewCommand = new RelayCommand(ShowFeedPreview, CanShowFeedPreview);
         OpenInAppPublisherBrowserCommand = new RelayCommand(
             OpenInAppPublisherBrowser,
@@ -228,6 +237,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SwitchProfileCommand = new RelayCommand(() => ProfileSwitchRequested?.Invoke());
         ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
         ClearCatalogFiltersCommand = new RelayCommand(ClearCatalogFilters);
+        RemoveCatalogFilterCommand = new RelayCommand<CatalogFilterChip>(RemoveCatalogFilter);
         ClearSearchQueryCommand = new RelayCommand(
             () => SearchQuery = string.Empty,
             () => HasSearchQuery);
@@ -345,6 +355,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand SwitchProfileCommand { get; }
     public RelayCommand ToggleSidebarCommand { get; }
     public RelayCommand ClearCatalogFiltersCommand { get; }
+    public RelayCommand<CatalogFilterChip> RemoveCatalogFilterCommand { get; }
     public RelayCommand ClearSearchQueryCommand { get; }
     public RelayCommand ClearArticleTopicCommand { get; }
     public RelayCommand ClearArticleFiltersCommand { get; }
@@ -513,6 +524,8 @@ public sealed class MainWindowViewModel : ObservableObject
         set => _catalogBrowser.CatalogSearchQuery = value;
     }
 
+    public IReadOnlyList<CatalogFilterChip> ActiveCatalogFilterChips => _catalogBrowser.ActiveCatalogFilterChips;
+
     public CatalogCategoryOption? SelectedCatalogCategory
     {
         get => _catalogBrowser.SelectedCatalogCategory;
@@ -523,6 +536,12 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         get => _catalogBrowser.SelectedCatalogCollection;
         set => _catalogBrowser.SelectedCatalogCollection = value;
+    }
+
+    public CatalogFeedListItem? SelectedCatalogFeed
+    {
+        get => _catalogBrowser.SelectedCatalogFeed;
+        set => _catalogBrowser.SelectedCatalogFeed = value;
     }
 
     public string SelectedCatalogCollectionCuratorLabel => _catalogBrowser.SelectedCatalogCollectionCuratorLabel;
@@ -556,10 +575,12 @@ public sealed class MainWindowViewModel : ObservableObject
     public bool CanSelectVisibleCatalogFeeds => _catalogBrowser.CanSelectVisibleCatalogFeeds;
     public bool? VisibleCatalogFeedSelectionState => _catalogBrowser.VisibleCatalogFeedSelectionState;
     public bool CanUnfollowAllCatalogFeeds => _catalogBrowser.CanUnfollowAllCatalogFeeds;
+    public string UnfollowVisibleCatalogFeedsLabel => _catalogBrowser.UnfollowVisibleCatalogFeedsLabel;
 
     public Func<int, Task<bool>>? ConfirmUnfollowAllRequested { get; set; }
     public Func<string, Task<bool>>? ConfirmUnfollowRequested { get; set; }
-    public Func<string, int, Task<bool>>? ConfirmDeleteFolderRequested { get; set; }
+    public Func<Point>? FolderDeleteDialogLocationProvider { get; set; }
+    public Func<string, int, Point?, Task<bool>>? ConfirmDeleteFolderRequested { get; set; }
 
     public bool IsCatalogFeedPreviewAvailable => _catalogFeedPreviewService is not null;
 
@@ -642,10 +663,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public async Task<CatalogFeed> AddPersonalFeedAsync(
         string name,
         string feedUrl,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? categoryName = null)
     {
         var service = _profileFeedService ?? throw new InvalidOperationException("Personal feeds are unavailable.");
-        var feed = await service.AddFeedAsync(ActiveProfile, name, feedUrl, cancellationToken);
+        var feed = await service.AddFeedAsync(ActiveProfile, name, feedUrl, cancellationToken, categoryName);
         await LoadProfileReaderDataAsync(cancellationToken);
         StatusMessage = $"Added {feed.Name} to your feeds. Refresh to load its articles.";
         return feed;
@@ -878,6 +900,8 @@ public sealed class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsCatalogBrowserVisible));
                 OnPropertyChanged(nameof(IsArticleCountVisible));
                 OnPropertyChanged(nameof(IsCatalogAdminVisible));
+                OnPropertyChanged(nameof(IsWorkspaceHeaderVisible));
+                OnPropertyChanged(nameof(IsSplitPaneEmptyReaderPlaceholderVisible));
                 ApplyArticleFilters();
             }
         }
@@ -1128,13 +1152,15 @@ public sealed class MainWindowViewModel : ObservableObject
             }
 
             IsInAppPublisherBrowserVisible = false;
-            if (_selectedArticle is not null)
+            var previousArticle = _selectedArticle;
+            if (previousArticle is not null)
             {
-                _selectedArticle.PropertyChanged -= OnSelectedArticlePropertyChanged;
+                previousArticle.PropertyChanged -= OnSelectedArticlePropertyChanged;
             }
 
             if (SetProperty(ref _selectedArticle, value))
             {
+                previousArticle?.SetWaitingForFullArticle(false);
                 if (_selectedArticle is not null)
                 {
                     _selectedArticle.PropertyChanged += OnSelectedArticlePropertyChanged;
@@ -1215,8 +1241,14 @@ public sealed class MainWindowViewModel : ObservableObject
         ReadingLayout == ProfileReadingLayout.SplitPane &&
         _isSplitPaneViewportWide;
     public bool IsSplitPaneEmptyReaderPlaceholderVisible =>
-        IsSplitPaneActive && SelectedArticle is null;
+        IsSplitPaneActive &&
+        SelectedArticle is null &&
+        !IsCatalogBrowserVisible &&
+        !IsCatalogAdminVisible;
     public bool IsFullPageReadingViewVisible => IsReadingViewVisible && !IsSplitPaneActive;
+    public bool IsWorkspaceHeaderVisible =>
+        !IsFullPageReadingViewVisible &&
+        ActiveRoute is not ("Follow sources" or "Search" or "Read later" or "Recently read" or "Manage catalog");
     public int ArticleListGridColumnSpan => IsSplitPaneActive ? 1 : 3;
     public int ArticleReaderGridColumn => IsSplitPaneActive ? 2 : 0;
     public int ArticleReaderGridColumnSpan => IsSplitPaneActive ? 1 : 3;
@@ -1238,6 +1270,7 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsSplitPaneActive));
         OnPropertyChanged(nameof(IsSplitPaneEmptyReaderPlaceholderVisible));
         OnPropertyChanged(nameof(IsFullPageReadingViewVisible));
+        OnPropertyChanged(nameof(IsWorkspaceHeaderVisible));
         OnPropertyChanged(nameof(ArticleListGridColumnSpan));
         OnPropertyChanged(nameof(ArticleReaderGridColumn));
         OnPropertyChanged(nameof(ArticleReaderGridColumnSpan));
@@ -1337,12 +1370,15 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedArticle?.IsSourceLinkVisible == true;
     public bool IsSelectedArticleFullArticleActionVisible =>
         SelectedArticle is { } article &&
-        !article.IsShowingExtractedContent &&
-        (article.HasExtractedContent ||
-         (_articleContentService is not null && article.IsSourceLinkVisible));
+        (article.IsShowingExtractedContent
+            ? _articleContentService is not null && article.IsSourceLinkVisible
+            : article.HasExtractedContent ||
+              (_articleContentService is not null && article.IsSourceLinkVisible));
     public string FullArticleActionLabel =>
         ArticleContentError is not null
             ? "Retry full article"
+            : SelectedArticle is { IsShowingExtractedContent: true }
+                ? "Refresh full article"
             : SelectedArticle?.HasExtractedContent == true
                 ? "Show full article"
                 : "Load full article";
@@ -1577,13 +1613,17 @@ public sealed class MainWindowViewModel : ObservableObject
 
         try
         {
+            var ownerRelativeLocation = FolderDeleteDialogLocationProvider?.Invoke();
             var folderSubscriptions = (await _readingService.GetSubscriptionsAsync(ActiveProfile.Id))
                 .Where(subscription => string.Equals(
                     subscription.FolderName,
                     folderLink.Label,
                     StringComparison.OrdinalIgnoreCase))
                 .ToArray();
-            if (!await ConfirmDeleteFolderRequested(folderLink.Label, folderSubscriptions.Length))
+            if (!await ConfirmDeleteFolderRequested(
+                folderLink.Label,
+                folderSubscriptions.Length,
+                ownerRelativeLocation))
             {
                 return;
             }
@@ -1621,6 +1661,27 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(option => option.CategoryId is null);
         SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(option => option.CollectionId is null);
         HideFollowedCatalogFeeds = false;
+    }
+
+    private void RemoveCatalogFilter(CatalogFilterChip filterChip)
+    {
+        switch (filterChip.Kind)
+        {
+            case CatalogFilterKind.Search:
+                CatalogSearchQuery = string.Empty;
+                break;
+            case CatalogFilterKind.Category:
+                SelectedCatalogCategory = CatalogCategoryOptions.FirstOrDefault(option => option.CategoryId is null);
+                break;
+            case CatalogFilterKind.Collection:
+                SelectedCatalogCollection = CatalogCollectionOptions.FirstOrDefault(option => option.CollectionId is null);
+                break;
+            case CatalogFilterKind.HideFollowed:
+                HideFollowedCatalogFeeds = false;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(filterChip));
+        }
     }
 
     private async Task PersistProfilePreferencesAsync()
@@ -1739,6 +1800,12 @@ public sealed class MainWindowViewModel : ObservableObject
             RecordCurrentNavigationState();
         }
 
+        var shouldWaitForFullArticle =
+            _profilePreferences.AutoLoadFullArticle &&
+            !article.HasExtractedContent &&
+            _articleContentService is not null &&
+            article.IsSourceLinkVisible;
+        article.SetWaitingForFullArticle(shouldWaitForFullArticle);
         article.IsRead = true;
         SelectedArticle = article;
         if (_profilePreferences.AutoLoadFullArticle)
@@ -2727,9 +2794,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private bool CanLoadFullArticle() =>
         !IsLoadingArticleContent &&
-        SelectedArticle is { IsShowingExtractedContent: false } article &&
-        (article.HasExtractedContent ||
-         (_articleContentService is not null && article.IsSourceLinkVisible));
+        SelectedArticle is { } article &&
+        (article.IsShowingExtractedContent
+            ? _articleContentService is not null && article.IsSourceLinkVisible
+            : article.HasExtractedContent ||
+              (_articleContentService is not null && article.IsSourceLinkVisible));
 
     private bool CanShowFeedPreview() =>
         SelectedArticle?.IsShowingExtractedContent == true;
@@ -2749,6 +2818,18 @@ public sealed class MainWindowViewModel : ObservableObject
         ArticleContentError = null;
     }
 
+    private async Task LoadFullArticleCommandAsync()
+    {
+        do
+        {
+            await LoadFullArticleAsync();
+        }
+        while (_profilePreferences.AutoLoadFullArticle &&
+               SelectedArticle is { } article &&
+               (article.IsWaitingForFullArticle ||
+                (article.HasExtractedContent && !article.IsShowingExtractedContent)));
+    }
+
     private async Task LoadFullArticleAsync()
     {
         if (SelectedArticle is not { } article)
@@ -2756,7 +2837,7 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
-        if (article.HasExtractedContent)
+        if (article.HasExtractedContent && !article.IsShowingExtractedContent)
         {
             article.ShowExtractedContent();
             ArticleContentError = null;
@@ -2816,6 +2897,7 @@ public sealed class MainWindowViewModel : ObservableObject
         }
         finally
         {
+            article.SetWaitingForFullArticle(false);
             if (ReferenceEquals(_selectedArticleContentLoad, cancellationSource))
             {
                 _selectedArticleContentLoad = null;

@@ -16,6 +16,9 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) :
     IRawFeedXmlDownloader
 {
     private const int MaximumFeedCharacters = 5_000_000;
+    private static readonly Regex HtmlDocumentStart = new(
+        @"\A[\uFEFF\s]*(?:<\?xml\b[^?]*\?>\s*)?(?:<!doctype\s+html\b|<html\b)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly FeedRequestClient _requestClient = new(httpClient);
 
     public async Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
@@ -31,13 +34,16 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) :
         using var response = await _requestClient.SendAsync(uri, cancellationToken).ConfigureAwait(false);
         var feedBaseUri = response.RequestMessage?.RequestUri ?? uri;
 
-        if (response.Content.Headers.ContentLength is > MaximumFeedCharacters)
+        var responseText = await ReadContentAsync(response.Content, cancellationToken).ConfigureAwait(false);
+        var feedText = SyndicationFeedParser.SanitizeInvalidXmlCharacters(responseText);
+        if (HtmlDocumentStart.IsMatch(feedText))
         {
-            throw new InvalidDataException("The feed response exceeds the supported size.");
+            throw new InvalidDataException(
+                "The URL returned an HTML web page instead of an RSS or Atom feed. Use the site's feed URL.");
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var xmlReader = XmlReader.Create(stream, new XmlReaderSettings
+        using var textReader = new StringReader(feedText);
+        using var xmlReader = XmlReader.Create(textReader, new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
             XmlResolver = null,
@@ -59,29 +65,36 @@ public sealed class SyndicationFeedDownloader(HttpClient httpClient) :
 
         using var response = await _requestClient.SendAsync(uri, cancellationToken).ConfigureAwait(false);
 
-        if (response.Content.Headers.ContentLength is > MaximumFeedCharacters)
+        return await ReadContentAsync(response.Content, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ReadContentAsync(
+        HttpContent content,
+        CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength is > MaximumFeedCharacters)
         {
             throw new InvalidDataException("The feed response exceeds the supported size.");
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var charset = response.Content.Headers.ContentType?.CharSet?.Trim().Trim('"');
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var charset = content.Headers.ContentType?.CharSet?.Trim().Trim('"');
         var encoding = string.IsNullOrWhiteSpace(charset) ? Encoding.UTF8 : Encoding.GetEncoding(charset);
         using var textReader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true);
-        var content = new StringBuilder();
+        var contentBuilder = new StringBuilder();
         var buffer = new char[8192];
         int charactersRead;
         while ((charactersRead = await textReader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
         {
-            if (content.Length + charactersRead > MaximumFeedCharacters)
+            if (contentBuilder.Length + charactersRead > MaximumFeedCharacters)
             {
                 throw new InvalidDataException("The feed response exceeds the supported size.");
             }
 
-            content.Append(buffer, 0, charactersRead);
+            contentBuilder.Append(buffer, 0, charactersRead);
         }
 
-        return content.ToString();
+        return contentBuilder.ToString();
     }
 
     public Task<string> DownloadRawFeedXmlAsync(

@@ -155,17 +155,44 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1" Padding="0,11">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding PublishedAt, StringFormat={}{0:MMM d, yyyy}}"
-                                               Margin="0,4,0,0"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource MutedTextBrush}" />
-                                    <TextBlock Text="{Binding Summary}"
-                                               Margin="0,6,0,0"
-                                               Foreground="{DynamicResource MutedTextBrush}"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Grid.Column="0"
+                                           Width="56"
+                                           Height="56"
+                                           Margin="0,0,12,0"
+                                           VerticalAlignment="Top"
+                                           Stretch="UniformToFill"
+                                           Source="{Binding ImageUrl}"
+                                           ImageFailed="PreviewThumbnail_ImageFailed">
+                                        <Image.Style>
+                                            <Style TargetType="Image">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ImageUrl}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ImageUrl}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Image.Style>
+                                    </Image>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding PublishedAt, StringFormat={}{0:MMM d, yyyy}}"
+                                                   Margin="0,4,0,0"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Summary}"
+                                                   Margin="0,6,0,0"
+                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
                             </Border>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -191,8 +218,12 @@
                            Visibility="Collapsed">
                     <TextBlock.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="Copy" Click="CopyErrorMessage_Click" />
-                        </ContextMenu>
+                    <MenuItem Header="Copy" Click="CopyErrorMessage_Click">
+                        <MenuItem.Icon>
+                            <TextBlock Text="&#xE8C8;" Style="{StaticResource ContextMenuIconStyle}" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                </ContextMenu>
                     </TextBlock.ContextMenu>
                 </TextBlock>
             </ScrollViewer>

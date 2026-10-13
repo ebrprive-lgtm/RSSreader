@@ -15,6 +15,7 @@ internal sealed record CatalogManagementSnapshot(
         IReadOnlyDictionary<string, IReadOnlyList<string>> collectionFeedIds)
     {
         var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
+        var categoryEnabled = categories.ToDictionary(category => category.Id, category => category.IsEnabled);
         var sameNameCounts = feeds
             .GroupBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
@@ -39,13 +40,19 @@ internal sealed record CatalogManagementSnapshot(
             feed.WebsiteUrl,
             sameNameCounts[feed.Name],
             feed.LastHealthCheckedAt,
-            feed.LastHealthCheckSucceeded)).ToArray();
+            feed.LastHealthCheckSucceeded,
+            feed.IsEnabled,
+            feed.IsEnabledInCategory,
+            feed.CategoryId is not { } categoryId ||
+                !categoryEnabled.TryGetValue(categoryId, out var isCategoryEnabled) ||
+                isCategoryEnabled)).ToArray();
 
         var categoryOptions = new List<CatalogCategoryFilterOption>
         {
             new(null, $"All categories ({feeds.Count})")
         };
         categoryOptions.AddRange(categories
+            .Where(category => category.IsEnabled)
             .OrderBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
             .Select(category => new CatalogCategoryFilterOption(
                 category.Id,

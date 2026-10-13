@@ -8,20 +8,40 @@
                  DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
         <MenuItem Header="Open in reader"
                   Command="{Binding PlacementTarget.Tag.OpenArticleInReaderCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"
-                  CommandParameter="{Binding}" />
+                  CommandParameter="{Binding}">
+            <MenuItem.Icon>
+                <TextBlock Text="&#xE8A5;" Style="{StaticResource ContextMenuIconStyle}" />
+            </MenuItem.Icon>
+        </MenuItem>
         <MenuItem Header="Open original source"
                   Command="{Binding PlacementTarget.Tag.OpenArticleSourceCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"
-                  CommandParameter="{Binding}" />
+                  CommandParameter="{Binding}">
+            <MenuItem.Icon>
+                <TextBlock Text="&#xE71B;" Style="{StaticResource ContextMenuIconStyle}" />
+            </MenuItem.Icon>
+        </MenuItem>
         <Separator />
         <MenuItem Header="Toggle read status"
                   Command="{Binding PlacementTarget.Tag.ToggleArticleReadCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"
-                  CommandParameter="{Binding}" />
+                  CommandParameter="{Binding}">
+            <MenuItem.Icon>
+                <TextBlock Text="&#xE73E;" Style="{StaticResource ContextMenuIconStyle}" />
+            </MenuItem.Icon>
+        </MenuItem>
         <MenuItem Header="Toggle saved status"
                   Command="{Binding PlacementTarget.Tag.ToggleArticleSavedCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"
-                  CommandParameter="{Binding}" />
+                  CommandParameter="{Binding}">
+            <MenuItem.Icon>
+                <TextBlock Text="&#xE734;" Style="{StaticResource ContextMenuIconStyle}" />
+            </MenuItem.Icon>
+        </MenuItem>
         <MenuItem Header="Show source feed"
                   Command="{Binding PlacementTarget.Tag.NavigateToArticleFeedCommand, RelativeSource={RelativeSource AncestorType={x:Type ContextMenu}}}"
-                  CommandParameter="{Binding}" />
+                  CommandParameter="{Binding}">
+            <MenuItem.Icon>
+                <TextBlock Text="&#xE715;" Style="{StaticResource ContextMenuIconStyle}" />
+            </MenuItem.Icon>
+        </MenuItem>
     </ContextMenu>
     <Style x:Key="ArticleMetadataPillButtonStyle" TargetType="{x:Type Button}">
         <Setter Property="Background" Value="{DynamicResource PublisherTopicPillBrush}" />
@@ -610,8 +630,7 @@
                                        FontSize="12"
                                        Foreground="{DynamicResource MutedTextBrush}"
                                        TextWrapping="Wrap"
-                                       TextTrimming="WordEllipsis"
-                                       ToolTip="{Binding Summary}" />
+                                       TextTrimming="WordEllipsis" />
                             <TextBlock Text="{Binding FreshnessLabel}"
                                        Margin="0,8,0,0"
                                        FontSize="11"

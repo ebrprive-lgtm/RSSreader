@@ -4,6 +4,8 @@ namespace RssReader.Infrastructure;
 
 internal static class RawFeedArticleSelector
 {
+    private static readonly XNamespace RdfNamespace = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+
     public static string Serialize(XElement article)
     {
         var standaloneArticle = new XElement(article);
@@ -69,7 +71,9 @@ internal static class RawFeedArticleSelector
         };
 
     private static string? GetArticleId(XElement article) =>
-        GetChildText(article, "guid") ?? GetChildText(article, "id");
+        GetChildText(article, "guid") ??
+        GetChildText(article, "id") ??
+        ((string?)article.Attribute(RdfNamespace + "about"))?.Trim();
 
     private static string? GetChildText(XElement element, string localName) =>
         element.Elements()

@@ -10,6 +10,41 @@ namespace RssReader.App.Tests;
 public sealed class CatalogManagementViewModelTests
 {
     [TestMethod]
+    public void CatalogFeedListItemRepairsCommonDoubleEncodedTitleText()
+    {
+        var feed = new CatalogFeedListItem(
+            "energy-feed",
+            "Tech Xplore Ã¢â‚¬â€œ Energy & Green Tech RSS Feed",
+            "https://example.com/feed.xml",
+            null,
+            null);
+
+        Assert.AreEqual("Tech Xplore – Energy & Green Tech RSS Feed", feed.Name);
+
+        var doubleEncodedFeed = new CatalogFeedListItem(
+            "business-feed",
+            "Forbes Ã‚Â» Business RSS Feed",
+            "https://example.com/business.xml",
+            null,
+            "Business Ã‚Â»");
+
+        Assert.AreEqual("Forbes » Business RSS Feed", doubleEncodedFeed.Name);
+        Assert.AreEqual("Business »", doubleEncodedFeed.CategoryName);
+
+        var management = new CatalogManagementViewModel(
+            Profile.CreateCatalogMaster(),
+            new CatalogService(new MemoryCatalogStore()));
+        var childNode = new CatalogTaxonomyTreeNode(
+            CatalogTaxonomyTreeNodeKind.Feed,
+            doubleEncodedFeed.Id,
+            doubleEncodedFeed.Name,
+            management,
+            feed: doubleEncodedFeed);
+
+        Assert.AreEqual("Forbes » Business RSS Feed", childNode.Name);
+    }
+
+    [TestMethod]
     public async Task OpmlImportAddsFeedsAndMapsFoldersToCategories()
     {
         const string opml = "<opml version=\"2.0\"><body><outline text=\"Science\"><outline text=\"NASA\" xmlUrl=\"https://example.com/nasa.xml\" /></outline></body></opml>";
@@ -193,6 +228,115 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task TaxonomyTreesLoadChildrenOnDemandAndSupportCategoryCollectionActions()
+    {
+        var actor = Profile.CreateCatalogMaster();
+        var service = new CatalogService(new MemoryCatalogStore());
+        var category = await service.AddCategoryAsync(actor, "News");
+        var categorizedFeed = await service.AddFeedAsync(
+            actor,
+            "Daily news",
+            "https://example.com/news.xml",
+            null,
+            category.Id);
+        var uncategorizedFeed = await service.AddFeedAsync(
+            actor,
+            "Other source",
+            "https://example.com/other.xml",
+            null,
+            null);
+        var collection = await service.AddCollectionAsync(actor, "Briefing");
+        var viewModel = new CatalogManagementViewModel(actor, service);
+        await viewModel.InitializeAsync();
+
+        var categoryNode = viewModel.CategoryTreeNodes.Single(node => node.Id == category.Id);
+        Assert.IsFalse(categoryNode.IsChildrenLoaded);
+        Assert.AreEqual(CatalogTaxonomyTreeNodeKind.Placeholder, categoryNode.Children.Single().Kind);
+        viewModel.LoadTaxonomyChildren(categoryNode);
+        CollectionAssert.AreEqual(
+            new[] { categorizedFeed.Id },
+            categoryNode.Children.Select(node => node.Feed!.Id).ToArray());
+
+        var uncategorizedNode = viewModel.CategoryTreeNodes.Single(node => node.Name == "Uncategorized");
+        viewModel.LoadTaxonomyChildren(uncategorizedNode);
+        CollectionAssert.AreEqual(
+            new[] { uncategorizedFeed.Id },
+            uncategorizedNode.Children.Select(node => node.Feed!.Id).ToArray());
+
+        var collectionNode = viewModel.CollectionTreeNodes.Single(node => node.Id == collection.Id);
+        collectionNode.IsExpanded = true;
+        await viewModel.AddCategoryFeedsToCollectionAsync(collection.Id, category.Id);
+
+        collectionNode = viewModel.CollectionTreeNodes.Single(node => node.Id == collection.Id);
+        Assert.IsTrue(collectionNode.IsExpanded);
+        viewModel.LoadTaxonomyChildren(collectionNode);
+        CollectionAssert.AreEqual(
+            new[] { categorizedFeed.Id },
+            collectionNode.Children.Select(node => node.Feed!.Id).ToArray());
+
+        categoryNode = viewModel.CategoryTreeNodes.Single(node => node.Id == category.Id);
+        viewModel.LoadTaxonomyChildren(categoryNode);
+        await viewModel.SetCategoryFeedAvailabilityCommand.ExecuteAsync(categoryNode.Children.Single());
+        var feedAfterCategoryDisable = (await service.GetFeedsAsync()).Single(feed => feed.Id == categorizedFeed.Id);
+        Assert.IsTrue(feedAfterCategoryDisable.IsEnabled);
+        Assert.IsFalse(feedAfterCategoryDisable.IsEnabledInCategory);
+
+        var browserState = new CatalogBrowserState(service, canFollowFeeds: true, hideFollowedCatalogFeeds: false);
+        await browserState.LoadAsync(
+            CancellationToken.None,
+            new HashSet<string>(StringComparer.Ordinal),
+            initializeCatalogManagement: null);
+        Assert.IsTrue(browserState.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == categorizedFeed.Id));
+        browserState.SelectedCatalogCategory = browserState.CatalogCategoryOptions
+            .Single(option => option.CategoryId == category.Id);
+        Assert.IsFalse(browserState.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == categorizedFeed.Id));
+
+        collectionNode = viewModel.CollectionTreeNodes.Single(node => node.Id == collection.Id);
+        viewModel.LoadTaxonomyChildren(collectionNode);
+        var collectionFeedNode = collectionNode.Children.Single(node => node.Feed?.Id == categorizedFeed.Id);
+        Assert.IsTrue(collectionFeedNode.IsCollectionFeed);
+        await viewModel.SetGlobalFeedAvailabilityCommand.ExecuteAsync(collectionFeedNode.Feed!);
+        var feedAfterGlobalDisable = (await service.GetFeedsAsync()).Single(feed => feed.Id == categorizedFeed.Id);
+        Assert.IsFalse(feedAfterGlobalDisable.IsEnabled);
+        Assert.IsFalse(feedAfterGlobalDisable.IsEnabledInCategory);
+
+        var browserStateAfterCollectionDisable = new CatalogBrowserState(service, canFollowFeeds: true, hideFollowedCatalogFeeds: false);
+        await browserStateAfterCollectionDisable.LoadAsync(
+            CancellationToken.None,
+            new HashSet<string>(StringComparer.Ordinal),
+            initializeCatalogManagement: null);
+        Assert.IsFalse(browserStateAfterCollectionDisable.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == categorizedFeed.Id));
+
+        collectionNode = viewModel.CollectionTreeNodes.Single(node => node.Id == collection.Id);
+        viewModel.LoadTaxonomyChildren(collectionNode);
+        collectionFeedNode = collectionNode.Children.Single(node => node.Feed?.Id == categorizedFeed.Id);
+        await viewModel.SetGlobalFeedAvailabilityCommand.ExecuteAsync(collectionFeedNode.Feed!);
+        var feedAfterGlobalEnable = (await service.GetFeedsAsync()).Single(feed => feed.Id == categorizedFeed.Id);
+        Assert.IsTrue(feedAfterGlobalEnable.IsEnabled);
+        Assert.IsFalse(feedAfterGlobalEnable.IsEnabledInCategory);
+
+        var browserStateAfterGlobalEnable = new CatalogBrowserState(service, canFollowFeeds: true, hideFollowedCatalogFeeds: false);
+        await browserStateAfterGlobalEnable.LoadAsync(
+            CancellationToken.None,
+            new HashSet<string>(StringComparer.Ordinal),
+            initializeCatalogManagement: null);
+        Assert.IsTrue(browserStateAfterGlobalEnable.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == categorizedFeed.Id));
+
+        collectionNode = viewModel.CollectionTreeNodes.Single(node => node.Id == collection.Id);
+        viewModel.LoadTaxonomyChildren(collectionNode);
+        await viewModel.RemoveCollectionTreeFeedCommand.ExecuteAsync(collectionNode.Children.Single());
+        Assert.AreEqual(0, viewModel.GetFeedIdsForCollection(collection.Id).Count);
+    }
+
+    [TestMethod]
     public async Task CatalogDeletionRequiresConfirmationAndExplainsItsImpact()
     {
         var store = new MemoryCatalogStore();
@@ -319,6 +463,77 @@ public sealed class CatalogManagementViewModelTests
     }
 
     [TestMethod]
+    public async Task DisablingCategoryHidesItsFeedsOutsideCategoryManagement()
+    {
+        var actor = Profile.CreateCatalogMaster();
+        var store = new MemoryCatalogStore();
+        var service = new CatalogService(store);
+        var category = await service.AddCategoryAsync(actor, "Technology");
+        var categorizedFeed = await service.AddFeedAsync(
+            actor,
+            "Technology news",
+            "https://example.com/technology.xml",
+            null,
+            category.Id);
+        var uncategorizedFeed = await service.AddFeedAsync(
+            actor,
+            "Other news",
+            "https://example.com/other.xml",
+            null,
+            null);
+        var collection = await service.AddCollectionAsync(actor, "Briefing");
+        await service.AddFeedToCollectionAsync(actor, collection.Id, categorizedFeed.Id);
+
+        var viewModel = new CatalogManagementViewModel(actor, service);
+        await viewModel.InitializeAsync();
+        Assert.AreEqual(2, viewModel.VisibleFeedCount);
+
+        var categoryNode = viewModel.CategoryTreeNodes.Single(node => node.Id == category.Id);
+        await viewModel.SetCategoryAvailabilityCommand.ExecuteAsync(categoryNode);
+
+        Assert.IsFalse(viewModel.Categories.Single(item => item.Id == category.Id).IsEnabled);
+        Assert.AreEqual(1, viewModel.VisibleFeedCount);
+        Assert.AreEqual(uncategorizedFeed.Id, viewModel.VisibleFeeds.Cast<CatalogFeedListItem>().Single().Id);
+        Assert.IsFalse(viewModel.CategoryFilterOptions.Any(option => option.CategoryId == category.Id));
+
+        categoryNode = viewModel.CategoryTreeNodes.Single(node => node.Id == category.Id);
+        Assert.AreEqual("Enable", categoryNode.CategoryAvailabilityActionLabel);
+        viewModel.LoadTaxonomyChildren(categoryNode);
+        Assert.IsTrue(categoryNode.Children.Any(node => node.Feed?.Id == categorizedFeed.Id));
+
+        var collectionNode = viewModel.CollectionTreeNodes.Single(node => node.Id == collection.Id);
+        viewModel.LoadTaxonomyChildren(collectionNode);
+        Assert.IsFalse(collectionNode.Children.Any(node => node.Feed?.Id == categorizedFeed.Id));
+
+        var browserState = new CatalogBrowserState(service, canFollowFeeds: true, hideFollowedCatalogFeeds: false);
+        await browserState.LoadAsync(
+            CancellationToken.None,
+            new HashSet<string>(StringComparer.Ordinal),
+            initializeCatalogManagement: null);
+        Assert.IsFalse(browserState.CatalogCategoryOptions.Any(option => option.CategoryId == category.Id));
+        Assert.IsFalse(browserState.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == categorizedFeed.Id));
+        Assert.IsTrue(browserState.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == uncategorizedFeed.Id));
+
+        await viewModel.SetCategoryAvailabilityCommand.ExecuteAsync(categoryNode);
+        Assert.IsTrue(viewModel.Categories.Single(item => item.Id == category.Id).IsEnabled);
+        Assert.AreEqual(2, viewModel.VisibleFeedCount);
+
+        var reenabledBrowserState = new CatalogBrowserState(service, canFollowFeeds: true, hideFollowedCatalogFeeds: false);
+        await reenabledBrowserState.LoadAsync(
+            CancellationToken.None,
+            new HashSet<string>(StringComparer.Ordinal),
+            initializeCatalogManagement: null);
+        Assert.IsTrue(reenabledBrowserState.CatalogCategoryOptions.Any(option => option.CategoryId == category.Id));
+        Assert.IsTrue(reenabledBrowserState.CatalogFeedListView
+            .Cast<CatalogFeedListItem>()
+            .Any(feed => feed.Id == categorizedFeed.Id));
+    }
+
+    [TestMethod]
     public async Task CatalogMasterCanRenameCategoryWithoutChangingFeedAssignment()
     {
         var store = new MemoryCatalogStore();
@@ -421,48 +636,8 @@ public sealed class CatalogManagementViewModelTests
 
         Assert.AreEqual("Preview feed", preview.Name);
         Assert.AreEqual(5, preview.Items.Count);
-        Assert.IsTrue(preview.Items.All(item => item.Content is null && item.ImageUrl is null));
-    }
-
-    [TestMethod]
-    public async Task CatalogMasterCanFilterFeedsWithMetadataGaps()
-    {
-        var store = new MemoryCatalogStore();
-        var category = new CatalogCategory("category-comics", "Comics");
-        await store.AddCategoryAsync(category);
-        var completeFeed = new CatalogFeed(
-            "complete-feed",
-            "Complete",
-            "https://complete.example/feed.xml",
-            "A complete feed",
-            category.Id,
-            "https://complete.example");
-        var incompleteFeed = new CatalogFeed(
-            "incomplete-feed",
-            "Incomplete",
-            "https://incomplete.example/feed.xml",
-            null,
-            null);
-        await store.AddFeedAsync(completeFeed);
-        await store.AddFeedAsync(incompleteFeed);
-
-        var viewModel = new CatalogManagementViewModel(
-            Profile.CreateCatalogMaster(),
-            new CatalogService(store));
-        await viewModel.InitializeAsync();
-
-        Assert.AreEqual("Metadata gaps: 1", viewModel.MetadataReviewSummary);
-        Assert.AreEqual(string.Empty, viewModel.Feeds.Single(feed => feed.Id == completeFeed.Id).MetadataReviewDisplay);
-        Assert.AreEqual(
-            "Metadata gaps: description, category, publisher website",
-            viewModel.Feeds.Single(feed => feed.Id == incompleteFeed.Id).MetadataReviewDisplay);
-        Assert.AreEqual(2, viewModel.VisibleFeedCount);
-
-        viewModel.ShowMetadataGapsOnly = true;
-
-        Assert.AreEqual(incompleteFeed.Id, viewModel.VisibleFeeds.Cast<CatalogFeedListItem>().Single().Id);
-        Assert.AreEqual(2, viewModel.Feeds.Count);
-        Assert.AreEqual("Metadata gaps: 1", viewModel.MetadataReviewSummary);
+        Assert.IsTrue(preview.Items.All(item =>
+            item.Content is null && item.ImageUrl == "https://example.com/image.jpg"));
     }
 
     [TestMethod]
@@ -526,9 +701,6 @@ public sealed class CatalogManagementViewModelTests
 
         viewModel.SelectedCollectionFilter = viewModel.CollectionFilterOptions.Single(option => option.CollectionId == spaceCollection.Id);
         Assert.AreEqual(2, viewModel.VisibleFeedCount);
-
-        viewModel.ShowMetadataGapsOnly = true;
-        Assert.AreEqual(nasaMissions.Id, viewModel.VisibleFeeds.Cast<CatalogFeedListItem>().Single().Id);
 
         viewModel.ClearFiltersCommand.Execute(null);
         await viewModel.CheckFeedHealthCommand.ExecuteAsync(viewModel.Feeds.Single(feed => feed.Id == nasaSpace.Id));
@@ -594,6 +766,157 @@ public sealed class CatalogManagementViewModelTests
         Assert.IsTrue(checkedItem.LastHealthCheckSucceeded);
         Assert.IsNotNull(checkedItem.LastHealthCheckedAt);
         StringAssert.StartsWith(checkedItem.HealthCheckDisplay, "Feed valid - checked ");
+    }
+
+    [TestMethod]
+    public async Task CheckAllVisibleFeedsDisablesFailedAndNearlyEmptySourcesGlobally()
+    {
+        var store = new MemoryCatalogStore();
+        var actor = Profile.CreateCatalogMaster();
+        var downloader = new TestFeedDownloader(
+            shouldFail: feed => feed.Name == "Scan error",
+            items: feed => Enumerable.Range(1, feed.Name switch
+            {
+                "Scan healthy" => 3,
+                "Scan two entries" => 2,
+                "Scan one entry" => 1,
+                _ => 4
+            })
+            .Select(index => new DownloadedFeedItem(
+                $"article-{feed.Id}-{index}",
+                $"Entry {index}",
+                null,
+                null,
+                null,
+                null))
+            .ToArray());
+        var catalogService = new CatalogService(store, downloader);
+        foreach (var name in new[]
+        {
+            "Scan healthy",
+            "Scan two entries",
+            "Scan one entry",
+            "Scan error",
+            "Hidden source"
+        })
+        {
+            await catalogService.AddFeedAsync(
+                actor,
+                name,
+                $"https://example.com/{Uri.EscapeDataString(name)}.xml",
+                null,
+                null);
+        }
+
+        var viewModel = new CatalogManagementViewModel(actor, catalogService);
+        await viewModel.InitializeAsync();
+        viewModel.SearchQuery = "Scan";
+        var progressReports = new List<CatalogFeedScanProgress>();
+
+        var disabledCount = await viewModel.CheckAllVisibleFeedsAsync(
+            new DelegateProgress<CatalogFeedScanProgress>(progressReports.Add));
+
+        Assert.AreEqual(3, disabledCount);
+        var feeds = (await catalogService.GetFeedsAsync()).ToDictionary(feed => feed.Name, StringComparer.Ordinal);
+        Assert.IsTrue(feeds["Scan healthy"].IsEnabled);
+        Assert.AreEqual(true, feeds["Scan healthy"].LastHealthCheckSucceeded);
+        Assert.IsFalse(feeds["Scan two entries"].IsEnabled);
+        Assert.AreEqual(true, feeds["Scan two entries"].LastHealthCheckSucceeded);
+        Assert.IsFalse(feeds["Scan one entry"].IsEnabled);
+        Assert.IsFalse(feeds["Scan error"].IsEnabled);
+        Assert.AreEqual(false, feeds["Scan error"].LastHealthCheckSucceeded);
+        Assert.IsTrue(feeds["Hidden source"].IsEnabled);
+        Assert.IsNull(feeds["Hidden source"].LastHealthCheckedAt);
+        Assert.AreEqual(4, progressReports.Where(report => report.CompletedCount == report.TotalCount).Last().TotalCount);
+        Assert.AreEqual(3, progressReports.Last().DisabledCount);
+    }
+
+    [TestMethod]
+    public async Task CheckCategoryFeedsOnlyChecksAndDisablesFeedsInSelectedCategory()
+    {
+        var store = new MemoryCatalogStore();
+        var actor = Profile.CreateCatalogMaster();
+        var downloader = new TestFeedDownloader(
+            shouldFail: feed => feed.Name == "Selected error",
+            items: feed => Enumerable.Range(1, feed.Name switch
+            {
+                "Selected healthy" => 3,
+                "Selected sparse" => 2,
+                _ => 4
+            })
+            .Select(index => new DownloadedFeedItem(
+                $"article-{feed.Id}-{index}",
+                $"Entry {index}",
+                null,
+                null,
+                null,
+                null))
+            .ToArray());
+        var catalogService = new CatalogService(store, downloader);
+        await catalogService.ImportFeedsAsync(actor,
+        [
+            new OpmlFeed("Selected healthy", "https://example.com/selected-healthy.xml", null, "Selected"),
+            new OpmlFeed("Selected sparse", "https://example.com/selected-sparse.xml", null, "Selected"),
+            new OpmlFeed("Selected error", "https://example.com/selected-error.xml", null, "Selected"),
+            new OpmlFeed("Other category", "https://example.com/other.xml", null, "Other")
+        ]);
+        var viewModel = new CatalogManagementViewModel(actor, catalogService);
+        await viewModel.InitializeAsync();
+        var category = viewModel.Categories.Single(candidate => candidate.Name == "Selected");
+        var progressReports = new List<CatalogFeedScanProgress>();
+
+        var disabledCount = await viewModel.CheckCategoryFeedsAsync(
+            category.Id,
+            new DelegateProgress<CatalogFeedScanProgress>(progressReports.Add));
+
+        Assert.AreEqual(2, disabledCount);
+        var feeds = (await catalogService.GetFeedsAsync()).ToDictionary(feed => feed.Name, StringComparer.Ordinal);
+        Assert.IsTrue(feeds["Selected healthy"].IsEnabled);
+        Assert.AreEqual(true, feeds["Selected healthy"].LastHealthCheckSucceeded);
+        Assert.IsFalse(feeds["Selected sparse"].IsEnabled);
+        Assert.IsFalse(feeds["Selected error"].IsEnabled);
+        Assert.AreEqual(false, feeds["Selected error"].LastHealthCheckSucceeded);
+        Assert.IsTrue(feeds["Other category"].IsEnabled);
+        Assert.IsNull(feeds["Other category"].LastHealthCheckedAt);
+        Assert.AreEqual(3, progressReports.Where(report => report.CompletedCount == report.TotalCount).Last().TotalCount);
+        Assert.AreEqual(2, progressReports.Last().DisabledCount);
+    }
+
+    [TestMethod]
+    public async Task CheckAllVisibleFeedsStopsOnCancellation()
+    {
+        var store = new MemoryCatalogStore();
+        var actor = Profile.CreateCatalogMaster();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var catalogService = new CatalogService(store, new BlockingFeedDownloader(started));
+        var first = await catalogService.AddFeedAsync(
+            actor,
+            "First feed",
+            "https://example.com/first.xml",
+            null,
+            null);
+        var second = await catalogService.AddFeedAsync(
+            actor,
+            "Second feed",
+            "https://example.com/second.xml",
+            null,
+            null);
+        var viewModel = new CatalogManagementViewModel(actor, catalogService);
+        await viewModel.InitializeAsync();
+        using var cancellation = new CancellationTokenSource();
+
+        var scan = viewModel.CheckAllVisibleFeedsAsync(
+            new DelegateProgress<CatalogFeedScanProgress>(_ => { }),
+            cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsExceptionAsync<TaskCanceledException>(() => scan);
+        var feeds = (await catalogService.GetFeedsAsync()).ToDictionary(feed => feed.Id, StringComparer.Ordinal);
+        Assert.IsTrue(feeds[first.Id].IsEnabled);
+        Assert.IsTrue(feeds[second.Id].IsEnabled);
+        Assert.IsNull(feeds[first.Id].LastHealthCheckedAt);
+        Assert.IsNull(feeds[second.Id].LastHealthCheckedAt);
     }
 
     [TestMethod]
@@ -726,13 +1049,32 @@ public sealed class CatalogManagementViewModelTests
         }
     }
 
-    private sealed class TestFeedDownloader(Func<CatalogFeed, bool>? shouldFail = null) : IFeedDownloader
+    private sealed class TestFeedDownloader(
+        Func<CatalogFeed, bool>? shouldFail = null,
+        Func<CatalogFeed, IReadOnlyList<DownloadedFeedItem>>? items = null) : IFeedDownloader
     {
         public Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
             CatalogFeed feed,
             CancellationToken cancellationToken = default) => shouldFail?.Invoke(feed) == true
                 ? Task.FromException<IReadOnlyList<DownloadedFeedItem>>(new InvalidOperationException("Feed check failed."))
-                : Task.FromResult<IReadOnlyList<DownloadedFeedItem>>([]);
+                : Task.FromResult(items?.Invoke(feed) ?? (IReadOnlyList<DownloadedFeedItem>)[]);
+    }
+
+    private sealed class BlockingFeedDownloader(TaskCompletionSource started) : IFeedDownloader
+    {
+        public async Task<IReadOnlyList<DownloadedFeedItem>> DownloadAsync(
+            CatalogFeed feed,
+            CancellationToken cancellationToken = default)
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return [];
+        }
+    }
+
+    private sealed class DelegateProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     private sealed class PreviewFeedDownloader : IFeedDownloader

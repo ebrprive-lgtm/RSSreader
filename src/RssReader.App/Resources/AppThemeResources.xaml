@@ -17,6 +17,8 @@
 
         <SolidColorBrush x:Key="AccentBrush" Color="#476F63" />
 
+        <SolidColorBrush x:Key="NeutralActionBrush" Color="#536B82" />
+
         <SolidColorBrush x:Key="AccentWashBrush" Color="#E4ECE8" />
 
         <SolidColorBrush x:Key="ContentBrush" Color="#FFFFFF" />

@@ -128,7 +128,7 @@
                                 AutomationProperties.Name="{Binding Label, StringFormat='Manage tags for {0}'}"
                                 ToolTip="Manage feed tags">
                             <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource IconActionButtonStyle}">
+                                <Style TargetType="Button" BasedOn="{StaticResource RowCommandNeutralButtonStyle}">
                                     <Setter Property="Opacity" Value="0" />
                                     <Setter Property="IsHitTestVisible" Value="False" />
                                     <Style.Triggers>
@@ -155,7 +155,7 @@
                                 AutomationProperties.Name="Delete folder"
                                 ToolTip="Delete folder">
                             <Button.Style>
-                                <Style TargetType="Button">
+                                <Style TargetType="Button" BasedOn="{StaticResource RowCommandDestructiveButtonStyle}">
                                     <Setter Property="Opacity" Value="0" />
                                     <Setter Property="IsHitTestVisible" Value="False" />
                                     <Setter Property="Template">
@@ -200,7 +200,7 @@
                                 AutomationProperties.Name="{Binding Label, StringFormat='Unfollow {0}'}"
                                 ToolTip="Unfollow feed">
                             <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource DestructiveIconActionButtonStyle}">
+                                <Style TargetType="Button" BasedOn="{StaticResource RowCommandDestructiveButtonStyle}">
                                     <Setter Property="Opacity" Value="0" />
                                     <Setter Property="IsHitTestVisible" Value="False" />
                                     <Style.Triggers>
@@ -296,9 +296,17 @@
                                          BorderBrush="{DynamicResource ControlBorderBrush}"
                                          BorderThickness="1"
                                          Padding="5">
-                                <MenuItem Header="Preferences" Click="PreferencesMenuItem_Click" Padding="12,8" />
+                                <MenuItem Header="Preferences" Click="PreferencesMenuItem_Click" Padding="12,8">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE713;" Style="{StaticResource ContextMenuIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <Separator />
-                                <MenuItem Header="Log Out" Click="LogoutMenuItem_Click" Padding="12,8" />
+                                <MenuItem Header="Log Out" Click="LogoutMenuItem_Click" Padding="12,8">
+                                    <MenuItem.Icon>
+                                        <TextBlock Text="&#xE8AC;" Style="{StaticResource DestructiveContextMenuIconStyle}" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                             </ContextMenu>
                         </Button.ContextMenu>
                         <Grid>
@@ -341,7 +349,8 @@
                         <ItemsControl ItemsSource="{Binding PrimaryLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
                         <Border Height="1" Background="{DynamicResource SeparatorBrush}" Margin="8,12" />
                         <ItemsControl ItemsSource="{Binding ReadingLinks}" ItemTemplate="{StaticResource SidebarLinkTemplate}" />
-                        <TextBlock Text="FEEDS"
+                        <TextBlock x:Name="FeedsSectionLabel"
+                                   Text="FEEDS"
                                    Margin="10,25,0,8"
                                    FontSize="11"
                                    FontWeight="SemiBold"

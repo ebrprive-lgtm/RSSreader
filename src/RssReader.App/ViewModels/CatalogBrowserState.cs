@@ -13,6 +13,7 @@ internal sealed class CatalogBrowserState : ObservableObject
     private string _catalogSearchQuery = string.Empty;
     private CatalogCategoryOption? _selectedCatalogCategory;
     private CatalogCollectionOption? _selectedCatalogCollection;
+    private CatalogFeedListItem? _selectedCatalogFeed;
     private bool _hideFollowedCatalogFeeds;
     private bool _isCatalogLoading;
     private bool _isCatalogLoaded;
@@ -92,8 +93,48 @@ internal sealed class CatalogBrowserState : ObservableObject
         }
     }
 
+    public CatalogFeedListItem? SelectedCatalogFeed
+    {
+        get => _selectedCatalogFeed;
+        set => SetProperty(ref _selectedCatalogFeed, value);
+    }
+
     public string SelectedCatalogCollectionCuratorLabel =>
         SelectedCatalogCollection?.CollectionId is null ? string.Empty : "Curated by Catalog Master";
+
+    public IReadOnlyList<CatalogFilterChip> ActiveCatalogFilterChips
+    {
+        get
+        {
+            var chips = new List<CatalogFilterChip>();
+            var searchQuery = CatalogSearchQuery.Trim();
+            if (searchQuery.Length > 0)
+            {
+                chips.Add(new CatalogFilterChip(CatalogFilterKind.Search, $"Search: {searchQuery}"));
+            }
+
+            if (SelectedCatalogCategory?.CategoryId is { } categoryId)
+            {
+                var categoryName = CatalogCategories.FirstOrDefault(category => category.Id == categoryId)?.Name
+                    ?? categoryId;
+                chips.Add(new CatalogFilterChip(CatalogFilterKind.Category, $"Category: {categoryName}"));
+            }
+
+            if (SelectedCatalogCollection?.CollectionId is { } collectionId)
+            {
+                var collectionName = CatalogCollections.FirstOrDefault(collection => collection.Id == collectionId)?.Name
+                    ?? collectionId;
+                chips.Add(new CatalogFilterChip(CatalogFilterKind.Collection, $"Collection: {collectionName}"));
+            }
+
+            if (HideFollowedCatalogFeeds)
+            {
+                chips.Add(new CatalogFilterChip(CatalogFilterKind.HideFollowed, "Hide followed"));
+            }
+
+            return chips;
+        }
+    }
 
     public bool HideFollowedCatalogFeeds
     {
@@ -116,12 +157,28 @@ internal sealed class CatalogBrowserState : ObservableObject
     public bool IsCatalogResultsEmpty =>
         IsCatalogLoaded && !IsCatalogLoading && !HasCatalogLoadError && CatalogFeedListView.IsEmpty;
 
-    public string CatalogResultsSummary =>
-        !IsCatalogLoaded && IsCatalogLoading ? "Loading feed catalog..." :
-        !IsCatalogLoaded && HasCatalogLoadError ? "Catalog unavailable" :
-        IsCatalogFilterActive
-            ? $"{CatalogFeedListView.Cast<CatalogFeedListItem>().Count()} of {CatalogFeeds.Count} feeds"
-            : $"{CatalogFeeds.Count} feeds";
+    public string CatalogResultsSummary
+    {
+        get
+        {
+            var summary = !IsCatalogLoaded && IsCatalogLoading ? "Loading feed catalog..." :
+                !IsCatalogLoaded && HasCatalogLoadError ? "Catalog unavailable" :
+                IsCatalogFilterActive
+                    ? $"{CatalogFeedListView.Cast<CatalogFeedListItem>().Count()} of {CatalogFeeds.Count} feeds"
+                    : $"{CatalogFeeds.Count} feeds";
+            if (!IsCatalogLoaded || IsCatalogLoading || HasCatalogLoadError)
+            {
+                return summary;
+            }
+
+            var visibleSelectedCount = CatalogFeedListView.Cast<CatalogFeedListItem>()
+                .Count(feed => feed.IsSelectedForFollow);
+            var selectedOutsideResultsCount = SelectedCatalogFeedCount - visibleSelectedCount;
+            return selectedOutsideResultsCount > 0
+                ? $"{summary}; {selectedOutsideResultsCount} selected outside these results"
+                : summary;
+        }
+    }
 
     public string CatalogResultsEmptyMessage => CatalogFeeds.Count == 0
         ? "No feeds are available in the catalog yet."
@@ -186,6 +243,8 @@ internal sealed class CatalogBrowserState : ObservableObject
 
     public bool CanUnfollowAllCatalogFeeds =>
         _canFollowFeeds && GetVisibleSubscribedCatalogFeeds().Length > 0;
+    public string UnfollowVisibleCatalogFeedsLabel =>
+        $"Unfollow visible ({GetVisibleSubscribedCatalogFeeds().Length})";
 
     public async Task LoadAsync(
         CancellationToken cancellationToken,
@@ -199,10 +258,12 @@ internal sealed class CatalogBrowserState : ObservableObject
 
         IsCatalogLoading = true;
         CatalogLoadErrorMessage = string.Empty;
+        var selectedFeedId = SelectedCatalogFeed?.Id;
         try
         {
             var categories = await _catalogService.GetCategoriesAsync(cancellationToken);
             var categoryNames = categories.ToDictionary(category => category.Id, category => category.Name);
+            var categoryEnabled = categories.ToDictionary(category => category.Id, category => category.IsEnabled);
             var feeds = await _catalogService.GetFeedsAsync(cancellationToken);
             var collections = await _catalogService.GetCollectionsAsync(cancellationToken);
             var collectionFeedIds = await _catalogService.GetCollectionFeedIdsByCollectionAsync(cancellationToken);
@@ -223,6 +284,11 @@ internal sealed class CatalogBrowserState : ObservableObject
             foreach (var category in categories.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
             {
                 CatalogCategories.Add(category);
+                if (!category.IsEnabled)
+                {
+                    continue;
+                }
+
                 var categoryFeedCount = categoryFeedCounts.GetValueOrDefault(category.Id);
                 CatalogCategoryOptions.Add(new CatalogCategoryOption(
                     category.Id,
@@ -266,7 +332,12 @@ internal sealed class CatalogBrowserState : ObservableObject
                         ? categoryName
                         : null,
                     feed.CategoryId,
-                    feed.WebsiteUrl);
+                    feed.WebsiteUrl,
+                    isEnabled: feed.IsEnabled,
+                    isEnabledInCategory: feed.IsEnabledInCategory,
+                    isCategoryEnabled: feed.CategoryId is not { } categoryId ||
+                        !categoryEnabled.TryGetValue(categoryId, out var enabled) ||
+                        enabled);
                 catalogFeed.IsSubscribed = subscribedFeedIds.Contains(feed.Id);
                 catalogFeed.PropertyChanged += OnCatalogFeedPropertyChanged;
                 catalogFeedItems.Add(catalogFeed);
@@ -277,6 +348,9 @@ internal sealed class CatalogBrowserState : ObservableObject
                 CatalogFeeds.ReplaceAll(catalogFeedItems);
             }
 
+            SelectedCatalogFeed = CatalogFeedListView.Cast<CatalogFeedListItem>()
+                .FirstOrDefault(feed => feed.Id == selectedFeedId) ??
+                CatalogFeedListView.Cast<CatalogFeedListItem>().FirstOrDefault();
             NotifyCatalogFeedViewChanged();
             if (initializeCatalogManagement is not null)
             {
@@ -322,14 +396,23 @@ internal sealed class CatalogBrowserState : ObservableObject
     public void RefreshCatalogFeedView()
     {
         CatalogFeedListView.Refresh();
+        var visibleFeeds = CatalogFeedListView.Cast<CatalogFeedListItem>().ToArray();
+        if (SelectedCatalogFeed is null || !visibleFeeds.Contains(SelectedCatalogFeed))
+        {
+            SelectedCatalogFeed = visibleFeeds.FirstOrDefault();
+        }
+
         NotifyCatalogFeedViewChanged();
     }
 
     private bool IsCatalogFeedVisible(object item)
     {
         if (item is not CatalogFeedListItem feed ||
+            !feed.IsEnabled ||
+            !feed.IsCategoryEnabled ||
             (HideFollowedCatalogFeeds && feed.IsSubscribed) ||
-            (SelectedCatalogCategory?.CategoryId is { } categoryId && feed.CategoryId != categoryId) ||
+            (SelectedCatalogCategory?.CategoryId is { } categoryId &&
+             (feed.CategoryId != categoryId || !feed.IsEnabledInCategory)) ||
             (SelectedCatalogCollection?.CollectionId is not null &&
              !SelectedCatalogCollection.FeedIds.Contains(feed.Id)))
         {
@@ -361,12 +444,14 @@ internal sealed class CatalogBrowserState : ObservableObject
             OnPropertyChanged(nameof(HasSelectedCatalogFeeds));
             OnPropertyChanged(nameof(CanFollowSelectedCatalogFeeds));
             OnPropertyChanged(nameof(FollowSelectedCatalogFeedsLabel));
+            OnPropertyChanged(nameof(CatalogResultsSummary));
             OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
         }
 
         if (e.PropertyName == nameof(CatalogFeedListItem.IsSubscribed))
         {
             OnPropertyChanged(nameof(CanUnfollowAllCatalogFeeds));
+            OnPropertyChanged(nameof(UnfollowVisibleCatalogFeedsLabel));
             OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
         }
     }
@@ -374,11 +459,13 @@ internal sealed class CatalogBrowserState : ObservableObject
     private void NotifyCatalogFeedViewChanged()
     {
         OnPropertyChanged(nameof(IsCatalogFilterActive));
+        OnPropertyChanged(nameof(ActiveCatalogFilterChips));
         OnPropertyChanged(nameof(IsCatalogResultsEmpty));
         OnPropertyChanged(nameof(CatalogResultsSummary));
         OnPropertyChanged(nameof(CatalogResultsEmptyMessage));
         OnPropertyChanged(nameof(CanSelectVisibleCatalogFeeds));
         OnPropertyChanged(nameof(VisibleCatalogFeedSelectionState));
         OnPropertyChanged(nameof(CanUnfollowAllCatalogFeeds));
+        OnPropertyChanged(nameof(UnfollowVisibleCatalogFeedsLabel));
     }
 }

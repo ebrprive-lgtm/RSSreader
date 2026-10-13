@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^dotnet build \"src\\\\RssReader\\.App\\\\RssReader\\.App\\.csproj\" --no-restore$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

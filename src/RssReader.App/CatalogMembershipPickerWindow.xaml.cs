@@ -35,20 +35,25 @@ public partial class CatalogMembershipPickerWindow : Window
 {
     private readonly ICollectionView _filteredItems;
     private readonly Func<Window, Task<CatalogMembershipPickerItem?>>? _createNewCollectionAsync;
+    private bool _changingSingleSelection;
 
     public CatalogMembershipPickerWindow(
         string title,
         string description,
         IEnumerable<CatalogMembershipPickerItem> items,
-        Func<Window, Task<CatalogMembershipPickerItem?>>? createNewCollectionAsync = null)
+        Func<Window, Task<CatalogMembershipPickerItem?>>? createNewCollectionAsync = null,
+        bool singleSelection = false)
     {
         InitializeComponent();
         DialogHeading.Text = title;
         DialogDescription.Text = description;
+        IsSingleSelection = singleSelection;
         _createNewCollectionAsync = createNewCollectionAsync;
         CreateCollectionButton.Visibility = createNewCollectionAsync is null
             ? Visibility.Collapsed
             : Visibility.Visible;
+        SelectShownButton.Visibility = singleSelection ? Visibility.Collapsed : Visibility.Visible;
+        ClearShownButton.Visibility = singleSelection ? Visibility.Collapsed : Visibility.Visible;
         Items = new ObservableCollection<CatalogMembershipPickerItem>(items);
         foreach (var item in Items)
         {
@@ -64,6 +69,7 @@ public partial class CatalogMembershipPickerWindow : Window
     }
 
     public ObservableCollection<CatalogMembershipPickerItem> Items { get; }
+    public bool IsSingleSelection { get; }
 
     public IReadOnlyCollection<string> SelectedIds =>
         Items.Where(item => item.IsSelected).Select(item => item.Id).ToArray();
@@ -99,6 +105,19 @@ public partial class CatalogMembershipPickerWindow : Window
     {
         if (e.PropertyName == nameof(CatalogMembershipPickerItem.IsSelected))
         {
+            if (!_changingSingleSelection &&
+                IsSingleSelection &&
+                sender is CatalogMembershipPickerItem { IsSelected: true } selectedItem)
+            {
+                _changingSingleSelection = true;
+                foreach (var item in Items.Where(item => item != selectedItem && item.IsSelected))
+                {
+                    item.IsSelected = false;
+                }
+
+                _changingSingleSelection = false;
+            }
+
             UpdateSelectionSummary();
         }
     }

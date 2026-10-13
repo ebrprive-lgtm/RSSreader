@@ -12,6 +12,79 @@ namespace RssReader.Infrastructure.Tests;
 public sealed class SyndicationFeedDownloaderTests
 {
     [TestMethod]
+    public async Task Download_UpgradesHttpsRedirectTargetsToHttps()
+    {
+        const string xml = """
+            <rss version="2.0">
+              <channel>
+                <title>Sample feed</title>
+                <item>
+                  <title>Redirected headline</title>
+                  <guid>redirected-item-1</guid>
+                  <link>https://example.test/story</link>
+                </item>
+              </channel>
+            </rss>
+            """;
+        var originalUri = new Uri("http://www.nytimes.com/services/xml/rss/nyt/HomePage.xml");
+        var redirectedHttpsUri = new Uri("https://www.nytimes.com/services/xml/rss/nyt/HomePage.xml");
+        var redirectLocation = new Uri("http://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml");
+        var finalHttpsUri = new Uri("https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml");
+        var requestedUris = new List<Uri>();
+        using var client = new HttpClient(new DelegateResponseHandler((request, _) =>
+        {
+            requestedUris.Add(request.RequestUri!);
+            if (request.RequestUri == originalUri)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.MovedPermanently)
+                {
+                    RequestMessage = new HttpRequestMessage(HttpMethod.Get, redirectedHttpsUri),
+                    Headers = { Location = redirectLocation }
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(xml)
+            });
+        }));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var items = await downloader.DownloadAsync(CreateFeed() with { FeedUrl = originalUri.AbsoluteUri });
+
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual("Redirected headline", items[0].Title);
+        CollectionAssert.AreEqual(
+            new[] { originalUri, finalHttpsUri },
+            requestedUris.ToArray());
+    }
+
+    [TestMethod]
+    public async Task Download_DoesNotUpgradeHttpsRedirectToNonDefaultHttpPort()
+    {
+        var originalUri = new Uri("https://example.test/feed.xml");
+        var finalHttpsUri = new Uri("https://example.test/feed.xml");
+        var redirectLocation = new Uri("http://redirect.example.test:8080/feed.xml");
+        var requestedUris = new List<Uri>();
+        using var client = new HttpClient(new DelegateResponseHandler((request, _) =>
+        {
+            requestedUris.Add(request.RequestUri!);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.MovedPermanently)
+            {
+                RequestMessage = new HttpRequestMessage(HttpMethod.Get, finalHttpsUri),
+                Headers = { Location = redirectLocation }
+            });
+        }));
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var failure = await Assert.ThrowsExceptionAsync<HttpRequestException>(
+            () => downloader.DownloadAsync(CreateFeed() with { FeedUrl = originalUri.AbsoluteUri }));
+
+        Assert.AreEqual(HttpStatusCode.MovedPermanently, failure.StatusCode);
+        CollectionAssert.AreEqual(new[] { originalUri }, requestedUris.ToArray());
+    }
+
+    [TestMethod]
     public async Task Download_RssNormalizesItemMetadata()
     {
         const string xml = """
@@ -40,6 +113,109 @@ public sealed class SyndicationFeedDownloaderTests
         Assert.AreEqual("Feed summary", items[0].Summary);
         StringAssert.Contains(items[0].SourceXml!, "<item>");
         StringAssert.Contains(items[0].SourceXml!, "<guid>rss-item-1</guid>");
+    }
+
+    [TestMethod]
+    public async Task Download_Rss092FeedNormalizesItemMetadata()
+    {
+        const string xml = """
+            <rss version="0.92">
+              <channel>
+                <title>Legacy sample feed</title>
+                <link>https://example.test/</link>
+                <description>Legacy feed format</description>
+                <item>
+                  <title>Legacy headline</title>
+                  <guid>legacy-item-1</guid>
+                  <link>https://example.test/legacy-story</link>
+                  <description>Legacy summary</description>
+                </item>
+              </channel>
+            </rss>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var items = await downloader.DownloadAsync(CreateFeed());
+
+        Assert.AreEqual(1, items.Count);
+        Assert.AreEqual("legacy-item-1", items[0].ExternalId);
+        Assert.AreEqual("Legacy headline", items[0].Title);
+        Assert.AreEqual("https://example.test/legacy-story", items[0].Link);
+        Assert.AreEqual("Legacy summary", items[0].Summary);
+        StringAssert.Contains(items[0].SourceXml!, "<item>");
+    }
+
+    [TestMethod]
+    public async Task Download_Rss10RdfFeedReadsItemsInSequenceOrder()
+    {
+        const string firstArticle = "https://www.dw.com/en/first-story/a-1001";
+        const string secondArticle = "https://www.dw.com/en/second-story/a-1002";
+        const string xml = """
+            <rdf:RDF
+                xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+                xmlns="http://purl.org/rss/1.0/"
+                xmlns:dc="http://purl.org/dc/elements/1.1/"
+                xmlns:dwsyn="http://rss.dw.com/syndication/dwsyn/">
+              <channel rdf:about="https://www.dw.com/en/top-stories/s-9097">
+                <title>DW English</title>
+                <link>https://www.dw.com/en/top-stories/s-9097</link>
+                <description>Latest news</description>
+                <image rdf:resource="https://rss.dw.com/images/logo.png" />
+                <items>
+                  <rdf:Seq>
+                    <rdf:li rdf:resource="https://www.dw.com/en/second-story/a-1002" />
+                    <rdf:li rdf:resource="https://www.dw.com/en/first-story/a-1001" />
+                  </rdf:Seq>
+                </items>
+              </channel>
+              <item rdf:about="https://www.dw.com/en/first-story/a-1001">
+                <title>First story</title>
+                <link>https://www.dw.com/en/first-story/a-1001</link>
+                <description>First story description</description>
+                <dc:creator>DW</dc:creator>
+                <dwsyn:contentID>1001</dwsyn:contentID>
+              </item>
+              <item rdf:about="https://www.dw.com/en/second-story/a-1002">
+                <title>Second story</title>
+                <link>https://www.dw.com/en/second-story/a-1002</link>
+                <description>Second story description</description>
+                <dc:creator>DW</dc:creator>
+                <dwsyn:contentID>1002</dwsyn:contentID>
+              </item>
+            </rdf:RDF>
+            """;
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var items = await downloader.DownloadAsync(CreateFeed());
+
+        Assert.AreEqual(2, items.Count);
+        Assert.AreEqual("Second story", items[0].Title);
+        Assert.AreEqual(secondArticle, items[0].Link);
+        Assert.AreEqual(secondArticle, items[0].ExternalId);
+        Assert.AreEqual("DW", items[0].Author);
+        Assert.AreEqual("Second story description", items[0].Summary);
+        StringAssert.Contains(items[0].SourceXml!, "Second story");
+        Assert.AreEqual("First story", items[1].Title);
+        Assert.AreEqual(firstArticle, items[1].Link);
+    }
+
+    [TestMethod]
+    public async Task Download_RemovesXmlForbiddenControlCharactersFromFeedText()
+    {
+        var xml =
+            "<rss version=\"2.0\"><channel><title>Sample feed</title><item>" +
+            "<title>Control character</title><description>Reliable news and" +
+            '\u000C' +
+            " creative modes for fast, efficient operation.</description></item></channel></rss>";
+        using var client = CreateClient(xml);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var item = (await downloader.DownloadAsync(CreateFeed())).Single();
+
+        Assert.AreEqual("Reliable news and creative modes for fast, efficient operation.", item.Content);
+        Assert.IsFalse(item.Content!.Contains('\u000C'));
     }
 
     [TestMethod]
@@ -493,6 +669,23 @@ public sealed class SyndicationFeedDownloaderTests
         var downloader = new SyndicationFeedDownloader(client);
 
         await Assert.ThrowsExceptionAsync<XmlException>(() => downloader.DownloadAsync(CreateFeed()));
+    }
+
+    [TestMethod]
+    public async Task Download_ExplainsWhenUrlReturnsAnHtmlPageInsteadOfAFeed()
+    {
+        const string html = """
+            <!DOCTYPE html>
+            <html lang="en"><head><title>Food &amp; Beverage Magazine</title></head><body></body></html>
+            """;
+        using var client = CreateClient(html);
+        var downloader = new SyndicationFeedDownloader(client);
+
+        var exception = await Assert.ThrowsExceptionAsync<InvalidDataException>(
+            () => downloader.DownloadAsync(CreateFeed()));
+
+        StringAssert.Contains(exception.Message, "HTML web page");
+        StringAssert.Contains(exception.Message, "Use the site's feed URL");
     }
 
     [TestMethod]

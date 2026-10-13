@@ -13,7 +13,8 @@ public sealed class ProfileFeedService(ICatalogStore catalogStore, IReaderStore 
         Profile profile,
         string name,
         string feedUrl,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? categoryName = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         if (string.IsNullOrWhiteSpace(name))
@@ -26,7 +27,8 @@ public sealed class ProfileFeedService(ICatalogStore catalogStore, IReaderStore 
             throw new ArgumentException("Feed URLs must use HTTP or HTTPS.", nameof(feedUrl));
         }
 
-        await EnsureFolderAsync(profile.Id, DefaultFolderName, cancellationToken);
+        var folderName = NormalizeFolderName(categoryName);
+        await EnsureFolderAsync(profile.Id, folderName, cancellationToken);
         var existing = await catalogStore.GetFeedsForProfileAsync(profile.Id, cancellationToken);
         var feed = existing.FirstOrDefault(candidate =>
             string.Equals(candidate.FeedUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase));
@@ -46,7 +48,7 @@ public sealed class ProfileFeedService(ICatalogStore catalogStore, IReaderStore 
         var subscriptions = await readerStore.GetSubscriptionsAsync(profile.Id, cancellationToken);
         if (subscriptions.All(subscription => subscription.FeedId != feed.Id))
         {
-            await readerStore.SubscribeAsync(profile.Id, feed.Id, DefaultFolderName, cancellationToken);
+            await readerStore.SubscribeAsync(profile.Id, feed.Id, folderName, cancellationToken);
         }
 
         return feed;

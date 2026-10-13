@@ -77,6 +77,41 @@ public partial class CatalogAdminView : UserControl
 
     private void AddFeed_Click(object sender, RoutedEventArgs e) => ShowCatalogEntry(CatalogEntryKind.Feed);
 
+    private void CheckAllFeeds_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        var dialog = new CatalogFeedScanProgressWindow(
+            catalogManagement.VisibleFeedCount,
+            catalogManagement.CheckAllVisibleFeedsAsync)
+        {
+            Owner = Window.GetWindow(this)
+        };
+        dialog.ShowDialog();
+    }
+
+    private void CheckCategoryFeeds_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CatalogTaxonomyTreeNode { Category: { } category } } ||
+            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        var feedCount = catalogManagement.GetFeedsForCategory(category.Id).Count;
+        var dialog = new CatalogFeedScanProgressWindow(
+            feedCount,
+            (progress, token) => catalogManagement.CheckCategoryFeedsAsync(category.Id, progress, token),
+            $"feeds in {category.Name}")
+        {
+            Owner = Window.GetWindow(this)
+        };
+        dialog.ShowDialog();
+    }
+
     private void EditFeed_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
@@ -106,8 +141,19 @@ public partial class CatalogAdminView : UserControl
 
     private void PreviewManagedFeed_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: CatalogFeedListItem feed } ||
+        if (sender is not FrameworkElement element ||
             DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        var feed = element.DataContext switch
+        {
+            CatalogFeedListItem feedItem => feedItem,
+            CatalogTaxonomyTreeNode { IsFeedNode: true, Feed: { } feedItem } => feedItem,
+            _ => null
+        };
+        if (feed is null)
         {
             return;
         }
@@ -126,7 +172,7 @@ public partial class CatalogAdminView : UserControl
 
     private void RenameCategory_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: CatalogCategory category } ||
+        if (sender is not FrameworkElement { DataContext: CatalogTaxonomyTreeNode { Category: { } category } } ||
             DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
         {
             return;
@@ -142,7 +188,7 @@ public partial class CatalogAdminView : UserControl
 
     private void RenameCollection_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: CatalogCollection collection } ||
+        if (sender is not FrameworkElement { DataContext: CatalogTaxonomyTreeNode { Collection: { } collection } } ||
             DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
         {
             return;
@@ -150,6 +196,70 @@ public partial class CatalogAdminView : UserControl
 
         catalogManagement.PrepareCollectionEdit(collection);
         ShowCatalogEntry(CatalogEntryKind.Collection, isEditingCollection: true);
+    }
+
+    private void CatalogTreeItem_Expanded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TreeViewItem { DataContext: CatalogTaxonomyTreeNode node } ||
+            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        catalogManagement.LoadTaxonomyChildren(node);
+        e.Handled = true;
+    }
+
+    private void TaxonomyItem_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: CatalogTaxonomyTreeNode node } &&
+            !node.IsManagedCategory &&
+            !node.IsCollection &&
+            !node.IsCategoryFeed &&
+            !node.IsCollectionFeed)
+        {
+            e.Handled = true;
+        }
+    }
+
+    private async void AddCategoryToCollection_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CatalogTaxonomyTreeNode { Collection: { } collection } } ||
+            DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
+        {
+            return;
+        }
+
+        var choices = catalogManagement.Categories
+            .OrderBy(category => category.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(category =>
+            {
+                var count = catalogManagement.GetFeedsForCategory(category.Id).Count;
+                var feedLabel = count == 1 ? "1 feed" : $"{count} feeds";
+                return new CatalogMembershipPickerItem(category.Id, category.Name, feedLabel, isSelected: false);
+            });
+        var picker = new CatalogMembershipPickerWindow(
+            $"Add category to {collection.Name}",
+            "Choose one category. All feeds in that category will be added to this collection.",
+            choices,
+            singleSelection: true)
+        {
+            Owner = Window.GetWindow(this)
+        };
+        if (picker.ShowDialog() != true || picker.SelectedIds.FirstOrDefault() is not { } categoryId)
+        {
+            return;
+        }
+
+        await catalogManagement.AddCategoryFeedsToCollectionAsync(collection.Id, categoryId);
+        if (!string.IsNullOrWhiteSpace(catalogManagement.ErrorMessage))
+        {
+            MessageDialogWindow.Show(
+                Window.GetWindow(this),
+                catalogManagement.ErrorMessage,
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     private async void ManageFeedCollections_Click(object sender, RoutedEventArgs e)
@@ -231,7 +341,7 @@ public partial class CatalogAdminView : UserControl
 
     private async void ManageCollectionFeeds_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: CatalogCollection collection } ||
+        if (sender is not FrameworkElement { DataContext: CatalogTaxonomyTreeNode { Collection: { } collection } } ||
             DataContext is not MainWindowViewModel { CatalogManagement: { } catalogManagement })
         {
             return;

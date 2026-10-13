@@ -16,38 +16,24 @@ public sealed class CatalogFeedListItem : ObservableObject
         string? websiteUrl = null,
         int sameNameCount = 1,
         DateTimeOffset? lastHealthCheckedAt = null,
-        bool? lastHealthCheckSucceeded = null)
+        bool? lastHealthCheckSucceeded = null,
+        bool isEnabled = true,
+        bool isEnabledInCategory = true,
+        bool isCategoryEnabled = true)
     {
         Id = id;
-        Name = name;
+        Name = FeedTextEncodingRepair.Repair(name);
         FeedUrl = feedUrl;
         Description = description;
-        CategoryName = categoryName;
+        CategoryName = categoryName is null ? null : FeedTextEncodingRepair.Repair(categoryName);
         CategoryId = categoryId;
         WebsiteUrl = websiteUrl;
         SameNameCount = sameNameCount;
         LastHealthCheckedAt = lastHealthCheckedAt;
         LastHealthCheckSucceeded = lastHealthCheckSucceeded;
-
-        var metadataGaps = new List<string>();
-        if (string.IsNullOrWhiteSpace(Description))
-        {
-            metadataGaps.Add("description");
-        }
-
-        if (string.IsNullOrWhiteSpace(CategoryName))
-        {
-            metadataGaps.Add("category");
-        }
-
-        if (string.IsNullOrWhiteSpace(WebsiteUrl))
-        {
-            metadataGaps.Add("publisher website");
-        }
-
-        MetadataReviewDisplay = metadataGaps.Count == 0
-            ? string.Empty
-            : $"Metadata gaps: {string.Join(", ", metadataGaps)}";
+        IsEnabled = isEnabled;
+        IsEnabledInCategory = isEnabledInCategory;
+        IsCategoryEnabled = isCategoryEnabled;
     }
 
     public string Id { get; }
@@ -60,14 +46,19 @@ public sealed class CatalogFeedListItem : ObservableObject
     public int SameNameCount { get; }
     public bool HasSameName => SameNameCount > 1;
     public bool HasDescription => !string.IsNullOrWhiteSpace(Description);
+    public bool HasWebsiteUrl => !string.IsNullOrWhiteSpace(WebsiteUrl);
     public DateTimeOffset? LastHealthCheckedAt { get; }
     public bool? LastHealthCheckSucceeded { get; }
+    public bool IsEnabled { get; }
+    public bool IsEnabledInCategory { get; }
+    public bool IsCategoryEnabled { get; }
+    public string GlobalAvailabilityActionLabel => IsEnabled ? "Disable globally" : "Enable globally";
+    public string CategoryAvailabilityActionLabel => IsEnabledInCategory ? "Disable" : "Enable";
     public string SameNameDisplay => SameNameCount > 1 ? $"{SameNameCount} feeds share this name" : string.Empty;
-    public string MetadataReviewDisplay { get; }
-    public bool HasMetadataGaps => MetadataReviewDisplay.Length > 0;
     public bool HasHealthCheck => LastHealthCheckedAt is not null;
     public string PublisherWebsiteDisplay =>
         string.IsNullOrWhiteSpace(WebsiteUrl) ? string.Empty : $"Publisher website: {WebsiteUrl}";
+    public string PublisherWebsiteLabel => GetPublisherWebsiteLabel(WebsiteUrl);
     public string HealthCheckDisplay => IsHealthCheckInProgress
         ? "Checking feed..."
         : LastHealthCheckedAt is not { } checkedAt
@@ -117,4 +108,21 @@ public sealed class CatalogFeedListItem : ObservableObject
     }
 
     public string SubscriptionLabel => IsSubscribed ? "Unfollow" : "Follow";
+
+    private static string GetPublisherWebsiteLabel(string? websiteUrl)
+    {
+        if (!Uri.TryCreate(websiteUrl, UriKind.Absolute, out var websiteUri) ||
+            (websiteUri.Scheme != Uri.UriSchemeHttp && websiteUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return "Website";
+        }
+
+        var host = websiteUri.Host;
+        if (host.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+        {
+            host = host[4..];
+        }
+
+        return websiteUri.IsDefaultPort ? host : $"{host}:{websiteUri.Port}";
+    }
 }

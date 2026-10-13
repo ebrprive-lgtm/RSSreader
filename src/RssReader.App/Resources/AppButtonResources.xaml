@@ -204,6 +204,42 @@
             </Setter>
         </Style>
 
+        <Style x:Key="RowCommandNeutralButtonStyle"
+               TargetType="{x:Type Button}"
+               BasedOn="{StaticResource IconActionButtonStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource NeutralActionBrush}" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+
+        <Style x:Key="RowCommandPositiveButtonStyle"
+               TargetType="{x:Type Button}"
+               BasedOn="{StaticResource RowCommandNeutralButtonStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+        </Style>
+
+        <Style x:Key="RowCommandDestructiveButtonStyle"
+               TargetType="{x:Type Button}"
+               BasedOn="{StaticResource DestructiveIconActionButtonStyle}">
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+
+        <Style x:Key="RowCommandNeutralIconStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource NeutralActionBrush}" />
+        </Style>
+
+        <Style x:Key="RowCommandPositiveIconStyle"
+               TargetType="{x:Type TextBlock}"
+               BasedOn="{StaticResource RowCommandNeutralIconStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+        </Style>
+
+        <Style x:Key="RowCommandDestructiveIconStyle"
+               TargetType="{x:Type TextBlock}"
+               BasedOn="{StaticResource RowCommandNeutralIconStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
+        </Style>
+
         <Style x:Key="SecondaryActionToggleButtonStyle" TargetType="{x:Type ToggleButton}">
             <Setter Property="Height" Value="32" />
             <Setter Property="Background" Value="Transparent" />

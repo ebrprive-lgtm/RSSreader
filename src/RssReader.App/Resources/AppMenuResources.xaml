@@ -45,7 +45,7 @@
                                     Padding="{TemplateBinding Padding}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="18" />
+                                        <ColumnDefinition Width="16" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="16" />
                                     </Grid.ColumnDefinitions>
@@ -55,6 +55,7 @@
                                                       VerticalAlignment="Center" />
                                     <ContentPresenter Grid.Column="1"
                                                       ContentSource="Header"
+                                                      Margin="4,0,0,0"
                                                       RecognizesAccessKey="True"
                                                       VerticalAlignment="Center" />
                                     <TextBlock x:Name="SubmenuArrow"
@@ -106,6 +107,25 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style x:Key="ContextMenuIconStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource NeutralActionBrush}" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="PositiveContextMenuIconStyle"
+               TargetType="{x:Type TextBlock}"
+               BasedOn="{StaticResource ContextMenuIconStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+        </Style>
+
+        <Style x:Key="DestructiveContextMenuIconStyle"
+               TargetType="{x:Type TextBlock}"
+               BasedOn="{StaticResource ContextMenuIconStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveBrush}" />
         </Style>
 
         <Style TargetType="{x:Type Separator}">
